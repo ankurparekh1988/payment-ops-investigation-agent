@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <!-- Composition root: the only project allowed to reference the demo adapters. -->
+  <ItemGroup>
+    <ProjectReference Include="..\PaymentOps.Agent\PaymentOps.Agent.csproj" />
+    <ProjectReference Include="..\PaymentOps.Data.Demo\PaymentOps.Data.Demo.csproj" />
+    <ProjectReference Include="..\PaymentOps.Knowledge\PaymentOps.Knowledge.csproj" />
+    <ProjectReference Include="..\PaymentOps.Platform\PaymentOps.Platform.csproj" />
+    <ProjectReference Include="..\PaymentOps.Tools\PaymentOps.Tools.csproj" />
+  </ItemGroup>
+
+</Project>

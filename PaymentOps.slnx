@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/eval/">
+    <Project Path="eval/PaymentOps.Evaluation/PaymentOps.Evaluation.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PaymentOps.Agent/PaymentOps.Agent.csproj" />
+    <Project Path="src/PaymentOps.Data.Demo/PaymentOps.Data.Demo.csproj" />
+    <Project Path="src/PaymentOps.Domain/PaymentOps.Domain.csproj" />
+    <Project Path="src/PaymentOps.Knowledge/PaymentOps.Knowledge.csproj" />
+    <Project Path="src/PaymentOps.Platform/PaymentOps.Platform.csproj" />
+    <Project Path="src/PaymentOps.Tools/PaymentOps.Tools.csproj" />
+    <Project Path="src/PaymentOps.Web/PaymentOps.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PaymentOps.ArchitectureTests/PaymentOps.ArchitectureTests.csproj" />
+    <Project Path="tests/PaymentOps.Data.ContractTests/PaymentOps.Data.ContractTests.csproj" />
+    <Project Path="tests/PaymentOps.Tools.Tests/PaymentOps.Tools.Tests.csproj" />
+    <Project Path="tests/PaymentOps.Web.SmokeTests/PaymentOps.Web.SmokeTests.csproj" />
+  </Folder>
+</Solution>
