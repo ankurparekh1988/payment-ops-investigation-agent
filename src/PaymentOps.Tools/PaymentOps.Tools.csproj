@@ -1,0 +1,9 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaymentOps.Domain\PaymentOps.Domain.csproj" />
+    <ProjectReference Include="..\PaymentOps.Knowledge\PaymentOps.Knowledge.csproj" />
+    <ProjectReference Include="..\PaymentOps.Platform\PaymentOps.Platform.csproj" />
+  </ItemGroup>
+
+</Project>
