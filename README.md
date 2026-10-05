@@ -81,3 +81,7 @@ dotnet run --project src/PaymentOps.Web
 - [ ] Human approval for incident tickets
 - [ ] Evaluation gate, content safety and injection defences
 - [ ] Tracing, alerting and cost tracking
+
+## License
+
+[MIT](LICENSE)
