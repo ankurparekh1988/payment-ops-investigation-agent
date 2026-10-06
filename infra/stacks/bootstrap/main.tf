@@ -1,0 +1,180 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 5.8"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.9"
+    }
+  }
+}
+
+data "azurerm_client_config" "current" {}
+
+locals {
+  tags = merge(var.tags, {
+    project    = var.name_prefix
+    managed-by = "terraform"
+  })
+
+  # Built-in role definition IDs are the same in every tenant. IDs rather than names, because
+  # Microsoft renames roles (Azure AI User became Foundry User) while the IDs stay fixed.
+  delegable_roles = {
+    "Cognitive Services OpenAI User" = "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
+    "Cognitive Services User"        = "a97b65f3-24c7-4388-baec-2e87135dc908"
+    "Foundry User"                   = "53ca6127-db72-4b80-b1b0-d745d6d5456d"
+    "Search Index Data Reader"       = "1407120a-92aa-4202-b7e9-c0e197c71c8f"
+    "Search Index Data Contributor"  = "8ebe5a00-799e-43f5-93ac-243d3dce84a7"
+    "Search Service Contributor"     = "7ca78c08-252a-4471-8644-bb5ff32d4ba0"
+    "Storage Blob Data Reader"       = "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1"
+    "Storage Blob Data Contributor"  = "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+    "Log Analytics Reader"           = "73c42c96-874c-492b-b04d-ab87d138a893"
+  }
+  delegable_role_ids = join(", ", values(local.delegable_roles))
+}
+
+# Holds what must outlive any environment: Terraform state and the pipeline identities.
+resource "azurerm_resource_group" "bootstrap" {
+  name     = "rg-${var.name_prefix}-bootstrap"
+  location = var.location
+  tags     = local.tags
+}
+
+# Created here so the pipeline identities can be scoped to this resource group rather than the
+# whole subscription. The platform stack reads it instead of creating it.
+resource "azurerm_resource_group" "workload" {
+  name     = "rg-${var.name_prefix}-${var.environment}"
+  location = var.location
+  tags     = merge(local.tags, { environment = var.environment })
+}
+
+resource "random_string" "state_suffix" {
+  length  = 6
+  upper   = false
+  special = false
+}
+
+module "state" {
+  source = "../../modules/state-storage"
+
+  name                = substr("st${var.name_prefix}tf${random_string.state_suffix.result}", 0, 24)
+  resource_group_name = azurerm_resource_group.bootstrap.name
+  location            = var.location
+  retention_days      = var.state_retention_days
+  tags                = local.tags
+}
+
+module "plan_identity" {
+  source = "../../modules/github-oidc-identity"
+
+  name                = "id-${var.name_prefix}-gh-plan"
+  resource_group_name = azurerm_resource_group.bootstrap.name
+  location            = var.location
+  github_repository   = var.github_repository
+  tags                = local.tags
+
+  # Pull requests and the plan job on main. Neither can change anything.
+  subjects = {
+    pull-request = "pull_request"
+    main-branch  = "ref:refs/heads/main"
+  }
+}
+
+module "deploy_identity" {
+  source = "../../modules/github-oidc-identity"
+
+  name                = "id-${var.name_prefix}-gh-deploy"
+  resource_group_name = azurerm_resource_group.bootstrap.name
+  location            = var.location
+  github_repository   = var.github_repository
+  tags                = local.tags
+
+  # Only jobs running in these GitHub environments, which require approval before they start.
+  subjects = {
+    "${var.environment}-infra" = "environment:${var.environment}-infra"
+    (var.environment)          = "environment:${var.environment}"
+  }
+}
+
+# --- Plan identity: read-only -------------------------------------------------------------------
+
+resource "azurerm_role_assignment" "plan_workload_reader" {
+  scope                = azurerm_resource_group.workload.id
+  role_definition_name = "Reader"
+  principal_id         = module.plan_identity.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Plans run with -lock=false, so reading state is enough.
+resource "azurerm_role_assignment" "plan_state_reader" {
+  scope                = module.state.container_id
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = module.plan_identity.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# --- Deploy identity: changes the workload resource group only ----------------------------------
+
+resource "azurerm_role_assignment" "deploy_workload_contributor" {
+  scope                = azurerm_resource_group.workload.id
+  role_definition_name = "Contributor"
+  principal_id         = module.deploy_identity.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "deploy_state_contributor" {
+  scope                = module.state.container_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = module.deploy_identity.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# The platform needs role assignments (keyless access everywhere), so the deploy identity may
+# grant roles, but only the roles listed above and only to service principals such as managed
+# identities. It cannot grant Owner, Contributor or anything to a user.
+resource "azurerm_role_assignment" "deploy_constrained_rbac_admin" {
+  scope                = azurerm_resource_group.workload.id
+  role_definition_name = "Role Based Access Control Administrator"
+  principal_id         = module.deploy_identity.principal_id
+  principal_type       = "ServicePrincipal"
+  description          = "Grant only the platform's data-plane roles, only to service principals."
+
+  condition_version = "2.0"
+  condition         = <<-EOT
+    (
+      (
+        !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
+      )
+      OR
+      (
+        @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.delegable_role_ids}}
+        AND
+        @Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'}
+      )
+    )
+    AND
+    (
+      (
+        !(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})
+      )
+      OR
+      (
+        @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.delegable_role_ids}}
+        AND
+        @Resource[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'}
+      )
+    )
+  EOT
+}
+
+# --- Operator ---------------------------------------------------------------------------------
+
+# Whoever runs the bootstrap needs data-plane access to migrate this stack's state and to run
+# the platform stack from a workstation.
+resource "azurerm_role_assignment" "operator_state_contributor" {
+  scope                = module.state.container_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
