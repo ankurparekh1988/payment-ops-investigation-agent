@@ -41,6 +41,7 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_name_prefix` | `paymentops` | Prefix for resource names |
 | `TF_VAR_environment` | `dev` | Environment to prepare |
 | `TF_VAR_github_repository` | `owner/name` | The only repository whose workflows can sign in to Azure |
+| `TF_VAR_github_owner_id`, `TF_VAR_github_repository_id` | | Numeric IDs, part of the OIDC subject (below). `gh api repos/OWNER/NAME --jq '.owner.id, .id'` |
 | `TF_STATE_*` | | Written by the bootstrap script on its first run |
 
 ## Bootstrap
@@ -74,12 +75,14 @@ The cost is a few cents a month.
 
 GitHub Actions signs in to Azure with OpenID Connect: each workflow run gets a short-lived token from GitHub, which Azure exchanges for access. No credentials are stored in GitHub. Each identity trusts only specific workflow contexts in this repository, and a fork's workflows are rejected because their tokens name a different repository.
 
+The trust is matched on the token's subject claim. For repositories created after 15 July 2026, GitHub includes the immutable owner and repository IDs in it, for example `repo:owner@123/name@456:pull_request`, so a renamed or re-created repository can't inherit the trust. The bootstrap builds subjects in this form and, when the GitHub CLI is available, checks the prefix against the one GitHub reports (`gh api repos/OWNER/NAME/actions/oidc/customization/sub`).
+
 ```mermaid
 flowchart LR
   PR["Pull request"] --> P["gh-plan"]
   MAIN["Push to main<br/>(plan job)"] --> P
-  ENVI["GitHub environment<br/>dev-infra (approval)"] --> D["gh-deploy"]
-  ENVA["GitHub environment<br/>dev (approval)"] --> D
+  ENVI["GitHub environment<br/>dev-infra"] --> D["gh-deploy"]
+  ENVA["GitHub environment<br/>dev"] --> D
   P -->|Reader| RG["rg-…-dev"]
   P -->|read state| ST[("tfstate")]
   D -->|Contributor + limited role granting| RG
@@ -91,9 +94,9 @@ flowchart LR
 | `gh-plan` | Pull requests; the `main` branch | Reader on the environment's resource group; read-only access to state (plans run with `-lock=false`) |
 | `gh-deploy` | GitHub environments `<env>-infra` and `<env>` only | Contributor on the environment's resource group; read/write state; limited role granting (below) |
 
-A pull request can show what *would* change, but cannot change anything.
+A pull request can show what *would* change, but cannot change anything. Only jobs running in the named GitHub environments can use `gh-deploy`. Protection rules on those environments, including required reviewers, are set up together with the deployment workflows.
 
-**Limited role granting.** The platform uses managed identities with key-based access disabled everywhere, so deploying it involves granting roles. `gh-deploy` holds *Role Based Access Control Administrator* with a condition attached. It can grant only the data-plane roles the platform needs, and only to service principals such as managed identities:
+**Limited role granting.** The platform uses managed identities with key-based access disabled everywhere, so deploying it involves assigning roles. `gh-deploy` holds *Role Based Access Control Administrator* with a condition attached. It may assign only these allow-listed platform roles, and only to service principals such as managed identities:
 
 - Cognitive Services OpenAI User
 - Cognitive Services User
@@ -105,12 +108,12 @@ A pull request can show what *would* change, but cannot change anything.
 - Storage Blob Data Contributor
 - Log Analytics Reader
 
-It can't grant Owner or Contributor, and can't grant anything to a user account.
+It cannot grant Owner or Contributor, and cannot assign roles to users or groups.
 
 ## Environments
 
-`dev` is the deployed environment. The bootstrap is environment-aware: running it with `TF_VAR_environment=prod` prepares a separate resource group and deployment identity using the same code.
+One environment, `dev`, is deployed. The modules and stacks take the environment name as an input, so the design can grow into independently managed environments, but the bootstrap currently keeps a single state file for one environment. Running it with a different `TF_VAR_environment` would change the existing environment rather than add a second one.
 
 ## Removing the bootstrap
 
-The state storage has a delete lock on purpose. To remove everything, first destroy any deployed environments, then delete the lock and run `terraform destroy` in `infra/deployments/bootstrap`.
+Bootstrap teardown isn't automated. The storage account holding the bootstrap's state is one of the resources the bootstrap manages, so destroying it in place would delete the state partway through. The teardown workflow will first migrate the state to a local backend, then remove the delete lock and destroy.
