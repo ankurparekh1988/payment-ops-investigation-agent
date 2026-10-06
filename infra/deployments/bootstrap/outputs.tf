@@ -22,6 +22,10 @@ output "deploy_identity_client_id" {
   value = module.bootstrap.deploy_identity_client_id
 }
 
+output "federated_subjects" {
+  value = module.bootstrap.federated_subjects
+}
+
 output "tenant_id" {
   value = module.bootstrap.tenant_id
 }

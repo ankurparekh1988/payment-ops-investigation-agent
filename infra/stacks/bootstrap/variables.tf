@@ -28,6 +28,16 @@ variable "github_repository" {
   type        = string
 }
 
+variable "github_owner_id" {
+  description = "Numeric ID of the repository owner, part of the immutable OIDC subject."
+  type        = number
+}
+
+variable "github_repository_id" {
+  description = "Numeric ID of the repository, part of the immutable OIDC subject."
+  type        = number
+}
+
 variable "state_retention_days" {
   description = "Days that deleted or overwritten state can be recovered."
   type        = number

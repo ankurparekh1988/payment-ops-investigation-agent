@@ -69,11 +69,13 @@ module "state" {
 module "plan_identity" {
   source = "../../modules/github-oidc-identity"
 
-  name                = "id-${var.name_prefix}-gh-plan"
-  resource_group_name = azurerm_resource_group.bootstrap.name
-  location            = var.location
-  github_repository   = var.github_repository
-  tags                = local.tags
+  name                 = "id-${var.name_prefix}-gh-plan"
+  resource_group_name  = azurerm_resource_group.bootstrap.name
+  location             = var.location
+  github_repository    = var.github_repository
+  github_owner_id      = var.github_owner_id
+  github_repository_id = var.github_repository_id
+  tags                 = local.tags
 
   # Pull requests and the plan job on main. Neither can change anything.
   subjects = {
@@ -85,13 +87,16 @@ module "plan_identity" {
 module "deploy_identity" {
   source = "../../modules/github-oidc-identity"
 
-  name                = "id-${var.name_prefix}-gh-deploy"
-  resource_group_name = azurerm_resource_group.bootstrap.name
-  location            = var.location
-  github_repository   = var.github_repository
-  tags                = local.tags
+  name                 = "id-${var.name_prefix}-gh-deploy"
+  resource_group_name  = azurerm_resource_group.bootstrap.name
+  location             = var.location
+  github_repository    = var.github_repository
+  github_owner_id      = var.github_owner_id
+  github_repository_id = var.github_repository_id
+  tags                 = local.tags
 
-  # Only jobs running in these GitHub environments, which require approval before they start.
+  # Only jobs running in these GitHub environments can use this identity. Their protection rules,
+  # including required reviewers, are configured with the deployment workflows.
   subjects = {
     "${var.environment}-infra" = "environment:${var.environment}-infra"
     (var.environment)          = "environment:${var.environment}"
@@ -132,14 +137,14 @@ resource "azurerm_role_assignment" "deploy_state_contributor" {
 }
 
 # The platform needs role assignments (keyless access everywhere), so the deploy identity may
-# grant roles, but only the roles listed above and only to service principals such as managed
-# identities. It cannot grant Owner, Contributor or anything to a user.
+# assign roles, but only the allow-listed roles above and only to service principals such as
+# managed identities. It cannot grant Owner or Contributor, or assign anything to users or groups.
 resource "azurerm_role_assignment" "deploy_constrained_rbac_admin" {
   scope                = azurerm_resource_group.workload.id
   role_definition_name = "Role Based Access Control Administrator"
   principal_id         = module.deploy_identity.principal_id
   principal_type       = "ServicePrincipal"
-  description          = "Grant only the platform's data-plane roles, only to service principals."
+  description          = "May assign only allow-listed platform roles, and only to service principals."
 
   condition_version = "2.0"
   condition         = <<-EOT

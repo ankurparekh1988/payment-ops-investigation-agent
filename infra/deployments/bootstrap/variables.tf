@@ -20,6 +20,16 @@ variable "github_repository" {
   type        = string
 }
 
+variable "github_owner_id" {
+  description = "Numeric ID of the repository owner (gh api repos/OWNER/NAME --jq .owner.id)."
+  type        = number
+}
+
+variable "github_repository_id" {
+  description = "Numeric ID of the repository (gh api repos/OWNER/NAME --jq .id)."
+  type        = number
+}
+
 variable "state_retention_days" {
   description = "Days that deleted or overwritten state can be recovered."
   type        = number

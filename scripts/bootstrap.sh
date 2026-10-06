@@ -19,7 +19,8 @@ if [[ -f "$env_file" ]]; then
 fi
 
 missing=()
-for name in ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_location TF_VAR_name_prefix TF_VAR_environment TF_VAR_github_repository; do
+for name in ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_location TF_VAR_name_prefix TF_VAR_environment \
+            TF_VAR_github_repository TF_VAR_github_owner_id TF_VAR_github_repository_id; do
   [[ -n "${!name:-}" ]] || missing+=("$name")
 done
 if (( ${#missing[@]} )); then
@@ -34,6 +35,25 @@ if [[ "$current_subscription" != "$ARM_SUBSCRIPTION_ID" ]]; then
   echo "Azure CLI is signed in to $current_subscription, but ARM_SUBSCRIPTION_ID is $ARM_SUBSCRIPTION_ID." >&2
   echo "Run: az account set --subscription $ARM_SUBSCRIPTION_ID" >&2
   exit 1
+fi
+
+# A federated credential with the wrong subject is created without error and only fails when a
+# workflow tries to sign in, so compare against the prefix GitHub actually issues when possible.
+expected_prefix="repo:${TF_VAR_github_repository%%/*}@${TF_VAR_github_owner_id}/${TF_VAR_github_repository#*/}@${TF_VAR_github_repository_id}"
+if command -v gh >/dev/null 2>&1; then
+  actual_prefix="$(gh api "repos/$TF_VAR_github_repository/actions/oidc/customization/sub" --jq '.sub_claim_prefix // empty' 2>/dev/null || true)"
+  if [[ -z "$actual_prefix" ]]; then
+    echo "Couldn't read the OIDC subject prefix from GitHub (is gh signed in?); skipping the check."
+    echo "Expected prefix: $expected_prefix"
+  elif [[ "$actual_prefix" != "$expected_prefix" ]]; then
+    echo "GitHub issues OIDC subjects starting with '$actual_prefix'," >&2
+    echo "but the configuration would trust '$expected_prefix'. Check TF_VAR_github_* in .env." >&2
+    exit 1
+  else
+    echo "OIDC subject prefix matches GitHub: $actual_prefix"
+  fi
+else
+  echo "GitHub CLI not found; skipping the OIDC subject check. Expected prefix: $expected_prefix"
 fi
 
 # Writes or replaces KEY=value in .env.

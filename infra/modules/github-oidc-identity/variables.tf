@@ -23,6 +23,23 @@ variable "github_repository" {
   }
 }
 
+variable "github_owner_id" {
+  description = "Numeric ID of the repository owner. Required together with github_repository_id for repositories that use immutable OIDC subjects."
+  type        = number
+  default     = null
+}
+
+variable "github_repository_id" {
+  description = "Numeric ID of the repository. Leave both IDs null only for repositories that still use name-only OIDC subjects."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = (var.github_repository_id == null) == (var.github_owner_id == null)
+    error_message = "Set both github_owner_id and github_repository_id, or neither."
+  }
+}
+
 variable "subjects" {
   description = <<-EOT
     Workflow contexts allowed to sign in, keyed by credential name. Values are the part of the

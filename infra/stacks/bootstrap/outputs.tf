@@ -28,6 +28,14 @@ output "deploy_identity_client_id" {
   value       = module.deploy_identity.client_id
 }
 
+output "federated_subjects" {
+  description = "Exact GitHub OIDC subjects each identity trusts."
+  value = {
+    plan   = module.plan_identity.federated_subjects
+    deploy = module.deploy_identity.federated_subjects
+  }
+}
+
 output "tenant_id" {
   description = "Entra tenant ID the identities belong to."
   value       = data.azurerm_client_config.current.tenant_id

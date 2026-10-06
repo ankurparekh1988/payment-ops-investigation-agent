@@ -8,6 +8,11 @@ output "principal_id" {
   value       = azurerm_user_assigned_identity.this.principal_id
 }
 
+output "federated_subjects" {
+  description = "Exact subjects trusted, keyed by credential name. Compare with the token GitHub issues."
+  value       = { for key, credential in azurerm_federated_identity_credential.this : key => credential.subject }
+}
+
 output "id" {
   description = "Resource ID of the identity."
   value       = azurerm_user_assigned_identity.this.id
