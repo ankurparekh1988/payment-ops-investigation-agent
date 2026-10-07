@@ -24,6 +24,18 @@ if [[ ! -d "$deployment_dir" ]]; then
   exit 2
 fi
 
+# Only the deployment pipeline changes environments. Workstations can plan and inspect; the
+# bootstrap is the one exception because it creates the pipeline's own identities and state.
+changes_environment=false
+case "$1" in
+  apply | destroy | import | taint | untaint | force-unlock) changes_environment=true ;;
+  state) [[ "${2:-}" =~ ^(rm|mv|push|replace-provider)$ ]] && changes_environment=true ;;
+esac
+if [[ "$changes_environment" == "true" && "$deployment" != "bootstrap" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
+  echo "'terraform $*' for '$deployment' runs only in the deployment pipeline. Use 'plan' locally." >&2
+  exit 1
+fi
+
 # .env fills in configuration; anything already set in the environment (such as CI variables) wins.
 if [[ -f "$env_file" ]]; then
   preset_env="$(export -p | grep -v '^declare -[a-z]*r')"
