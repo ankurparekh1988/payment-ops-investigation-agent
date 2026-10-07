@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> Only the foundation is in place so far: module structure, architecture tests, the web host, and the Terraform bootstrap (state storage and pipeline identities). Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> Only the foundation is in place so far: module structure, architecture tests, the web host, and the Azure platform defined in Terraform. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -10,7 +10,24 @@
 | Architecture tests | ✅ Dependency rules enforced in `PaymentOps.ArchitectureTests` |
 | Web host | ✅ Placeholder Blazor host with a `/health` endpoint |
 | Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
+| Azure platform | ✅ Defined in Terraform, with a model preflight. Created by the deployment pipeline (next); nothing is deployed outside it |
 | Product and AI capabilities | Not started |
+
+## Azure platform
+
+What runs where, and how each part authenticates. Every service-to-service call uses a managed identity; API keys and shared keys are disabled throughout.
+
+```mermaid
+flowchart LR
+  U["Ops users<br/>(browser)"] -->|HTTPS| APP["Web app<br/>App Service, Linux, .NET 10"]
+  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat, embedding and judge deployments<br/>strict content filter"]
+  APP -->|"Entra token<br/>Blob Data Reader"| ST[("Knowledge storage")]
+  APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
+  AI --> LA[("Log Analytics")]
+  F -.->|"project identity<br/>Log Analytics Reader"| LA
+```
+
+*As of 2026-10-07.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application will also read, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
 
 ## Project references
 
