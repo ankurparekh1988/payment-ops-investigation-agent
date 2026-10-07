@@ -38,6 +38,12 @@ variable "github_repository_id" {
   type        = number
 }
 
+variable "developer_object_ids" {
+  description = "Entra object IDs of people who run the app locally against this environment."
+  type        = list(string)
+  default     = []
+}
+
 variable "state_retention_days" {
   description = "Days that deleted or overwritten state can be recovered."
   type        = number
