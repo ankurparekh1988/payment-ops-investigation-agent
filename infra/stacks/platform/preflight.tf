@@ -1,5 +1,7 @@
-# Model preflight: fail the plan, before anything is applied, if a manifest model isn't available
-# in the region at its pinned version and deployment type, retires too soon, or exceeds quota.
+# Model preflight: fail the plan if a manifest model isn't offered in the region at its pinned
+# version and deployment type, is closed to new deployments, or retires within the buffer.
+# Quota and capacity headroom are checked by the deployment pipeline immediately before apply,
+# because quota is shared across deployments and depends on what already exists.
 
 data "azapi_resource_action" "model_catalog" {
   type                   = "Microsoft.CognitiveServices/locations@2024-10-01"
@@ -9,24 +11,13 @@ data "azapi_resource_action" "model_catalog" {
   response_export_values = ["value"]
 }
 
-data "azapi_resource_action" "model_quota" {
-  type                   = "Microsoft.CognitiveServices/locations@2024-10-01"
-  resource_id            = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.CognitiveServices/locations/${var.location}"
-  action                 = "usages"
-  method                 = "GET"
-  response_export_values = ["value"]
-}
-
 locals {
+  closed_lifecycle_states = ["Deprecating", "Deprecated"]
+
   catalog = {
     for entry in data.azapi_resource_action.model_catalog.output.value :
     "${entry.model.name}@${entry.model.version}" => entry.model...
     if try(entry.kind, "") == "OpenAI"
-  }
-
-  quota_limits = {
-    for usage in data.azapi_resource_action.model_quota.output.value :
-    usage.name.value => usage.limit
   }
 
   retirement_cutoff = timeadd(plantimestamp(), "${var.model_retirement_buffer_days * 24}h")
@@ -35,11 +26,10 @@ locals {
     for name, d in var.model_deployments : name => {
       label     = "${d.model} ${d.version} (${d.sku})"
       entry     = try(local.catalog["${d.model}@${d.version}"][0], null)
-      skus      = try([for sku in local.catalog["${d.model}@${d.version}"][0].skus : sku.name], [])
+      lifecycle = try(local.catalog["${d.model}@${d.version}"][0].lifecycleStatus, "Unknown")
       retires   = try(local.catalog["${d.model}@${d.version}"][0].deprecation.inference, null)
-      capacity  = d.capacity
-      quota     = try(local.quota_limits["OpenAI.${d.sku}.${d.model}"], 0)
-      requested = d.sku
+      sku       = try([for s in local.catalog["${d.model}@${d.version}"][0].skus : s if s.name == d.sku][0], null)
+      offered   = try([for s in local.catalog["${d.model}@${d.version}"][0].skus : s.name], [])
     }
   }
 }
@@ -56,8 +46,13 @@ resource "terraform_data" "model_preflight" {
     }
 
     precondition {
-      condition     = contains(each.value.skus, each.value.requested)
-      error_message = "${each.key}: ${each.value.label} isn't offered as ${each.value.requested} in ${var.location} (offered: ${join(", ", each.value.skus)})."
+      condition     = !contains(local.closed_lifecycle_states, each.value.lifecycle)
+      error_message = "${each.key}: ${each.value.label} is ${each.value.lifecycle} and closed to new deployments. Choose a newer version in ai/manifest.yaml."
+    }
+
+    precondition {
+      condition     = each.value.sku != null
+      error_message = "${each.key}: ${each.value.label} isn't offered with that deployment type in ${var.location} (offered: ${join(", ", each.value.offered)})."
     }
 
     precondition {
@@ -66,8 +61,8 @@ resource "terraform_data" "model_preflight" {
     }
 
     precondition {
-      condition     = each.value.capacity <= each.value.quota
-      error_message = "${each.key}: requests ${each.value.capacity}K TPM but the subscription's quota for ${each.value.label} is ${each.value.quota}K TPM."
+      condition     = try(each.value.sku.deprecationDate, null) == null || timecmp(coalesce(try(each.value.sku.deprecationDate, null), "9999-12-31T00:00:00Z"), local.retirement_cutoff) > 0
+      error_message = "${each.key}: the ${each.value.label} deployment type is deprecated on ${coalesce(try(each.value.sku.deprecationDate, null), "n/a")}, within ${var.model_retirement_buffer_days} days."
     }
   }
 }
