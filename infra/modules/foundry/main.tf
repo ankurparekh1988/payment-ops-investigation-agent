@@ -96,8 +96,10 @@ resource "azurerm_cognitive_account_rai_policy" "strict" {
 resource "azurerm_cognitive_deployment" "this" {
   for_each = var.model_deployments
 
-  name                   = each.key
-  cognitive_account_id   = azurerm_cognitive_account.this.id
+  name                 = each.key
+  cognitive_account_id = azurerm_cognitive_account.this.id
+
+  # Models change only through a reviewed manifest change that passes evaluation (ADR 0002).
   version_upgrade_option = "NoAutoUpgrade"
   rai_policy_name        = each.value.content_filter == null ? null : local.rai_policy_names[each.value.content_filter]
 
