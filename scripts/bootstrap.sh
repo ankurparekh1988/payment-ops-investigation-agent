@@ -38,22 +38,46 @@ if [[ "$current_subscription" != "$ARM_SUBSCRIPTION_ID" ]]; then
 fi
 
 # A federated credential with the wrong subject is created without error and only fails when a
-# workflow tries to sign in, so compare against the prefix GitHub actually issues when possible.
+# workflow tries to sign in, so compare against the subject format GitHub actually issues.
 expected_prefix="repo:${TF_VAR_github_repository%%/*}@${TF_VAR_github_owner_id}/${TF_VAR_github_repository#*/}@${TF_VAR_github_repository_id}"
-if command -v gh >/dev/null 2>&1; then
-  actual_prefix="$(gh api "repos/$TF_VAR_github_repository/actions/oidc/customization/sub" --jq '.sub_claim_prefix // empty' 2>/dev/null || true)"
+check_oidc_subject() {
+  local repo="$TF_VAR_github_repository" settings use_default use_immutable actual_prefix
+  settings="$(gh api "repos/$repo/actions/oidc/customization/sub" \
+    --jq '[.use_default, (.use_immutable_subject // false), (.sub_claim_prefix // "")] | @tsv' 2>/dev/null)" || return 2
+  IFS=$'\t' read -r use_default use_immutable actual_prefix <<< "$settings"
+
+  # A customised template changes the whole subject structure, not just the prefix.
+  if [[ "$use_default" != "true" ]]; then
+    echo "The repository uses a customised OIDC subject template; the federated credentials expect GitHub's default." >&2
+    return 1
+  fi
+
+  # sub_claim_prefix is optional in the API, so derive the prefix from the repository if it's absent.
   if [[ -z "$actual_prefix" ]]; then
-    echo "Couldn't read the OIDC subject prefix from GitHub (is gh signed in?); skipping the check."
-    echo "Expected prefix: $expected_prefix"
-  elif [[ "$actual_prefix" != "$expected_prefix" ]]; then
+    if [[ "$use_immutable" == "true" ]]; then
+      actual_prefix="$(gh api "repos/$repo" --jq '"repo:\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"')" || return 2
+    else
+      actual_prefix="repo:$repo"
+    fi
+  fi
+
+  if [[ "$actual_prefix" != "$expected_prefix" ]]; then
     echo "GitHub issues OIDC subjects starting with '$actual_prefix'," >&2
     echo "but the configuration would trust '$expected_prefix'. Check TF_VAR_github_* in .env." >&2
-    exit 1
-  else
-    echo "OIDC subject prefix matches GitHub: $actual_prefix"
+    return 1
   fi
-else
+  echo "OIDC subject prefix matches GitHub: $actual_prefix"
+}
+
+if ! command -v gh >/dev/null 2>&1; then
   echo "GitHub CLI not found; skipping the OIDC subject check. Expected prefix: $expected_prefix"
+else
+  check_oidc_subject && status=0 || status=$?
+  if (( status == 1 )); then
+    exit 1
+  elif (( status == 2 )); then
+    echo "Couldn't read OIDC settings from GitHub (is gh signed in?); skipping the check. Expected prefix: $expected_prefix"
+  fi
 fi
 
 # Writes or replaces KEY=value in .env.
