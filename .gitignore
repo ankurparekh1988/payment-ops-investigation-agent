@@ -6,6 +6,19 @@
 # dotenv files
 .env
 
+# Terraform: working directories, state and plans never leave the workstation or CI runner.
+# Provider lock files (.terraform.lock.hcl) are committed.
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
 # User-specific files
 *.rsuser
 *.suo

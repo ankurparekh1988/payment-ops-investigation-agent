@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> Only the project foundation is in place so far: module structure, architecture tests and the web host. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> Only the foundation is in place so far: module structure, architecture tests, the web host, and the Terraform bootstrap (state storage and pipeline identities). Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -9,6 +9,7 @@
 | Solution structure | ✅ Projects and allowed dependency directions in place |
 | Architecture tests | ✅ Dependency rules enforced in `PaymentOps.ArchitectureTests` |
 | Web host | ✅ Placeholder Blazor host with a `/health` endpoint |
+| Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
 | Product and AI capabilities | Not started |
 
 ## Project references

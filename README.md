@@ -2,7 +2,7 @@
 
 An AI agent that helps a payments operations team work out why money didn't move when it should have: a late payout, a missing settlement, a processor outage.
 
-> 🚧 **Early stage.** The project foundation is in place: module structure, architecture tests and the web host. The rest of this page describes the design it's being built towards.
+> 🚧 **Early stage.** The foundation is in place: module structure, architecture tests, the web host, and Terraform state with keyless pipeline identities in Azure. The rest of this page describes the design it's being built towards.
 
 When a merchant's payout is late, the explanation is usually spread across settlement records, error logs, a processor's status page and a runbook, and someone has to piece it together by hand. The agent is designed to do that legwork. Ask it *"Why were payouts for merchant M-1042 delayed yesterday?"* and it will pull the relevant data and documents, explain what happened, and show exactly where each fact came from.
 
@@ -19,7 +19,7 @@ The setting is a fictional company, *Contoso Payments*, and all data is syntheti
 
 .NET 10 and Blazor, with Microsoft Agent Framework for the agent. Azure: Microsoft Foundry, Azure AI Search and Entra ID. Infrastructure uses Terraform, deployed through GitHub Actions.
 
-More detail: [product notes](docs/PRD.md) · [architecture so far](docs/Architecture.md)
+More detail: [product notes](docs/PRD.md) · [architecture so far](docs/Architecture.md) · [deployment](docs/Deployment.md) · [decisions](docs/adr/README.md)
 
 ## Running locally
 
