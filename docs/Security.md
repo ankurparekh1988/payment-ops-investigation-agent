@@ -7,6 +7,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 - **No keys.** Every service-to-service call uses a managed identity with an Entra ID token. API keys, storage account keys and workspace keys are disabled, so there are no secrets to store, rotate or leak.
 - **Least privilege, narrowest scope.** Each identity gets only the roles it needs, assigned on the specific resource rather than the subscription where possible.
 - **Authority sits with people, not pipelines.** Granting roles to users, registering resource providers and creating pipeline identities require Owner rights, which no CI identity holds.
+- **Only the pipeline changes environments.** The bootstrap, which creates the pipeline's identities and state, is the single step run by a person. Everything after it is deployed by the pipeline.
 
 ## Identities
 
@@ -25,7 +26,8 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | Web app | Foundry resource | Cognitive Services OpenAI User | Call the chat and embedding deployments |
 | Web app | Knowledge container | Storage Blob Data Reader | Serve source documents behind authorization checks |
 | Web app | Application Insights | Monitoring Metrics Publisher | Send telemetry with an Entra token |
-| Foundry project | Log Analytics workspace | Log Analytics Reader | Show traces in the Foundry portal |
+| Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
+| Foundry project | Application Insights | Log Analytics Reader | Show traces in the Foundry portal |
 | `gh-plan` | Environment resource group | Reader | Plan infrastructure changes |
 | `gh-plan` | State container | Storage Blob Data Reader | Read Terraform state |
 | `gh-deploy` | Environment resource group | Contributor | Apply infrastructure changes |
@@ -43,7 +45,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | Log Analytics | Local authentication disabled |
 | Application Insights | Local authentication disabled; ingestion requires an Entra token |
 
-One stored value comes close to a key: Foundry's connection to Application Insights keeps the connection string as its credential, because that's the only form Foundry supports for this connection. It can't be used to send telemetry on its own, since ingestion requires Entra ID.
+Foundry's connection to Application Insights authenticates with the project's managed identity, so no connection string or key is stored in Foundry. The web app is given the Application Insights connection string only to know where to send telemetry; with local authentication disabled, sending still requires the app's Entra token.
 
 ## Content safety
 

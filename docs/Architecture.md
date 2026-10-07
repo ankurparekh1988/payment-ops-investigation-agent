@@ -24,7 +24,7 @@ flowchart LR
   APP -->|"Entra token<br/>Blob Data Reader"| ST[("Knowledge storage")]
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
-  F -.->|"project identity<br/>Log Analytics Reader"| LA
+  F -.->|"project identity<br/>Metrics Publisher, Log Analytics Reader"| AI
 ```
 
 *As of 2026-10-07.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application will also read, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).

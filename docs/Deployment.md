@@ -102,13 +102,13 @@ The strict content filter is attached to the chat deployments: anything above "S
 
 ### Model preflight
 
-Before any model deployment changes, the plan checks each model in `ai/manifest.yaml` against the live Azure model catalog and the subscription's quota. The plan fails, before anything is applied, if a model:
+Before any model deployment changes, the plan checks each model in `ai/manifest.yaml` against the live Azure model catalog. The plan fails, before anything is applied, if a model:
 
 - isn't offered in the region at its pinned version and deployment type;
-- retires within `TF_VAR_model_retirement_buffer_days`;
-- requests more capacity than the subscription's quota.
+- is `Deprecating` or `Deprecated`, and so closed to new deployments;
+- retires, or its deployment type is deprecated, within `TF_VAR_model_retirement_buffer_days`.
 
-These reads are subscription-level, so both pipeline identities hold a custom *Model Availability Reader* role with exactly those two read permissions.
+Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom is checked by the deployment pipeline immediately before it applies. The catalog and quota reads are subscription-level, so both pipeline identities hold a custom *Model Availability Reader* role limited to those reads.
 
 ### Planning locally
 
@@ -116,7 +116,7 @@ These reads are subscription-level, so both pipeline identities hold a custom *M
 scripts/terraform.sh platform plan
 ```
 
-`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Applying the platform is the pipeline's job.
+`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions for everything except the bootstrap, which is the one root-of-trust step run by a person.
 
 ## Pipeline identities
 
