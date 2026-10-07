@@ -124,19 +124,31 @@ module "cost_guardrail" {
   tags                    = local.tags
 }
 
-# Lets the Foundry portal show traces. Foundry stores the connection string as this connection's
-# credential; it can't send telemetry on its own because ingestion requires Entra ID.
-resource "azurerm_cognitive_account_connection_api_key" "app_insights" {
-  name                 = "app-insights"
-  cognitive_account_id = module.foundry.account_id
-  category             = "AppInsights"
-  target               = module.monitoring.application_insights_id
-  api_key              = module.monitoring.connection_string
+# Connects Application Insights to the Foundry project for tracing. The project authenticates with
+# its own managed identity, so no connection string or key is stored.
+# AzAPI: AzureRM doesn't yet support project-level connections with ProjectManagedIdentity auth.
+resource "azapi_resource" "app_insights_connection" {
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2026-09-01"
+  name      = "app-insights"
+  parent_id = module.foundry.project_id
 
-  metadata = {
-    ApiType    = "Azure"
-    ResourceId = module.monitoring.application_insights_id
+  # AzAPI's embedded schema predates ProjectManagedIdentity; Azure still validates the request.
+  schema_validation_enabled = false
+
+  body = {
+    properties = {
+      authType      = "ProjectManagedIdentity"
+      category      = "AppInsights"
+      target        = module.monitoring.application_insights_id
+      isSharedToAll = false
+      metadata = {
+        ApiType    = "Azure"
+        ResourceId = module.monitoring.application_insights_id
+      }
+    }
   }
+
+  depends_on = [azurerm_role_assignment.foundry_project_telemetry]
 }
 
 # --- Role assignments: every service-to-service call uses a managed identity ------------------
@@ -162,9 +174,16 @@ resource "azurerm_role_assignment" "app_telemetry" {
   principal_type       = "ServicePrincipal"
 }
 
-# Foundry's trace views read from the connected workspace with the project's identity.
-resource "azurerm_role_assignment" "foundry_project_logs" {
-  scope                = module.monitoring.workspace_id
+# The Foundry project writes traces to, and reads them from, the connected Application Insights.
+resource "azurerm_role_assignment" "foundry_project_telemetry" {
+  scope                = module.monitoring.application_insights_id
+  role_definition_name = "Monitoring Metrics Publisher"
+  principal_id         = module.foundry.project_principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "foundry_project_trace_reader" {
+  scope                = module.monitoring.application_insights_id
   role_definition_name = "Log Analytics Reader"
   principal_id         = module.foundry.project_principal_id
   principal_type       = "ServicePrincipal"
