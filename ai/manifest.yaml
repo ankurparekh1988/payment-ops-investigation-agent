@@ -1,0 +1,38 @@
+# AI release manifest: the models this release runs on.
+#
+# Terraform creates the model deployments from this file, and the application will read the same
+# file, so infrastructure and application can't disagree about which model is live. Changes go
+# through a pull request. Versions are pinned and never auto-upgraded.
+#
+# capacityK is the deployment's rate limit in thousands of tokens per minute. Global Standard is
+# billed per token, so capacity costs nothing while idle.
+
+manifestVersion: 0.1.0
+
+models:
+  chat:
+    # Blue/green slots: a new model version goes into the inactive slot, is evaluated there,
+    # and is promoted by switching "active". Outside an upgrade only the active slot exists.
+    active: blue
+    deployments:
+      blue:
+        deployment: chat-blue
+        model: gpt-5.4-mini
+        version: "2026-03-17"
+        deploymentType: GlobalStandard
+        capacityK: 50
+
+  embedding:
+    deployment: embed-v1
+    model: text-embedding-3-small
+    version: "1"
+    deploymentType: GlobalStandard
+    capacityK: 50
+
+  # Scores answers during evaluation. Pinned separately so judge behaviour changes only on purpose.
+  judge:
+    deployment: judge
+    model: gpt-5.4-mini
+    version: "2026-03-17"
+    deploymentType: GlobalStandard
+    capacityK: 50
