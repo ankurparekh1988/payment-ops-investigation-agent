@@ -19,7 +19,7 @@ There are two kinds of deployment:
 | | What it creates | Who applies it |
 |---|---|---|
 | **Bootstrap** | Terraform state storage, the GitHub pipeline identities, the environment's resource group, resource provider registration | A person with Owner rights. Re-run only when the bootstrap itself changes |
-| **Platform** | Everything the application runs on: models, hosting, storage, monitoring, budget | The GitHub Actions pipeline, after approval. Workstations only run plans |
+| **Platform** | Everything the application runs on: models, hosting, storage, monitoring, budget | The GitHub Actions deployment pipeline, after approval (being added next). Workstations only run plans |
 
 The bootstrap can't run through the pipeline, because it creates what the pipeline needs to run: the identity the pipeline signs in as, and the storage that holds its state. Creating them also needs Owner-level rights, which shouldn't sit with any CI identity. So a person runs it with reviewed Terraform code, and the pipeline works inside the boundaries it set up.
 
@@ -108,13 +108,13 @@ Before any model deployment changes, the plan checks each model in `ai/manifest.
 - is `Deprecating` or `Deprecated`, and so closed to new deployments;
 - retires, or its deployment type is deprecated, within `TF_VAR_model_retirement_buffer_days`.
 
-Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom is checked by the deployment pipeline immediately before it applies. The catalog and quota reads are subscription-level, so both pipeline identities hold a custom *Model Availability Reader* role limited to those reads.
+Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom will be checked by the deployment pipeline immediately before apply. The catalog and quota reads are subscription-level, so both pipeline identities hold a custom *Model Availability Reader* role limited to those reads.
 
 ### Model lifecycle
 
 Model versions are temporary: Microsoft deprecates a generally available version after about 12 months and retires it after about 18, after which calls fail. Every deployment here is pinned and never upgrades automatically, so a model changes only through a reviewed change to `ai/manifest.yaml` that passes evaluation ([ADR 0002](adr/0002-pinned-model-versions.md)).
 
-To upgrade the chat model, add the new version as the inactive slot in the manifest (for example `green`), let the evaluation compare it with the active one, switch `active`, then remove the old slot. An embedding upgrade builds a new search index alongside the existing one instead, because vectors from different models can't be mixed.
+The upgrade path, once the evaluation gate is in place: add the new chat model version as the inactive slot in the manifest (for example `green`), have the evaluation compare it with the active one, switch `active`, then remove the old slot. An embedding upgrade builds a new search index alongside the existing one instead, because vectors from different models can't be mixed.
 
 ### Planning locally
 

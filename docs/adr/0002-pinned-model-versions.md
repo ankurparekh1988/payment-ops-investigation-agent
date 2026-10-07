@@ -30,9 +30,9 @@ An upgrade starts when a model enters deprecation (`Deprecating` in the API) or 
 
 - Model behaviour never changes without review and evaluation, and the judge and embedding model stay stable across releases.
 - A missed retirement causes an outage instead of an unevaluated upgrade. That risk is managed actively:
-  - The plan-time preflight rejects models that are deprecated or retire within the configured buffer, which also stops a recreated environment from deploying them.
-  - A scheduled check opens an issue when a model in the manifest approaches deprecation or retirement.
-  - Azure Service Health retirement advisories go to the alert email.
+  - In place: the plan-time preflight rejects models that are deprecated or retire within the configured buffer, which also stops a recreated environment from deploying them.
+  - Planned: a scheduled check that opens an issue when a model in the manifest approaches deprecation or retirement.
+  - Planned: an Azure Service Health alert that routes retirement advisories to the alert email.
 - Rejecting deprecated models is stricter than Azure requires: subscriptions that already use a deprecated model may keep deploying it. This deliberately forces the upgrade at about 12 months rather than drifting towards retirement.
 
 ## Alternatives considered

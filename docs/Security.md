@@ -7,7 +7,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 - **No keys.** Every service-to-service call uses a managed identity with an Entra ID token. API keys, storage account keys and workspace keys are disabled, so there are no secrets to store, rotate or leak.
 - **Least privilege, narrowest scope.** Each identity gets only the roles it needs, assigned on the specific resource rather than the subscription where possible.
 - **Authority sits with people, not pipelines.** Granting roles to users, registering resource providers and creating pipeline identities require Owner rights, which no CI identity holds.
-- **Only the pipeline changes environments.** The bootstrap, which creates the pipeline's identities and state, is the single step run by a person. Everything after it is deployed by the pipeline.
+- **Only the pipeline changes environments.** The bootstrap, which creates the pipeline's identities and state, is the single step run by a person. Everything else is deployed only by the deployment pipeline, which is being added next; until then, nothing else is deployed.
 
 ## Identities
 
