@@ -31,8 +31,21 @@ locals {
     "Storage Blob Data Reader"       = "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1"
     "Storage Blob Data Contributor"  = "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
     "Log Analytics Reader"           = "73c42c96-874c-492b-b04d-ab87d138a893"
+    "Monitoring Metrics Publisher"   = "3913510d-42f4-4e42-8a64-420c390055eb"
   }
   delegable_role_ids = join(", ", values(local.delegable_roles))
+
+  # What a developer needs to run the app locally against the environment's services.
+  developer_roles = [
+    "Cognitive Services OpenAI User",
+    "Foundry User",
+    "Search Index Data Reader",
+    "Storage Blob Data Reader",
+  ]
+  developer_assignments = {
+    for pair in setproduct(var.developer_object_ids, local.developer_roles) :
+    "${pair[0]}/${pair[1]}" => { object_id = pair[0], role = pair[1] }
+  }
 }
 
 # Holds what must outlive any environment: Terraform state and the pipeline identities.
@@ -172,6 +185,50 @@ resource "azurerm_role_assignment" "deploy_constrained_rbac_admin" {
       )
     )
   EOT
+}
+
+# --- Model preflight: read the model catalog and quota from CI ----------------------------------
+
+# The platform's model preflight reads the regional catalog and quota, which are subscription-level,
+# so both pipeline identities get exactly those two read permissions.
+resource "azurerm_role_definition" "model_availability_reader" {
+  name        = "${var.name_prefix} Model Availability Reader"
+  scope       = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
+  description = "Read the regional model catalog and model quota usage."
+
+  permissions {
+    actions = [
+      "Microsoft.CognitiveServices/locations/models/read",
+      "Microsoft.CognitiveServices/locations/usages/read",
+    ]
+  }
+
+  assignable_scopes = ["/subscriptions/${data.azurerm_client_config.current.subscription_id}"]
+}
+
+resource "azurerm_role_assignment" "model_availability_reader" {
+  for_each = {
+    plan   = module.plan_identity.principal_id
+    deploy = module.deploy_identity.principal_id
+  }
+
+  scope              = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
+  role_definition_id = azurerm_role_definition.model_availability_reader.role_definition_resource_id
+  principal_id       = each.value
+  principal_type     = "ServicePrincipal"
+}
+
+# --- Developers ---------------------------------------------------------------------------------
+
+# Data-plane access for people running the app locally. Granted here, by an Owner, because the
+# deploy identity is deliberately unable to assign roles to users.
+resource "azurerm_role_assignment" "developer" {
+  for_each = local.developer_assignments
+
+  scope                = azurerm_resource_group.workload.id
+  role_definition_name = each.value.role
+  principal_id         = each.value.object_id
+  principal_type       = "User"
 }
 
 # --- Operator ---------------------------------------------------------------------------------

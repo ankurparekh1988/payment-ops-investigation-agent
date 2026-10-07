@@ -20,12 +20,20 @@ terraform {
 }
 
 # Subscription and tenant come from ARM_SUBSCRIPTION_ID and ARM_TENANT_ID.
+# Registers every resource provider the platform uses: registration is a subscription-level
+# action, so it happens here rather than in the pipeline.
 provider "azurerm" {
   storage_use_azuread = true
 
   resource_providers_to_register = [
+    "Microsoft.CognitiveServices",
+    "Microsoft.Consumption",
+    "Microsoft.Insights",
     "Microsoft.ManagedIdentity",
+    "Microsoft.OperationalInsights",
+    "Microsoft.Search",
     "Microsoft.Storage",
+    "Microsoft.Web",
   ]
 
   features {}

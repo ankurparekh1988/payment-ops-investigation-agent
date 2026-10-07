@@ -11,12 +11,20 @@ stack_dir="$repo_root/infra/deployments/bootstrap"
 env_file="$repo_root/.env"
 state_key="bootstrap.tfstate"
 
+# .env fills in configuration; anything already set in the environment (such as CI variables) wins.
 if [[ -f "$env_file" ]]; then
+  preset_env="$(export -p | grep -v '^declare -[a-z]*r')"
   set -a
   # shellcheck disable=SC1090
   source "$env_file"
   set +a
+  eval "$preset_env"
 fi
+
+# Empty TF_VAR_* lines would reach Terraform as empty strings; unset them so defaults apply.
+while IFS='=' read -r name _; do
+  if [[ -z "${!name}" ]]; then unset "$name"; fi
+done < <(env | grep '^TF_VAR_' || true)
 
 missing=()
 for name in ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_location TF_VAR_name_prefix TF_VAR_environment \

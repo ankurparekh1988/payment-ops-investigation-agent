@@ -30,6 +30,12 @@ variable "github_repository_id" {
   type        = number
 }
 
+variable "developer_object_ids" {
+  description = "Entra object IDs of developers who need data access, as a JSON list (az ad signed-in-user show --query id)."
+  type        = list(string)
+  default     = []
+}
+
 variable "state_retention_days" {
   description = "Days that deleted or overwritten state can be recovered."
   type        = number
