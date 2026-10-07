@@ -41,10 +41,26 @@ fi
 # workflow tries to sign in, so compare against the subject format GitHub actually issues.
 expected_prefix="repo:${TF_VAR_github_repository%%/*}@${TF_VAR_github_owner_id}/${TF_VAR_github_repository#*/}@${TF_VAR_github_repository_id}"
 check_oidc_subject() {
-  local repo="$TF_VAR_github_repository" settings use_default use_immutable actual_prefix
-  settings="$(gh api "repos/$repo/actions/oidc/customization/sub" \
-    --jq '[.use_default, (.use_immutable_subject // false), (.sub_claim_prefix // "")] | @tsv' 2>/dev/null)" || return 2
-  IFS=$'\t' read -r use_default use_immutable actual_prefix <<< "$settings"
+  local repo="$TF_VAR_github_repository" actual_prefix settings use_default use_immutable reported_prefix
+
+  # The immutable prefix is fully determined by the repository's identity, so check the configured
+  # owner, name and IDs against the repository itself rather than relying on optional fields.
+  actual_prefix="$(gh api "repos/$repo" --jq '"repo:\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"' 2>/dev/null)" || return 2
+  if [[ "$actual_prefix" != "$expected_prefix" ]]; then
+    echo "The repository's identity gives the OIDC prefix '$actual_prefix'," >&2
+    echo "but the configuration would trust '$expected_prefix'. Check TF_VAR_github_* in .env." >&2
+    return 1
+  fi
+
+  # use_default is the one required field. Optional fields are read only when present, and kept as
+  # text so an explicit false isn't confused with a missing value.
+  settings="$(gh api "repos/$repo/actions/oidc/customization/sub" --jq '[
+      (.use_default | tostring),
+      (if has("use_immutable_subject") then (.use_immutable_subject | tostring) else "" end),
+      (.sub_claim_prefix // "")
+    ] | join("|")' 2>/dev/null)" || return 2
+  # "|" rather than a tab: read collapses runs of whitespace delimiters, which would shift fields.
+  IFS='|' read -r use_default use_immutable reported_prefix <<< "$settings"
 
   # A customised template changes the whole subject structure, not just the prefix.
   if [[ "$use_default" != "true" ]]; then
@@ -52,21 +68,14 @@ check_oidc_subject() {
     return 1
   fi
 
-  # sub_claim_prefix is optional in the API, so derive the prefix from the repository if it's absent.
-  if [[ -z "$actual_prefix" ]]; then
-    if [[ "$use_immutable" == "true" ]]; then
-      actual_prefix="$(gh api "repos/$repo" --jq '"repo:\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"')" || return 2
-    else
-      actual_prefix="repo:$repo"
-    fi
-  fi
-
-  if [[ "$actual_prefix" != "$expected_prefix" ]]; then
-    echo "GitHub issues OIDC subjects starting with '$actual_prefix'," >&2
-    echo "but the configuration would trust '$expected_prefix'. Check TF_VAR_github_* in .env." >&2
+  # Older repositories issue name-only subjects unless they opt in to immutable ones.
+  if [[ "$use_immutable" == "false" ]] || [[ -n "$reported_prefix" && "$reported_prefix" != "$expected_prefix" ]]; then
+    echo "GitHub reports this repository issues subjects starting with '${reported_prefix:-repo:$repo}'," >&2
+    echo "not the immutable form '$expected_prefix'. Opt the repository in to immutable subjects first." >&2
     return 1
   fi
-  echo "OIDC subject prefix matches GitHub: $actual_prefix"
+
+  echo "OIDC subject prefix matches the repository: $expected_prefix"
 }
 
 if ! command -v gh >/dev/null 2>&1; then
