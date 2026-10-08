@@ -223,6 +223,29 @@ resource "azurerm_role_assignment" "model_availability_reader" {
   principal_type     = "ServicePrincipal"
 }
 
+# --- Plan identity: refresh the web app --------------------------------------------------------
+
+# Reader can't call list actions, but refreshing a web app reads its configuration through one.
+# The app holds no secrets in its settings (every service is reached with managed identity).
+resource "azurerm_role_definition" "web_app_config_reader" {
+  name        = "${var.name_prefix} Web App Configuration Reader"
+  scope       = azurerm_resource_group.workload.id
+  description = "Read web app configuration, which Terraform needs to refresh a web app."
+
+  permissions {
+    actions = ["Microsoft.Web/sites/config/list/action"]
+  }
+
+  assignable_scopes = [azurerm_resource_group.workload.id]
+}
+
+resource "azurerm_role_assignment" "plan_web_app_config_reader" {
+  scope              = azurerm_resource_group.workload.id
+  role_definition_id = azurerm_role_definition.web_app_config_reader.role_definition_resource_id
+  principal_id       = module.plan_identity.principal_id
+  principal_type     = "ServicePrincipal"
+}
+
 # --- Developers ---------------------------------------------------------------------------------
 
 # Data-plane access for people running the app locally. Granted here, by an Owner, because the

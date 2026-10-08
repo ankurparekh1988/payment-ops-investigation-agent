@@ -226,7 +226,7 @@ flowchart LR
 
 | Identity | Trusted contexts | Permissions |
 |---|---|---|
-| `gh-plan` | Pull requests; the `main` branch | Reader on the subscription; read-only access to state (plans run with `-lock=false`) |
+| `gh-plan` | Pull requests; the `main` branch | Reader on the subscription; Web App Configuration Reader on the environment's resource group, to refresh the web app; read-only access to state (plans run with `-lock=false`) |
 | `gh-deploy` | GitHub environments `<env>-infra` and `<env>` only | Contributor on the environment's resource group; read/write state; limited role granting (below); Model Availability Reader |
 
 A pull request can show what *would* change, but cannot change anything. Only jobs running in the named GitHub environments can use `gh-deploy`. Protection rules on those environments, including required reviewers, are set up together with the deployment workflows.
