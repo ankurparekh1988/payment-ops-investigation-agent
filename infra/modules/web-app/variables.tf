@@ -44,6 +44,12 @@ variable "health_check_path" {
   default     = "/health"
 }
 
+variable "log_retention_days" {
+  description = "Days the app's HTTP logs are kept on the instance file system."
+  type        = number
+  default     = 7
+}
+
 variable "app_settings" {
   description = "Application settings. Non-secret values only; the app reaches services with its identity."
   type        = map(string)

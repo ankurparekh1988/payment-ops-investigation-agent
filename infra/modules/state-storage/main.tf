@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.10"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -38,12 +40,21 @@ resource "azurerm_storage_account" "this" {
   }
 
   tags = var.tags
+
+  # Terraform refuses to destroy state storage; removing it is a deliberate code change.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "azurerm_storage_container" "this" {
   name                  = var.container_name
   storage_account_id    = azurerm_storage_account.this.id
   container_access_type = "private"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "azurerm_management_lock" "this" {

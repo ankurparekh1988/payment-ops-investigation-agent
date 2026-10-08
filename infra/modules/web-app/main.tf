@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.10"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -21,6 +23,8 @@ resource "azurerm_service_plan" "this" {
   tags                = var.tags
 }
 
+# Auto-heal restarts long-running instances on failure patterns; not worth tuning for this workload.
+# tflint-ignore: azurerm_app_service_missing_auto_heal_setting
 resource "azurerm_linux_web_app" "this" {
   name                = var.name
   resource_group_name = var.resource_group_name
@@ -51,6 +55,18 @@ resource "azurerm_linux_web_app" "this" {
 
     application_stack {
       dotnet_version = var.dotnet_version
+    }
+  }
+
+  logs {
+    detailed_error_messages = true
+    failed_request_tracing  = true
+
+    http_logs {
+      file_system {
+        retention_in_days = var.log_retention_days
+        retention_in_mb   = 35
+      }
     }
   }
 
