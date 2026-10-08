@@ -1,10 +1,11 @@
 # Payment Ops Investigation Agent
 
 [![CI](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml)
+[![CD](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml)
 
 An AI agent that helps a payments operations team work out why money didn't move when it should have: a late payout, a missing settlement, a processor outage.
 
-> 🚧 **Early stage.** The foundation is in place: module structure, architecture tests, the web host, and the Azure platform (models, hosting, storage, monitoring) defined in Terraform, with CI checking every change. The deployment pipeline is next. The rest of this page describes the design it's being built towards.
+> 🚧 **Early stage.** The foundation is in place: module structure, architecture tests, the web host, and the Azure platform (models, hosting, storage, monitoring) defined in Terraform, with CI checking every change and an approval-gated pipeline deploying it. The rest of this page describes the design it's being built towards.
 
 When a merchant's payout is late, the explanation is usually spread across settlement records, error logs, a processor's status page and a runbook, and someone has to piece it together by hand. The agent is designed to do that legwork. Ask it *"Why were payouts for merchant M-1042 delayed yesterday?"* and it will pull the relevant data and documents, explain what happened, and show exactly where each fact came from.
 
