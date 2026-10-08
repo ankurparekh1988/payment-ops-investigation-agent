@@ -17,7 +17,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 api="https://management.azure.com/subscriptions/${ARM_SUBSCRIPTION_ID:?}/providers/Microsoft.CognitiveServices/locations/${TF_VAR_location:?}"
 api_version="2024-10-01"
 
-plan="$(terraform -chdir="$repo_root/infra/deployments/$deployment" show -json "$plan_file")"
+plan="$("$repo_root/scripts/terraform.sh" "$deployment" show -json "$plan_file")"
 
 # Model deployments as {sku, model, version, capacity}, capacity in thousands of tokens per minute.
 read_deployments='[.. | objects | select(.type? == "azurerm_cognitive_deployment") | .values

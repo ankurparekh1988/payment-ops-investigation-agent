@@ -90,6 +90,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # Early feedback only; the authoritative check runs after approval, just before apply.
       - name: Check model capacity
         if: steps.plan.outputs.has-changes == 'true'
         run: scripts/check-model-capacity.sh platform platform.tfplan
@@ -113,7 +114,8 @@ jobs:
 
   apply:
     name: Apply
-    needs: plan
+    # No environment change unless there's a deployable build to go with it.
+    needs: [build, plan]
     if: needs.plan.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}-infra
@@ -144,6 +146,16 @@ jobs:
         run: |
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:PLAN_ENCRYPTION_KEY \
             -in platform.tfplan.enc -out infra/deployments/platform/platform.tfplan
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Quota and capacity can change while the approval waits, so check again right before applying.
+      - name: Check model capacity
+        run: scripts/check-model-capacity.sh platform platform.tfplan
 
       # Applies exactly the reviewed plan. Terraform refuses if the state changed since planning.
       - name: Apply
