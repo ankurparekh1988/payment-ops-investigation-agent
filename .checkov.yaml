@@ -1,0 +1,33 @@
+# Checkov findings accepted for this environment, each with its reason. Items marked "gap" are
+# recorded in docs/ProductionGapAnalysis.md with what production would do instead.
+framework:
+  - terraform
+  - github_actions
+skip-check:
+  # Network isolation (gap): public endpoints protected by Entra ID and TLS; public blob access is off.
+  - CKV2_AZURE_33   # storage private endpoint
+  - CKV_AZURE_59    # storage public network access
+  - CKV_AZURE_134   # Foundry public network access
+  - CKV_AZURE_222   # web app public network access
+
+  # Customer-managed keys (gap): Microsoft-managed encryption is sufficient for synthetic data.
+  - CKV2_AZURE_1    # storage
+  - CKV2_AZURE_22   # Foundry
+
+  # Storage data-plane audit logs (gap). Access is Entra-only and role-scoped.
+  - CKV2_AZURE_21   # blob read logging
+
+  # Not applicable.
+  - CKV_AZURE_33    # queue logging: no queues are used
+  - CKV_AZURE_17    # client certificates: users sign in with Entra ID in the browser
+  - CKV_AZURE_88    # Azure Files mount: the app is stateless
+
+  # Sign-in is implemented in the app with Entra ID, which needs the user's roles and groups
+  # for authorization, rather than App Service's built-in authentication.
+  - CKV_AZURE_13
+
+  # Hosting tier and redundancy (gap): free and single-instance in dev, configurable per environment.
+  - CKV_AZURE_206   # storage replication
+  - CKV_AZURE_212   # minimum instances
+  - CKV_AZURE_214   # always on (not available on the free tier)
+  - CKV_AZURE_225   # zone-redundant plan

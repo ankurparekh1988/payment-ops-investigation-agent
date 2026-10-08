@@ -23,8 +23,9 @@ internal static class SolutionProjects
     private static ProjectInfo Load(string path)
     {
         var xml = XDocument.Load(path);
+        // Project files use Windows separators; normalise them so the names resolve on Linux too.
         var projectReferences = xml.Descendants("ProjectReference")
-            .Select(e => Path.GetFileNameWithoutExtension((string)e.Attribute("Include")!))
+            .Select(e => Path.GetFileNameWithoutExtension(((string)e.Attribute("Include")!).Replace('\\', '/')))
             .ToHashSet(StringComparer.Ordinal);
         var packageReferences = xml.Descendants("PackageReference")
             .Select(e => (string)e.Attribute("Include")!)

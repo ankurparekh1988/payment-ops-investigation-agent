@@ -115,6 +115,15 @@ backend_args() {
        "-backend-config=key=$state_key"
 }
 
+# The operator is recorded once rather than read from whoever runs Terraform, so scheduled drift
+# checks running as a pipeline identity don't see a different desired state.
+if [[ -z "${TF_VAR_bootstrap_operator_object_id:-}" ]]; then
+  TF_VAR_bootstrap_operator_object_id="$(az ad signed-in-user show --query id -o tsv)"
+  export TF_VAR_bootstrap_operator_object_id
+  set_env_value TF_VAR_bootstrap_operator_object_id "$TF_VAR_bootstrap_operator_object_id"
+  echo "Recorded the bootstrap operator in .env."
+fi
+
 cd "$stack_dir"
 
 if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then

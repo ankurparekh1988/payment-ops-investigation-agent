@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.10"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -118,8 +120,10 @@ module "deploy_identity" {
 
 # --- Plan identity: read-only -------------------------------------------------------------------
 
-resource "azurerm_role_assignment" "plan_workload_reader" {
-  scope                = azurerm_resource_group.workload.id
+# Subscription-wide read, so plans can also detect drift in the bootstrap itself (subscription role
+# assignments, the custom role, provider registration). Reader can't list keys or read secrets.
+resource "azurerm_role_assignment" "plan_subscription_reader" {
+  scope                = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
   role_definition_name = "Reader"
   principal_id         = module.plan_identity.principal_id
   principal_type       = "ServicePrincipal"
@@ -189,8 +193,8 @@ resource "azurerm_role_assignment" "deploy_constrained_rbac_admin" {
 
 # --- Model preflight: read the model catalog and quota from CI ----------------------------------
 
-# The platform's model preflight reads the regional catalog and quota, which are subscription-level,
-# so both pipeline identities get exactly those two read permissions.
+# The platform's model preflight reads the regional catalog and quota, which are subscription-level.
+# The deploy identity gets exactly those reads and nothing else at subscription scope.
 resource "azurerm_role_definition" "model_availability_reader" {
   name        = "${var.name_prefix} Model Availability Reader"
   scope       = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
@@ -207,8 +211,8 @@ resource "azurerm_role_definition" "model_availability_reader" {
 }
 
 resource "azurerm_role_assignment" "model_availability_reader" {
+  # The plan identity already has these reads through subscription Reader.
   for_each = {
-    plan   = module.plan_identity.principal_id
     deploy = module.deploy_identity.principal_id
   }
 
@@ -233,10 +237,10 @@ resource "azurerm_role_assignment" "developer" {
 
 # --- Operator ---------------------------------------------------------------------------------
 
-# Whoever runs the bootstrap needs data-plane access to migrate this stack's state and to run
-# the platform stack from a workstation.
+# The bootstrap operator needs data-plane access to migrate this stack's state and to plan from a
+# workstation. Configured explicitly so the desired state doesn't depend on who runs the plan.
 resource "azurerm_role_assignment" "operator_state_contributor" {
   scope                = module.state.container_id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.operator_object_id
 }

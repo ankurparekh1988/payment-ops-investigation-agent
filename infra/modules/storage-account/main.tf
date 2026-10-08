@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.10"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -7,6 +9,8 @@ terraform {
   }
 }
 
+# Environments are disposable and their content is rebuilt from the repository.
+# tflint-ignore: azurerm_resources_missing_prevent_destroy
 resource "azurerm_storage_account" "this" {
   name                     = var.name
   resource_group_name      = var.resource_group_name

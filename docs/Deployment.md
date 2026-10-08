@@ -108,7 +108,7 @@ Before any model deployment changes, the plan checks each model in `ai/manifest.
 - is `Deprecating` or `Deprecated`, and so closed to new deployments;
 - retires, or its deployment type is deprecated, within `TF_VAR_model_retirement_buffer_days`.
 
-Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom will be checked by the deployment pipeline immediately before apply. The catalog and quota reads are subscription-level, so both pipeline identities hold a custom *Model Availability Reader* role limited to those reads.
+Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom will be checked by the deployment pipeline immediately before apply. The catalog and quota reads are subscription-level. The plan identity has them through Reader; the deploy identity holds a custom *Model Availability Reader* role limited to them.
 
 ### Model lifecycle
 
@@ -124,6 +124,25 @@ scripts/terraform.sh platform plan
 
 `scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions for everything except the bootstrap, which is the one root-of-trust step run by a person.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`:
+
+| Job | What it checks |
+|---|---|
+| Build and test | .NET build, tests and formatting |
+| Validate infrastructure | `terraform fmt` and `validate` for every deployment, TFLint, and a Checkov security scan. Accepted Checkov findings are listed with reasons in `.checkov.yaml` |
+| Plan platform | A plan of the environment as `gh-plan`, including the model preflight. The PR gets one comment listing the resources that would change (pull requests only) |
+| CodeQL | Static analysis of the C# code and the workflows themselves |
+| Dependency review | New dependencies with known high-severity vulnerabilities (pull requests only) |
+
+`.github/workflows/scheduled-checks.yml` runs weekly and keeps one GitHub issue open per problem, closing it when the problem is gone:
+
+- **Model lifecycle:** reruns the model preflight with a 120-day window, so a model approaching deprecation or retirement is flagged well before deployment would start refusing it.
+- **Bootstrap drift:** plans the bootstrap and reports anything changed outside Terraform.
+
+The workflows read their configuration from the repository's Actions secrets and variables. `scripts/configure-github.sh` sets them from `.env` and the bootstrap outputs, with identifiers and personal values as secrets so logs mask them.
+
 ## Pipeline identities
 
 GitHub Actions signs in to Azure with OpenID Connect: each workflow run gets a short-lived token from GitHub, which Azure exchanges for access. No credentials are stored in GitHub. Each identity trusts only specific workflow contexts in this repository, and a fork's workflows are rejected because their tokens name a different repository.
@@ -136,15 +155,15 @@ flowchart LR
   MAIN["Push to main<br/>(plan job)"] --> P
   ENVI["GitHub environment<br/>dev-infra"] --> D["gh-deploy"]
   ENVA["GitHub environment<br/>dev"] --> D
-  P -->|Reader| RG["rg-…-dev"]
+  P -->|Reader| SUB["Subscription"]
   P -->|read state| ST[("tfstate")]
-  D -->|Contributor + limited role granting| RG
+  D -->|Contributor + limited role granting| RG["rg-…-dev"]
   D -->|read/write state| ST
 ```
 
 | Identity | Trusted contexts | Permissions |
 |---|---|---|
-| `gh-plan` | Pull requests; the `main` branch | Reader on the environment's resource group; read-only access to state (plans run with `-lock=false`); Model Availability Reader |
+| `gh-plan` | Pull requests; the `main` branch | Reader on the subscription; read-only access to state (plans run with `-lock=false`) |
 | `gh-deploy` | GitHub environments `<env>-infra` and `<env>` only | Contributor on the environment's resource group; read/write state; limited role granting (below); Model Availability Reader |
 
 A pull request can show what *would* change, but cannot change anything. Only jobs running in the named GitHub environments can use `gh-deploy`. Protection rules on those environments, including required reviewers, are set up together with the deployment workflows.

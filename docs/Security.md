@@ -28,12 +28,12 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | Web app | Application Insights | Monitoring Metrics Publisher | Send telemetry with an Entra token |
 | Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
 | Foundry project | Application Insights | Log Analytics Reader | Show traces in the Foundry portal |
-| `gh-plan` | Environment resource group | Reader | Plan infrastructure changes |
+| `gh-plan` | Subscription | Reader | Plan infrastructure changes, read the model catalog, and detect drift in the bootstrap's subscription-level resources. Reader can't list keys or read secrets |
 | `gh-plan` | State container | Storage Blob Data Reader | Read Terraform state |
 | `gh-deploy` | Environment resource group | Contributor | Apply infrastructure changes |
 | `gh-deploy` | Environment resource group | RBAC Administrator, conditional | Assign only allow-listed platform roles, only to service principals ([details](Deployment.md#pipeline-identities)) |
 | `gh-deploy` | State container | Storage Blob Data Contributor | Read and write Terraform state |
-| Both pipeline identities | Subscription | Model Availability Reader (custom) | Read the model catalog and quota for the model preflight; nothing else |
+| `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog and quota for the model preflight; nothing else |
 | Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader, Storage Blob Data Reader | Run the app locally |
 
 ## Keyless controls
@@ -46,6 +46,15 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | Application Insights | Local authentication disabled; ingestion requires an Entra token |
 
 Foundry's connection to Application Insights authenticates with the project's managed identity, so no connection string or key is stored in Foundry. The web app is given the Application Insights connection string only to know where to send telemetry; with local authentication disabled, sending still requires the app's Entra token.
+
+## Pipeline logs
+
+The repository is public, so workflow logs, artifacts and PR comments are too.
+
+- Subscription, tenant and client IDs and the alert email are stored as GitHub secrets, so logs mask them wherever they appear, including inside resource IDs.
+- Terraform redacts sensitive values in plans. Saved plan files contain them in plain text, so they never leave the job that created them.
+- PR comments and job summaries list resource addresses and actions only, because GitHub doesn't mask them.
+- Workflows from forks get no Azure access and need approval to run. Every third-party action is pinned to a commit SHA, and the default token is read-only.
 
 ## Content safety
 

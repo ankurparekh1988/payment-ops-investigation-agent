@@ -38,6 +38,11 @@ variable "github_repository_id" {
   type        = number
 }
 
+variable "operator_object_id" {
+  description = "Entra object ID of the person who runs the bootstrap."
+  type        = string
+}
+
 variable "developer_object_ids" {
   description = "Entra object IDs of people who run the app locally against this environment."
   type        = list(string)
