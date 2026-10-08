@@ -1,0 +1,52 @@
+name: Teardown
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type the environment name to confirm destroying its platform.
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
+  cancel-in-progress: false
+
+env:
+  TERRAFORM_VERSION: 1.16.4
+
+jobs:
+  destroy:
+    name: Destroy platform
+    if: inputs.confirm == fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment
+    runs-on: ubuntu-latest
+    # Same approval gate as any infrastructure change. The bootstrap is never touched.
+    environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}-infra
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/terraform-setup
+        with:
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
+
+      - name: Plan destroy
+        run: scripts/terraform.sh platform plan -destroy -input=false -no-color -out=destroy.tfplan
+
+      - name: Summarise changes
+        run: scripts/plan-summary.sh platform destroy.tfplan
+
+      - name: Destroy
+        run: scripts/terraform.sh platform apply -input=false -no-color destroy.tfplan
