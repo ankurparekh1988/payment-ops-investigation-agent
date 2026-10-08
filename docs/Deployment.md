@@ -108,7 +108,7 @@ Before any model deployment changes, the plan checks each model in `ai/manifest.
 - is `Deprecating` or `Deprecated`, and so closed to new deployments;
 - retires, or its deployment type is deprecated, within `TF_VAR_model_retirement_buffer_days`.
 
-Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom is checked by the deployment pipeline immediately before apply (see [Continuous deployment](#continuous-deployment)). The catalog and quota reads are subscription-level. The plan identity has them through Reader; the deploy identity holds a custom *Model Availability Reader* role limited to them.
+Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom is checked by the deployment pipeline immediately before apply (see [Continuous deployment](#continuous-deployment)). The catalog and quota reads are subscription-level. The plan identity has them through Reader; the deploy identity holds a custom *Model Availability Reader* role limited to the catalog, quota and capacity reads.
 
 ### Model lifecycle
 
@@ -149,10 +149,11 @@ The workflows read their configuration from the repository's Actions secrets and
 
 ```mermaid
 flowchart LR
-  B["Build<br/>publish the app once"] --> D
+  B["Build<br/>publish the app once"] --> A
   P["Plan<br/>gh-plan, preflight,<br/>capacity check"] --> A{"Approve<br/>dev-infra"}
-  A --> AP["Apply<br/>exact saved plan<br/>gh-deploy"]
+  A --> AP["Apply<br/>capacity re-check,<br/>exact saved plan"]
   AP --> D["Deploy app<br/>environment dev"]
+  B -->|no changes| D
   P -->|no changes| D
   D --> S["Smoke test<br/>/health, /health/ready"]
 ```
@@ -160,14 +161,14 @@ flowchart LR
 | Job | What it does |
 |---|---|
 | Build | Publishes the web app once; the same artifact is what gets deployed |
-| Plan | Plans the platform as `gh-plan` with the model preflight. If anything would change, it checks model capacity (below) and uploads the plan **encrypted**: saved plans hold sensitive values in plain text, and artifacts in a public repository can be downloaded |
-| Apply | Waits for approval in the `<env>-infra` environment, then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
+| Plan | Plans the platform as `gh-plan` with the model preflight. If anything would change, it checks model capacity as early feedback and uploads the plan **encrypted**: saved plans hold sensitive values in plain text, and artifacts in a public repository can be downloaded |
+| Apply | Runs only if the build also succeeded, so infrastructure never changes without a deployable app. Waits for approval in the `<env>-infra` environment, checks model capacity again (quota can change while approval waits), then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
 | Deploy app | Deploys the built artifact to the web app in the `<env>` environment |
 | Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry with its managed identity) |
 
 **Model capacity.** Quota is shared by every deployment of the same model and deployment type, so `scripts/check-model-capacity.sh` sums the capacity requested in the plan per model and deployment type and compares it with the subscription's quota. The environment's own existing deployments are added back to the headroom, so a re-apply doesn't count them twice. Quota doesn't guarantee that the region has capacity, so any new capacity is also checked against the region's available capacity.
 
-`.github/workflows/teardown.yml` destroys the platform on demand, after you type the environment name and pass the same approval. The bootstrap is never touched, so the environment can be redeployed.
+`.github/workflows/teardown.yml` destroys the platform on demand. You type the environment name to start it; it plans the destroy and summarises what will be removed, then waits for the same approval and applies exactly that destroy plan. The bootstrap is never touched, so the environment can be redeployed.
 
 ### One command
 

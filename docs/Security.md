@@ -33,7 +33,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | `gh-deploy` | Environment resource group | Contributor | Apply infrastructure changes |
 | `gh-deploy` | Environment resource group | RBAC Administrator, conditional | Assign only allow-listed platform roles, only to service principals ([details](Deployment.md#pipeline-identities)) |
 | `gh-deploy` | State container | Storage Blob Data Contributor | Read and write Terraform state |
-| `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog and quota for the model preflight; nothing else |
+| `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog, quota and regional capacity for the preflight and the pre-apply capacity check; nothing else |
 | Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader, Storage Blob Data Reader | Run the app locally |
 
 ## Keyless controls
