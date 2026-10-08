@@ -1,0 +1,133 @@
+name: Scheduled checks
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays, 13:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-checks
+  cancel-in-progress: false
+
+env:
+  TERRAFORM_VERSION: 1.16.4
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_PLAN_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  TF_IN_AUTOMATION: true
+  TF_STATE_RESOURCE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP }}
+  TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT }}
+  TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
+  TF_VAR_location: ${{ vars.TF_VAR_LOCATION }}
+  TF_VAR_name_prefix: ${{ vars.TF_VAR_NAME_PREFIX }}
+  TF_VAR_environment: ${{ vars.TF_VAR_ENVIRONMENT }}
+
+jobs:
+  model-lifecycle:
+    name: Model lifecycle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    env:
+      # Warn well before the deployment preflight would start blocking.
+      TF_VAR_model_retirement_buffer_days: 120
+      TF_VAR_app_service_sku: ${{ vars.TF_VAR_APP_SERVICE_SKU }}
+      TF_VAR_dotnet_version: ${{ vars.TF_VAR_DOTNET_VERSION }}
+      TF_VAR_storage_replication_type: ${{ vars.TF_VAR_STORAGE_REPLICATION_TYPE }}
+      TF_VAR_log_retention_days: ${{ vars.TF_VAR_LOG_RETENTION_DAYS }}
+      TF_VAR_log_daily_quota_gb: ${{ vars.TF_VAR_LOG_DAILY_QUOTA_GB }}
+      TF_VAR_monthly_budget: ${{ vars.TF_VAR_MONTHLY_BUDGET }}
+      TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Check manifest models
+        run: |
+          set +e
+          scripts/terraform.sh platform plan -lock=false -input=false -json > plan.jsonl
+          status=$?
+          set -e
+          jq -r 'select(.type == "diagnostic") | "\(.diagnostic.severity): \(.diagnostic.summary). \(.diagnostic.detail)"' plan.jsonl
+
+          if (( status == 0 )); then
+            scripts/report-issue.sh close model-lifecycle
+            exit 0
+          fi
+
+          # Only preflight findings become an issue; any other failure fails the job.
+          findings="$(jq -r 'select(.type == "diagnostic" and .diagnostic.summary == "Resource precondition failed")
+                            | "- \(.diagnostic.detail)"' plan.jsonl)"
+          if [[ -z "$findings" ]]; then
+            echo "::error::The plan failed for a reason other than model lifecycle."
+            exit 1
+          fi
+
+          {
+            echo "A model in \`ai/manifest.yaml\` is deprecated, or retires or loses its deployment type within 120 days."
+            echo
+            echo "$findings"
+            echo
+            echo "Upgrade it through the inactive slot and the evaluation gate, as described in ADR 0002."
+          } > issue.md
+          scripts/report-issue.sh open model-lifecycle "Upgrade a model in ai/manifest.yaml" issue.md
+
+  bootstrap-drift:
+    name: Bootstrap drift
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    env:
+      TF_VAR_github_repository: ${{ github.repository }}
+      TF_VAR_github_owner_id: ${{ github.repository_owner_id }}
+      TF_VAR_github_repository_id: ${{ github.repository_id }}
+      TF_VAR_developer_object_ids: ${{ secrets.DEVELOPER_OBJECT_IDS }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Compare bootstrap with its code
+        run: |
+          set +e
+          scripts/terraform.sh bootstrap plan -lock=false -input=false -no-color -detailed-exitcode > plan.log 2>&1
+          status=$?
+          set -e
+          cat plan.log
+
+          case "$status" in
+            0) scripts/report-issue.sh close bootstrap-drift ;;
+            2)
+              {
+                echo "The bootstrap resources no longer match \`infra/stacks/bootstrap\`. Someone changed them"
+                echo "outside Terraform, or a bootstrap change was merged without being applied."
+                echo
+                grep -E '^  # ' plan.log | sed 's/^  # /- /'
+                echo
+                echo "Review the drift, then re-run \`scripts/bootstrap.sh\` as an Owner."
+              } > issue.md
+              scripts/report-issue.sh open bootstrap-drift "Bootstrap drift detected" issue.md
+              ;;
+            *) echo "::error::The bootstrap plan failed."; exit 1 ;;
+          esac
