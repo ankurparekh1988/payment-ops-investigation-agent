@@ -97,6 +97,7 @@ jobs:
       TF_VAR_github_owner_id: ${{ github.repository_owner_id }}
       TF_VAR_github_repository_id: ${{ github.repository_id }}
       TF_VAR_developer_object_ids: ${{ secrets.DEVELOPER_OBJECT_IDS }}
+      TF_VAR_bootstrap_operator_object_id: ${{ secrets.BOOTSTRAP_OPERATOR_OBJECT_ID }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -108,22 +109,26 @@ jobs:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
+      # The bootstrap plan shows principal IDs, and masking isn't guaranteed for parts of a
+      # structured secret, so only diagnostics and a values-free summary reach the log.
       - name: Compare bootstrap with its code
         run: |
           set +e
-          scripts/terraform.sh bootstrap plan -lock=false -input=false -no-color -detailed-exitcode > plan.log 2>&1
+          scripts/terraform.sh bootstrap plan -lock=false -input=false -json -detailed-exitcode \
+            -out=bootstrap.tfplan > plan.jsonl
           status=$?
           set -e
-          cat plan.log
+          jq -r 'select(.type == "diagnostic") | "\(.diagnostic.severity): \(.diagnostic.summary). \(.diagnostic.detail)"' plan.jsonl
 
           case "$status" in
             0) scripts/report-issue.sh close bootstrap-drift ;;
             2)
+              scripts/plan-summary.sh bootstrap bootstrap.tfplan
               {
                 echo "The bootstrap resources no longer match \`infra/stacks/bootstrap\`. Someone changed them"
                 echo "outside Terraform, or a bootstrap change was merged without being applied."
                 echo
-                grep -E '^  # ' plan.log | sed 's/^  # /- /'
+                cat plan-summary.md
                 echo
                 echo "Review the drift, then re-run \`scripts/bootstrap.sh\` as an Owner."
               } > issue.md
