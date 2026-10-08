@@ -237,10 +237,10 @@ resource "azurerm_role_assignment" "developer" {
 
 # --- Operator ---------------------------------------------------------------------------------
 
-# Whoever runs the bootstrap needs data-plane access to migrate this stack's state and to run
-# the platform stack from a workstation.
+# The bootstrap operator needs data-plane access to migrate this stack's state and to plan from a
+# workstation. Configured explicitly so the desired state doesn't depend on who runs the plan.
 resource "azurerm_role_assignment" "operator_state_contributor" {
   scope                = module.state.container_id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.operator_object_id
 }

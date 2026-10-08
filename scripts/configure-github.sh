@@ -41,6 +41,7 @@ set_secret AZURE_PLAN_CLIENT_ID "$(bootstrap_output plan_identity_client_id)"
 set_secret AZURE_DEPLOY_CLIENT_ID "$(bootstrap_output deploy_identity_client_id)"
 set_secret ALERT_EMAIL "${TF_VAR_alert_email:-}"
 set_secret DEVELOPER_OBJECT_IDS "${TF_VAR_developer_object_ids:-}"
+set_secret BOOTSTRAP_OPERATOR_OBJECT_ID "${TF_VAR_bootstrap_operator_object_id:-}"
 
 set_variable TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
 set_variable TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"

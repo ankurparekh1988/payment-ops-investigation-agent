@@ -30,6 +30,11 @@ variable "github_repository_id" {
   type        = number
 }
 
+variable "bootstrap_operator_object_id" {
+  description = "Entra object ID of the person who runs the bootstrap. bootstrap.sh fills it in on first run."
+  type        = string
+}
+
 variable "developer_object_ids" {
   description = "Entra object IDs of developers who need data access, as a JSON list (az ad signed-in-user show --query id)."
   type        = list(string)
