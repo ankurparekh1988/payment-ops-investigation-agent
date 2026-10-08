@@ -105,7 +105,7 @@ module "web_app" {
   # Non-secret settings only. The app reaches every service with its managed identity.
   app_settings = {
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.monitoring.connection_string
-    PaymentOps__Foundry__Endpoint         = module.foundry.endpoint
+    PaymentOps__Foundry__Endpoint         = module.foundry.openai_endpoint
     PaymentOps__Foundry__ChatDeployment   = var.active_chat_deployment
     PaymentOps__Foundry__EmbedDeployment  = var.embedding_deployment
     PaymentOps__Knowledge__BlobEndpoint   = module.knowledge_storage.blob_endpoint

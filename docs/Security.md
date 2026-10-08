@@ -7,7 +7,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 - **No keys.** Every service-to-service call uses a managed identity with an Entra ID token. API keys, storage account keys and workspace keys are disabled, so there are no secrets to store, rotate or leak.
 - **Least privilege, narrowest scope.** Each identity gets only the roles it needs, assigned on the specific resource rather than the subscription where possible.
 - **Authority sits with people, not pipelines.** Granting roles to users, registering resource providers and creating pipeline identities require Owner rights, which no CI identity holds.
-- **Only the pipeline changes environments.** The bootstrap, which creates the pipeline's identities and state, is the single step run by a person. Everything else is deployed only by the deployment pipeline, which is being added next; until then, nothing else is deployed.
+- **Only the pipeline changes environments.** The bootstrap, which creates the pipeline's identities and state, is the single step run by a person. Everything else is deployed only by the deployment pipeline, after approval.
 
 ## Identities
 
@@ -33,7 +33,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | `gh-deploy` | Environment resource group | Contributor | Apply infrastructure changes |
 | `gh-deploy` | Environment resource group | RBAC Administrator, conditional | Assign only allow-listed platform roles, only to service principals ([details](Deployment.md#pipeline-identities)) |
 | `gh-deploy` | State container | Storage Blob Data Contributor | Read and write Terraform state |
-| `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog and quota for the model preflight; nothing else |
+| `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog, quota and regional capacity for the preflight and the pre-apply capacity check; nothing else |
 | Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader, Storage Blob Data Reader | Run the app locally |
 
 ## Keyless controls
@@ -52,7 +52,7 @@ Foundry's connection to Application Insights authenticates with the project's ma
 The repository is public, so workflow logs, artifacts and PR comments are too.
 
 - Subscription, tenant and client IDs and the alert email are stored as GitHub secrets, so logs mask them wherever they appear, including inside resource IDs.
-- Terraform redacts sensitive values in plans. Saved plan files contain them in plain text, so they never leave the job that created them.
+- Terraform redacts sensitive values in plans. Saved plan files contain them in plain text, so a plan passed from the plan job to the apply job is encrypted with a key held as a secret, and kept for one day.
 - PR comments and job summaries list resource addresses and actions only, because GitHub doesn't mask them.
 - Workflows from forks get no Azure access and need approval to run. Every third-party action is pinned to a commit SHA, and the default token is read-only.
 

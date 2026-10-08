@@ -1,0 +1,27 @@
+name: Terraform setup
+description: Installs Terraform and exports the environment's settings for scripts/terraform.sh.
+
+inputs:
+  terraform-version:
+    description: Terraform version to install.
+    required: true
+  settings:
+    description: JSON object of environment variables to export (the TERRAFORM_SETTINGS repository variable).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+
+    - name: Export settings
+      shell: bash
+      env:
+        SETTINGS: ${{ inputs.settings }}
+      run: |
+        jq -r 'to_entries[] | "\(.key)=\(.value)"' <<< "$SETTINGS" >> "$GITHUB_ENV"
+        echo "ARM_USE_OIDC=true" >> "$GITHUB_ENV"
+        echo "TF_IN_AUTOMATION=true" >> "$GITHUB_ENV"

@@ -10,7 +10,8 @@
 | Architecture tests | ✅ Dependency rules enforced in `PaymentOps.ArchitectureTests` |
 | Web host | ✅ Placeholder Blazor host with a `/health` endpoint |
 | Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
-| Azure platform | ✅ Defined in Terraform, with a model preflight. Created by the deployment pipeline (next); nothing is deployed outside it |
+| Azure platform | ✅ Defined in Terraform, with a model preflight. Deployed only by the deployment pipeline, after approval |
+| Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry with its managed identity) |
 | Product and AI capabilities | Not started |
 
 ## Azure platform

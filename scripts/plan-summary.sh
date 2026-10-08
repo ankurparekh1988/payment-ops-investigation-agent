@@ -14,7 +14,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 marker="<!-- plan-summary:$deployment -->"
 max_rows=60
 
-changes="$(terraform -chdir="$repo_root/infra/deployments/$deployment" show -json "$plan_file" | jq -r '
+changes="$("$repo_root/scripts/terraform.sh" "$deployment" show -json "$plan_file" | jq -r '
   [.resource_changes[]? | select(.mode == "managed" and .change.actions != ["no-op"])
    | {action: (.change.actions | join(" then ")), address}]')"
 

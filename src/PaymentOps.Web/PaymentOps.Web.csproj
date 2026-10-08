@@ -12,5 +12,12 @@
     <ProjectReference Include="..\PaymentOps.Platform\PaymentOps.Platform.csproj" />
     <ProjectReference Include="..\PaymentOps.Tools\PaymentOps.Tools.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaymentOps.Web.SmokeTests" />
+  </ItemGroup>
 
 </Project>

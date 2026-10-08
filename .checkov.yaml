@@ -21,6 +21,7 @@ skip-check:
   - CKV_AZURE_33    # queue logging: no queues are used
   - CKV_AZURE_17    # client certificates: users sign in with Entra ID in the browser
   - CKV_AZURE_88    # Azure Files mount: the app is stateless
+  - CKV_GHA_7       # build inputs: only teardown takes one, a confirmation that's compared, never built from
 
   # Sign-in is implemented in the app with Entra ID, which needs the user's roles and groups
   # for authorization, rather than App Service's built-in authentication.

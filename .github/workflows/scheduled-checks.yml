@@ -14,17 +14,9 @@ concurrency:
 
 env:
   TERRAFORM_VERSION: 1.16.4
-  ARM_USE_OIDC: true
   ARM_CLIENT_ID: ${{ secrets.AZURE_PLAN_CLIENT_ID }}
   ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  TF_IN_AUTOMATION: true
-  TF_STATE_RESOURCE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP }}
-  TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT }}
-  TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
-  TF_VAR_location: ${{ vars.TF_VAR_LOCATION }}
-  TF_VAR_name_prefix: ${{ vars.TF_VAR_NAME_PREFIX }}
-  TF_VAR_environment: ${{ vars.TF_VAR_ENVIRONMENT }}
 
 jobs:
   model-lifecycle:
@@ -35,14 +27,6 @@ jobs:
       id-token: write
       issues: write
     env:
-      # Warn well before the deployment preflight would start blocking.
-      TF_VAR_model_retirement_buffer_days: 120
-      TF_VAR_app_service_sku: ${{ vars.TF_VAR_APP_SERVICE_SKU }}
-      TF_VAR_dotnet_version: ${{ vars.TF_VAR_DOTNET_VERSION }}
-      TF_VAR_storage_replication_type: ${{ vars.TF_VAR_STORAGE_REPLICATION_TYPE }}
-      TF_VAR_log_retention_days: ${{ vars.TF_VAR_LOG_RETENTION_DAYS }}
-      TF_VAR_log_daily_quota_gb: ${{ vars.TF_VAR_LOG_DAILY_QUOTA_GB }}
-      TF_VAR_monthly_budget: ${{ vars.TF_VAR_MONTHLY_BUDGET }}
       TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -50,12 +34,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      - uses: ./.github/actions/terraform-setup
         with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-          terraform_wrapper: false
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
 
       - name: Check manifest models
+        env:
+          # Warn well before the deployment preflight would start blocking.
+          TF_VAR_model_retirement_buffer_days: 120
         run: |
           set +e
           scripts/terraform.sh platform plan -lock=false -input=false -json > plan.jsonl
@@ -104,10 +91,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      - uses: ./.github/actions/terraform-setup
         with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-          terraform_wrapper: false
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
 
       # The bootstrap plan shows principal IDs, and masking isn't guaranteed for parts of a
       # structured secret, so only diagnostics and a values-free summary reach the log.

@@ -19,7 +19,7 @@ There are two kinds of deployment:
 | | What it creates | Who applies it |
 |---|---|---|
 | **Bootstrap** | Terraform state storage, the GitHub pipeline identities, the environment's resource group, resource provider registration | A person with Owner rights. Re-run only when the bootstrap itself changes |
-| **Platform** | Everything the application runs on: models, hosting, storage, monitoring, budget | The GitHub Actions deployment pipeline, after approval (being added next). Workstations only run plans |
+| **Platform** | Everything the application runs on: models, hosting, storage, monitoring, budget | The deployment pipeline (`cd.yml`), after approval. Workstations only run plans |
 
 The bootstrap can't run through the pipeline, because it creates what the pipeline needs to run: the identity the pipeline signs in as, and the storage that holds its state. Creating them also needs Owner-level rights, which shouldn't sit with any CI identity. So a person runs it with reviewed Terraform code, and the pipeline works inside the boundaries it set up.
 
@@ -108,7 +108,7 @@ Before any model deployment changes, the plan checks each model in `ai/manifest.
 - is `Deprecating` or `Deprecated`, and so closed to new deployments;
 - retires, or its deployment type is deprecated, within `TF_VAR_model_retirement_buffer_days`.
 
-Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom will be checked by the deployment pipeline immediately before apply. The catalog and quota reads are subscription-level. The plan identity has them through Reader; the deploy identity holds a custom *Model Availability Reader* role limited to them.
+Quota is shared by every deployment of the same model and deployment type, and depends on what's already deployed, so capacity headroom is checked by the deployment pipeline immediately before apply (see [Continuous deployment](#continuous-deployment)). The catalog and quota reads are subscription-level. The plan identity has them through Reader; the deploy identity holds a custom *Model Availability Reader* role limited to the catalog, quota and capacity reads.
 
 ### Model lifecycle
 
@@ -141,7 +141,70 @@ scripts/terraform.sh platform plan
 - **Model lifecycle:** reruns the model preflight with a 120-day window, so a model approaching deprecation or retirement is flagged well before deployment would start refusing it.
 - **Bootstrap drift:** plans the bootstrap and reports anything changed outside Terraform.
 
-The workflows read their configuration from the repository's Actions secrets and variables. `scripts/configure-github.sh` sets them from `.env` and the bootstrap outputs, with identifiers and personal values as secrets so logs mask them.
+The workflows read their configuration from the repository's Actions secrets and a single `TERRAFORM_SETTINGS` variable. `scripts/configure-github.sh` sets them from `.env` and the bootstrap outputs, with identifiers and personal values as secrets so logs mask them, and creates the GitHub environments the deployment pipeline uses.
+
+## Continuous deployment
+
+`.github/workflows/cd.yml` runs on every push to `main`, and on demand.
+
+```mermaid
+flowchart LR
+  B["Build<br/>publish the app once"] --> A
+  P["Plan<br/>gh-plan, preflight,<br/>capacity check"] --> A{"Approve<br/>dev-infra"}
+  A --> AP["Apply<br/>capacity re-check,<br/>exact saved plan"]
+  AP --> D["Deploy app<br/>environment dev"]
+  B -->|no changes| D
+  P -->|no changes| D
+  D --> S["Smoke test<br/>/health, /health/ready"]
+```
+
+| Job | What it does |
+|---|---|
+| Build | Publishes the web app once; the same artifact is what gets deployed |
+| Plan | Plans the platform as `gh-plan` with the model preflight. If anything would change, it checks model capacity as early feedback and uploads the plan **encrypted**: saved plans hold sensitive values in plain text, and artifacts in a public repository can be downloaded |
+| Apply | Runs only if the build also succeeded, so infrastructure never changes without a deployable app. Waits for approval in the `<env>-infra` environment, checks model capacity again (quota can change while approval waits), then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
+| Deploy app | Deploys the built artifact to the web app in the `<env>` environment |
+| Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry with its managed identity) |
+
+**Model capacity.** Quota is shared by every deployment of the same model and deployment type, so `scripts/check-model-capacity.sh` sums the capacity requested in the plan per model and deployment type and compares it with the subscription's quota. The environment's own existing deployments are added back to the headroom, so a re-apply doesn't count them twice. Quota doesn't guarantee that the region has capacity, so any new capacity is also checked against the region's available capacity.
+
+`.github/workflows/teardown.yml` destroys the platform on demand. You type the environment name to start it; it plans the destroy and summarises what will be removed, then waits for the same approval and applies exactly that destroy plan. The bootstrap is never touched, so the environment can be redeployed.
+
+### One command
+
+```bash
+scripts/deploy.sh    # runs cd.yml and follows it
+scripts/destroy.sh   # runs teardown.yml and follows it
+```
+
+Both start the pipeline rather than applying anything locally, so the approval gate still applies.
+
+### Environments and promotion
+
+Only `dev` is deployed. The stages a change passes through map onto the pipeline rather than onto extra environments:
+
+| Stage | Where it happens |
+|---|---|
+| Development | Feature branches, with a plan of every change on its pull request |
+| Testing | CI checks on the pull request. Once the evaluation suite exists, it gates deployment, and a new model version is evaluated in the inactive blue/green slot before it serves traffic |
+| Approval | A required reviewer on `<env>-infra` approves every infrastructure change after reading its plan |
+| Production | The same code with a different `TF_VAR_environment`: its own resource group, state, deploy identity and approval gate |
+
+### Azure DevOps equivalents
+
+The pipeline maps stage for stage onto Azure DevOps:
+
+| Concept | GitHub Actions (here) | Azure DevOps |
+|---|---|---|
+| Pipeline definition | Workflow YAML | YAML pipeline |
+| Ordering | Jobs with `needs` | Stages and jobs with `dependsOn` |
+| Shared steps | Composite action | Step template |
+| Approvals | Environments with required reviewers | Environments with approvals and checks |
+| Cloud sign-in | OIDC federated credentials | Workload identity federation service connection |
+| Configuration | Repository variables and secrets | Variable groups |
+| Artifacts | Workflow artifacts | Pipeline artifacts |
+| Merge protection | Rulesets with required checks | Branch policies with build validation |
+| One deployment at a time | Concurrency groups | Exclusive lock check |
 
 ## Pipeline identities
 
