@@ -17,6 +17,7 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   TERRAFORM_VERSION: 1.16.4
   TFLINT_VERSION: v0.64.0
+  CHECKOV_VERSION: 3.3.26
 
 jobs:
   build-test:
@@ -74,11 +75,9 @@ jobs:
           tflint --recursive --config "$PWD/.tflint.hcl" --format compact
 
       - name: Security scan
-        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf # v12.1347.0
-        with:
-          config_file: .checkov.yaml
-          directory: .
-          quiet: true
+        run: |
+          pip install --quiet "checkov==${CHECKOV_VERSION}"
+          checkov --config-file .checkov.yaml --directory . --quiet --compact
 
   plan:
     name: Plan platform
