@@ -1,0 +1,228 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment to the environment at a time; never cancel one that's in progress.
+concurrency:
+  group: deploy-${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  TERRAFORM_VERSION: 1.16.4
+  ENVIRONMENT: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Built once here; the same artifact is what gets deployed.
+      - name: Publish
+        run: |
+          dotnet publish src/PaymentOps.Web --configuration Release --output publish
+          (cd publish && zip -qr ../app.zip .)
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app
+          path: app.zip
+          retention-days: 7
+
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_PLAN_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+    outputs:
+      has-changes: ${{ steps.plan.outputs.has-changes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/terraform-setup
+        with:
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
+
+      - name: Plan
+        id: plan
+        run: |
+          set +e
+          scripts/terraform.sh platform plan -lock=false -input=false -no-color -detailed-exitcode -out=platform.tfplan
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "has-changes=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "has-changes=true" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
+
+      - name: Summarise changes
+        run: scripts/plan-summary.sh platform platform.tfplan
+
+      - if: steps.plan.outputs.has-changes == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_PLAN_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check model capacity
+        if: steps.plan.outputs.has-changes == 'true'
+        run: scripts/check-model-capacity.sh platform platform.tfplan
+
+      # The plan file holds sensitive values in plain text and artifacts in a public repository can
+      # be downloaded, so it's encrypted with a key only this repository's workflows can read.
+      - name: Encrypt plan
+        if: steps.plan.outputs.has-changes == 'true'
+        env:
+          PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:PLAN_ENCRYPTION_KEY \
+            -in infra/deployments/platform/platform.tfplan -out platform.tfplan.enc
+
+      - if: steps.plan.outputs.has-changes == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: platform-plan
+          path: platform.tfplan.enc
+          retention-days: 1
+
+  apply:
+    name: Apply
+    needs: plan
+    if: needs.plan.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}-infra
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/terraform-setup
+        with:
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: platform-plan
+
+      - name: Decrypt plan
+        env:
+          PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:PLAN_ENCRYPTION_KEY \
+            -in platform.tfplan.enc -out infra/deployments/platform/platform.tfplan
+
+      # Applies exactly the reviewed plan. Terraform refuses if the state changed since planning.
+      - name: Apply
+        run: scripts/terraform.sh platform apply -input=false -no-color platform.tfplan
+
+  deploy-app:
+    name: Deploy app
+    needs: [build, plan, apply]
+    if: >-
+      always() && needs.build.result == 'success' && needs.plan.result == 'success'
+      && (needs.apply.result == 'success' || needs.apply.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
+      url: ${{ steps.target.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    outputs:
+      url: ${{ steps.target.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/terraform-setup
+        with:
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
+
+      - name: Find target
+        id: target
+        run: |
+          {
+            echo "resource-group=$(scripts/terraform.sh platform output -raw resource_group_name)"
+            echo "app-name=$(scripts/terraform.sh platform output -raw web_app_name)"
+            echo "url=$(scripts/terraform.sh platform output -raw web_app_url)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: app
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy
+        env:
+          RESOURCE_GROUP: ${{ steps.target.outputs.resource-group }}
+          APP_NAME: ${{ steps.target.outputs.app-name }}
+        run: az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path app.zip --type zip
+
+  smoke:
+    name: Smoke test
+    needs: deploy-app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check liveness and readiness
+        env:
+          APP_URL: ${{ needs.deploy-app.outputs.url }}
+        run: |
+          # The free tier sleeps when idle, so allow a few minutes for the first response.
+          for endpoint in health health/ready; do
+            for attempt in $(seq 1 18); do
+              status="$(curl --silent --output body.txt --write-out '%{http_code}' --max-time 30 "$APP_URL/$endpoint" || true)"
+              if [[ "$status" == "200" ]]; then
+                echo "/$endpoint: $(cat body.txt)"
+                continue 2
+              fi
+              echo "/$endpoint returned $status (attempt $attempt of 18); retrying in 10 seconds."
+              sleep 10
+            done
+            echo "::error::/$endpoint never became healthy."
+            exit 1
+          done
