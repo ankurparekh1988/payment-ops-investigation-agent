@@ -4,8 +4,8 @@ output "resource_group_name" {
 }
 
 output "foundry_endpoint" {
-  description = "Endpoint for model calls with an Entra ID token."
-  value       = module.foundry.endpoint
+  description = "OpenAI v1 API base for model calls with an Entra ID token."
+  value       = module.foundry.openai_endpoint
 }
 
 output "model_deployments" {

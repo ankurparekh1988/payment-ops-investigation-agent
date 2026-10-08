@@ -4,8 +4,13 @@ output "account_id" {
 }
 
 output "endpoint" {
-  description = "Endpoint the application calls with an Entra ID token."
+  description = "The account's generic endpoint."
   value       = azurerm_cognitive_account.this.endpoint
+}
+
+output "openai_endpoint" {
+  description = "Base URL for the OpenAI v1 API, which the application calls with an Entra ID token."
+  value       = data.azapi_resource.account.output.properties.endpoints[local.openai_endpoint_key]
 }
 
 output "project_id" {

@@ -6,12 +6,17 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 5.8"
     }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.13"
+    }
   }
 }
 
 locals {
-  strict_policy_name = "strict-content-filter"
-  harm_categories    = ["Hate", "Sexual", "Violence", "Selfharm"]
+  openai_endpoint_key = "OpenAI Language Model Instance API"
+  strict_policy_name  = "strict-content-filter"
+  harm_categories     = ["Hate", "Sexual", "Violence", "Selfharm"]
 
   rai_policy_names = {
     strict  = local.strict_policy_name
@@ -36,6 +41,22 @@ resource "azurerm_cognitive_account" "this" {
   }
 
   tags = var.tags
+}
+
+# The account's own published endpoints, which include the OpenAI v1 API base. Read rather than built
+# from the name, so it's correct in every Azure cloud.
+# AzAPI: AzureRM exposes only the account's generic endpoint.
+data "azapi_resource" "account" {
+  type                   = "Microsoft.CognitiveServices/accounts@2025-06-01"
+  resource_id            = azurerm_cognitive_account.this.id
+  response_export_values = ["properties.endpoints"]
+
+  lifecycle {
+    postcondition {
+      condition     = can(self.output.properties.endpoints[local.openai_endpoint_key])
+      error_message = "The Foundry account doesn't publish an ${local.openai_endpoint_key} endpoint."
+    }
+  }
 }
 
 resource "azurerm_cognitive_account_project" "this" {
