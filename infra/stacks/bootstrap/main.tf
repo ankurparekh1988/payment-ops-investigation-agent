@@ -193,17 +193,18 @@ resource "azurerm_role_assignment" "deploy_constrained_rbac_admin" {
 
 # --- Model preflight: read the model catalog and quota from CI ----------------------------------
 
-# The platform's model preflight reads the regional catalog and quota, which are subscription-level.
-# The deploy identity gets exactly those reads and nothing else at subscription scope.
+# The model preflight and the pre-apply capacity check read the regional catalog, quota and capacity,
+# which are subscription-level. The deploy identity gets exactly those reads at subscription scope.
 resource "azurerm_role_definition" "model_availability_reader" {
   name        = "${var.name_prefix} Model Availability Reader"
   scope       = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
-  description = "Read the regional model catalog and model quota usage."
+  description = "Read the regional model catalog, model quota usage and available capacity."
 
   permissions {
     actions = [
       "Microsoft.CognitiveServices/locations/models/read",
       "Microsoft.CognitiveServices/locations/usages/read",
+      "Microsoft.CognitiveServices/locations/modelCapacities/read",
     ]
   }
 
