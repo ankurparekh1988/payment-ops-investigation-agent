@@ -18,17 +18,16 @@ env:
   TERRAFORM_VERSION: 1.16.4
 
 jobs:
-  destroy:
-    name: Destroy platform
+  # Plans the destroy first, so the approver sees exactly what will be removed.
+  destroy-plan:
+    name: Plan destroy
     if: inputs.confirm == fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment
     runs-on: ubuntu-latest
-    # Same approval gate as any infrastructure change. The bootstrap is never touched.
-    environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}-infra
     permissions:
       contents: read
       id-token: write
     env:
-      ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+      ARM_CLIENT_ID: ${{ secrets.AZURE_PLAN_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
@@ -43,10 +42,58 @@ jobs:
           settings: ${{ vars.TERRAFORM_SETTINGS }}
 
       - name: Plan destroy
-        run: scripts/terraform.sh platform plan -destroy -input=false -no-color -out=destroy.tfplan
+        run: scripts/terraform.sh platform plan -destroy -lock=false -input=false -no-color -out=destroy.tfplan
 
       - name: Summarise changes
         run: scripts/plan-summary.sh platform destroy.tfplan
 
+      - name: Encrypt plan
+        env:
+          PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:PLAN_ENCRYPTION_KEY \
+            -in infra/deployments/platform/destroy.tfplan -out destroy.tfplan.enc
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: destroy-plan
+          path: destroy.tfplan.enc
+          retention-days: 1
+
+  destroy-apply:
+    name: Destroy platform
+    needs: destroy-plan
+    runs-on: ubuntu-latest
+    # Same approval gate as any infrastructure change. The bootstrap is never touched.
+    environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}-infra
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/terraform-setup
+        with:
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: destroy-plan
+
+      - name: Decrypt plan
+        env:
+          PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:PLAN_ENCRYPTION_KEY \
+            -in destroy.tfplan.enc -out infra/deployments/platform/destroy.tfplan
+
+      # Applies exactly the reviewed destroy plan. Terraform refuses if the state changed since.
       - name: Destroy
         run: scripts/terraform.sh platform apply -input=false -no-color destroy.tfplan
