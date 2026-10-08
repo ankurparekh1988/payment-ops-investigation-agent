@@ -29,6 +29,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
 | Foundry project | Application Insights | Log Analytics Reader | Show traces in the Foundry portal |
 | `gh-plan` | Subscription | Reader | Plan infrastructure changes, read the model catalog, and detect drift in the bootstrap's subscription-level resources. Reader can't list keys or read secrets |
+| `gh-plan` | Environment resource group | Web App Configuration Reader (custom) | Refresh the web app during plans, which reads its configuration through a list action Reader excludes. The app's settings hold no secrets |
 | `gh-plan` | State container | Storage Blob Data Reader | Read Terraform state |
 | `gh-deploy` | Environment resource group | Contributor | Apply infrastructure changes |
 | `gh-deploy` | Environment resource group | RBAC Administrator, conditional | Assign only allow-listed platform roles, only to service principals ([details](Deployment.md#pipeline-identities)) |
