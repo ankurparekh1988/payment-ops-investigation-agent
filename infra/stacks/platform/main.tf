@@ -127,7 +127,8 @@ module "cost_guardrail" {
 }
 
 # Connects Application Insights to the Foundry project for tracing. The project authenticates with
-# its own managed identity, so no connection string or key is stored.
+# its own managed identity; the connection string only tells Foundry where to send traces, and can't
+# send telemetry on its own because ingestion requires Entra ID.
 # AzAPI: AzureRM doesn't yet support project-level connections with ProjectManagedIdentity auth.
 resource "azapi_resource" "app_insights_connection" {
   type      = "Microsoft.CognitiveServices/accounts/projects/connections@2026-09-01"
@@ -144,8 +145,9 @@ resource "azapi_resource" "app_insights_connection" {
       target        = module.monitoring.application_insights_id
       isSharedToAll = false
       metadata = {
-        ApiType    = "Azure"
-        ResourceId = module.monitoring.application_insights_id
+        ApiType                             = "Azure"
+        ResourceId                          = module.monitoring.application_insights_id
+        ApplicationInsightsConnectionString = module.monitoring.connection_string
       }
     }
   }

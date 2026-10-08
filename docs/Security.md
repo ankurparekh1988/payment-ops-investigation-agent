@@ -45,7 +45,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | Log Analytics | Local authentication disabled |
 | Application Insights | Local authentication disabled; ingestion requires an Entra token |
 
-Foundry's connection to Application Insights authenticates with the project's managed identity, so no connection string or key is stored in Foundry. The web app is given the Application Insights connection string only to know where to send telemetry; with local authentication disabled, sending still requires the app's Entra token.
+Foundry's connection to Application Insights authenticates with the project's managed identity. Foundry and the web app both hold the Application Insights connection string, but only to know where to send telemetry: with local authentication disabled, sending still requires an Entra token for the project or the app.
 
 ## Pipeline logs
 
