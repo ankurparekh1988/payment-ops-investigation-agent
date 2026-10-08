@@ -493,3 +493,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# CI working files from the plan and scheduled-check workflows
+plan-summary.md
+plan.jsonl
+issue.md
