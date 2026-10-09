@@ -10,6 +10,11 @@ variable "environment" {
   type        = string
 }
 
+variable "web_app_url" {
+  description = "HTTPS address of the deployed web app (scripts/identity.sh reads it from the platform)."
+  type        = string
+}
+
 variable "bootstrap_operator_object_id" {
   description = "Entra object ID of the person who runs the human-run deployments."
   type        = string

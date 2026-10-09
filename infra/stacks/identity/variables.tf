@@ -8,6 +8,16 @@ variable "environment" {
   type        = string
 }
 
+variable "web_app_url" {
+  description = "HTTPS address of the deployed web app, which users return to after signing in."
+  type        = string
+
+  validation {
+    condition     = startswith(var.web_app_url, "https://")
+    error_message = "The web app address must use HTTPS."
+  }
+}
+
 variable "operator_object_id" {
   description = "Entra object ID of the person who runs this deployment. Owns the objects and gets Ops.Admin."
   type        = string

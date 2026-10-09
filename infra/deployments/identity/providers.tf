@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/azuread"
       version = "~> 3.10"
     }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 5.8"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.9"
@@ -22,11 +18,6 @@ terraform {
   }
 }
 
-# Tenant and subscription come from ARM_TENANT_ID and ARM_SUBSCRIPTION_ID. Creating applications,
-# groups and users needs directory permissions, so this deployment is run by a person.
+# The tenant comes from ARM_TENANT_ID. Creating applications, groups and users needs directory
+# permissions, so this deployment is run by a person.
 provider "azuread" {}
-
-provider "azurerm" {
-  storage_use_azuread = true
-  features {}
-}

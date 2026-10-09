@@ -7,7 +7,7 @@ How access is controlled, as built so far. Retrieval-time authorization, tool au
 - **No keys.** Every service-to-service call uses a managed identity with an Entra ID token. API keys, storage account keys and workspace keys are disabled, so there are no secrets to store, rotate or leak.
 - **Least privilege, narrowest scope.** Each identity gets only the roles it needs, assigned on the specific resource rather than the subscription where possible.
 - **Authority sits with people, not pipelines.** Granting roles to users, registering resource providers and creating pipeline identities require Owner rights, which no CI identity holds.
-- **Only the pipeline changes environments.** Two steps are run by a person because they need rights no pipeline should hold: the bootstrap (the pipeline's own identities and state) and identity (the Entra app registration, groups and demo users). Everything else is deployed only by the deployment pipeline, after approval.
+- **Only the pipeline changes environments.** Two steps are run by a person because they need rights no pipeline should hold: the bootstrap (the pipeline's own identities and state) and identity (the Entra app registration, groups and demo users). Each is marked by a `HUMAN_RUN` file in its deployment folder, and `scripts/terraform.sh` refuses changes outside the pipeline to any deployment without one. Everything else is deployed only by the deployment pipeline, after approval.
 
 ## Users and sign-in
 

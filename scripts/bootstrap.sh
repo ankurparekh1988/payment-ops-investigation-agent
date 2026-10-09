@@ -97,16 +97,8 @@ else
   fi
 fi
 
-# Writes or replaces KEY=value in .env.
-set_env_value() {
-  local key="$1" value="$2"
-  touch "$env_file"
-  if grep -q "^${key}=" "$env_file"; then
-    sed -i.bak "s|^${key}=.*|${key}=${value}|" "$env_file" && rm -f "$env_file.bak"
-  else
-    printf '%s=%s\n' "$key" "$value" >> "$env_file"
-  fi
-}
+# shellcheck source=scripts/lib/env-file.sh
+source "$repo_root/scripts/lib/env-file.sh"
 
 backend_args() {
   echo "-backend-config=resource_group_name=$TF_STATE_RESOURCE_GROUP" \
@@ -120,7 +112,7 @@ backend_args() {
 if [[ -z "${TF_VAR_bootstrap_operator_object_id:-}" ]]; then
   TF_VAR_bootstrap_operator_object_id="$(az ad signed-in-user show --query id -o tsv)"
   export TF_VAR_bootstrap_operator_object_id
-  set_env_value TF_VAR_bootstrap_operator_object_id "$TF_VAR_bootstrap_operator_object_id"
+  set_env_value "$env_file" TF_VAR_bootstrap_operator_object_id "$TF_VAR_bootstrap_operator_object_id"
   echo "Recorded the bootstrap operator in .env."
 fi
 
@@ -150,9 +142,9 @@ TF_STATE_RESOURCE_GROUP="$(terraform output -raw state_resource_group_name)"
 TF_STATE_STORAGE_ACCOUNT="$(terraform output -raw state_storage_account_name)"
 TF_STATE_CONTAINER="$(terraform output -raw state_container_name)"
 
-set_env_value TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
-set_env_value TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"
-set_env_value TF_STATE_CONTAINER "$TF_STATE_CONTAINER"
+set_env_value "$env_file" TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
+set_env_value "$env_file" TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"
+set_env_value "$env_file" TF_STATE_CONTAINER "$TF_STATE_CONTAINER"
 
 rm -f backend_override.tf
 echo "Moving bootstrap state into $TF_STATE_STORAGE_ACCOUNT/$TF_STATE_CONTAINER/$state_key."

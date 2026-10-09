@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/azuread"
       version = "~> 3.10"
     }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 5.8"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.9"
@@ -41,24 +37,9 @@ locals {
     engineer   = { display_name = "Demo Ops Engineer", role = "Ops.Engineer", restricted = false }
     compliance = { display_name = "Demo Risk and Compliance Engineer", role = "Ops.Engineer", restricted = true }
   }
-}
+  enabled_demo_users = var.create_demo_users ? local.demo_users : {}
 
-# The web app is created by the platform deployment; its address becomes the sign-in redirect.
-data "azurerm_resources" "web_app" {
-  resource_group_name = "rg-${local.base}"
-  type                = "Microsoft.Web/sites"
-
-  lifecycle {
-    postcondition {
-      condition     = length(self.resources) == 1
-      error_message = "Expected exactly one web app in rg-${local.base}; deploy the platform first."
-    }
-  }
-}
-
-data "azurerm_linux_web_app" "this" {
-  name                = data.azurerm_resources.web_app.resources[0].name
-  resource_group_name = "rg-${local.base}"
+  web_app_url = trimsuffix(var.web_app_url, "/")
 }
 
 data "azuread_domains" "initial" {
@@ -72,10 +53,10 @@ module "app" {
   role_id_namespace = "${var.name_prefix}/${var.environment}"
   app_roles         = local.app_roles
   owner_object_ids  = [var.operator_object_id]
-  logout_url        = "https://${data.azurerm_linux_web_app.this.default_hostname}/signout-oidc"
+  logout_url        = "${local.web_app_url}/signout-oidc"
 
   redirect_uris = concat(
-    ["https://${data.azurerm_linux_web_app.this.default_hostname}/signin-oidc"],
+    ["${local.web_app_url}/signin-oidc"],
     var.local_redirect_uris,
   )
 }
@@ -102,7 +83,7 @@ resource "azuread_app_role_assignment" "operator" {
 }
 
 resource "random_password" "demo_user" {
-  for_each = var.create_demo_users ? local.demo_users : {}
+  for_each = local.enabled_demo_users
 
   length           = 24
   special          = true
@@ -110,7 +91,7 @@ resource "random_password" "demo_user" {
 }
 
 resource "azuread_user" "demo" {
-  for_each = var.create_demo_users ? local.demo_users : {}
+  for_each = local.enabled_demo_users
 
   display_name                = each.value.display_name
   user_principal_name         = "${var.name_prefix}-${var.environment}-${each.key}@${data.azuread_domains.initial.domains[0].domain_name}"

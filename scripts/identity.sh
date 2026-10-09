@@ -8,21 +8,17 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 env_file="$repo_root/.env"
+# shellcheck source=scripts/lib/env-file.sh
+source "$repo_root/scripts/lib/env-file.sh"
 
-# Writes or replaces KEY=value in .env.
-set_env_value() {
-  local key="$1" value="$2"
-  if grep -q "^${key}=" "$env_file"; then
-    sed -i.bak "s|^${key}=.*|${key}=${value}|" "$env_file" && rm -f "$env_file.bak"
-  else
-    printf '%s=%s\n' "$key" "$value" >> "$env_file"
-  fi
-}
+# Users are sent back to the deployed web app after signing in.
+TF_VAR_web_app_url="$("$repo_root/scripts/terraform.sh" platform output -raw web_app_url)"
+export TF_VAR_web_app_url
 
 "$repo_root/scripts/terraform.sh" identity apply
 
-set_env_value TF_VAR_entra_client_id "$("$repo_root/scripts/terraform.sh" identity output -raw client_id)"
-set_env_value TF_VAR_restricted_group_id "$("$repo_root/scripts/terraform.sh" identity output -raw restricted_group_id)"
+set_env_value "$env_file" TF_VAR_entra_client_id "$("$repo_root/scripts/terraform.sh" identity output -raw client_id)"
+set_env_value "$env_file" TF_VAR_restricted_group_id "$("$repo_root/scripts/terraform.sh" identity output -raw restricted_group_id)"
 
 echo
 echo "Recorded the client ID and Restricted group in .env. Next: scripts/configure-github.sh"

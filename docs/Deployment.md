@@ -92,12 +92,14 @@ It also registers the Azure resource providers the platform uses, because regist
 
 ## Identity
 
-Users sign in through an Entra app registration, which needs directory rights no pipeline holds. After the first platform deployment (the sign-in address comes from the deployed web app):
+Users sign in through an Entra app registration, which needs directory rights no pipeline holds. Its sign-in address is the web app's, so in a new environment the order is: deploy the platform, run identity, then deploy the platform again so the app picks up the sign-in settings. Until then the app runs without sign-in and the smoke test fails.
 
 ```bash
 scripts/identity.sh            # creates or updates the Entra objects, records their IDs in .env
 scripts/configure-github.sh    # passes the IDs to the deployment pipeline
 ```
+
+`scripts/identity.sh` reads the web app address from the platform deployment's outputs, so nothing needs to be entered by hand.
 
 It creates the app registration with the `Ops.Reader`, `Ops.Engineer` and `Ops.Admin` roles, assigns you `Ops.Admin`, creates the Risk and Compliance group and, with `TF_VAR_create_demo_users=true`, one demo user per role. The demo users can sign in to this app and nothing else. Their passwords exist only in the Entra-protected Terraform state:
 
@@ -151,7 +153,7 @@ The upgrade path, once the evaluation gate is in place: add the new chat model v
 scripts/terraform.sh platform plan
 ```
 
-`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions for everything except the bootstrap, which is the one root-of-trust step run by a person.
+`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions. The exceptions are deployments that contain a `HUMAN_RUN` file saying why they need rights no pipeline should hold: today, the bootstrap and identity.
 
 ## Continuous integration
 
