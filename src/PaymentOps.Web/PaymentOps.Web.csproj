@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <UserSecretsId>440f3fb5-54df-42fd-bf04-12c7e6d1f45f</UserSecretsId>
   </PropertyGroup>
 
   <!-- Composition root: the only project allowed to reference the demo adapters. -->
@@ -14,6 +15,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" />
+    <PackageReference Include="Microsoft.Identity.Web" />
   </ItemGroup>
 
   <ItemGroup>
