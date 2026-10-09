@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> Only the foundation is in place so far: module structure, architecture tests, the web host, and the Azure platform defined in Terraform. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> Only the foundation is in place so far: module structure, architecture tests, the web host with sign-in and telemetry, and the Azure platform defined in Terraform. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -12,6 +12,8 @@
 | Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
 | Azure platform | ✅ Defined in Terraform, with a model preflight. Deployed only by the deployment pipeline, after approval |
 | Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry with its managed identity) |
+| Sign-in and roles | ✅ Entra ID sign-in, app roles and the Risk and Compliance group; the server-side `IUserContext` and authorization policies ([Security](Security.md)) |
+| Telemetry | ✅ OpenTelemetry to Application Insights, sent with the app's managed identity |
 | Product and AI capabilities | Not started |
 
 ## Azure platform
@@ -20,7 +22,9 @@ What runs where, and how each part authenticates. Every service-to-service call 
 
 ```mermaid
 flowchart LR
-  U["Ops users<br/>(browser)"] -->|HTTPS| APP["Web app<br/>App Service, Linux, .NET 10"]
+  U["Ops users<br/>(browser)"] -->|HTTPS, session cookie| APP["Web app<br/>App Service, Linux, .NET 10"]
+  U -->|sign in| E["Microsoft Entra ID<br/>app roles, groups"]
+  E -->|ID token| APP
   APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat, embedding and judge deployments<br/>strict content filter"]
   APP -->|"Entra token<br/>Blob Data Reader"| ST[("Knowledge storage")]
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]

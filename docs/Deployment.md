@@ -19,6 +19,7 @@ There are two kinds of deployment:
 | | What it creates | Who applies it |
 |---|---|---|
 | **Bootstrap** | Terraform state storage, the GitHub pipeline identities, the environment's resource group, resource provider registration | A person with Owner rights. Re-run only when the bootstrap itself changes |
+| **Identity** | The Entra app registration and its app roles, the Risk and Compliance group, optional demo users | A person with directory rights, after the first platform deployment and whenever the identity setup changes |
 | **Platform** | Everything the application runs on: models, hosting, storage, monitoring, budget | The deployment pipeline (`cd.yml`), after approval. Workstations only run plans |
 
 The bootstrap can't run through the pipeline, because it creates what the pipeline needs to run: the identity the pipeline signs in as, and the storage that holds its state. Creating them also needs Owner-level rights, which shouldn't sit with any CI identity. So a person runs it with reviewed Terraform code, and the pipeline works inside the boundaries it set up.
@@ -26,6 +27,7 @@ The bootstrap can't run through the pipeline, because it creates what the pipeli
 ## Prerequisites
 
 - An Azure subscription where you're **Owner** (needed for the bootstrap only)
+- Rights to create applications, groups and users in Entra ID, such as Application Administrator plus User Administrator (needed for identity only)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in with `az login`
 - [Terraform](https://developer.hashicorp.com/terraform/install) 1.10 or later
 - Bash. On Windows, Git Bash works.
@@ -50,6 +52,9 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_monthly_budget` | `10` | Budget that triggers alert emails |
 | `TF_VAR_alert_email` | | Where budget and operational alerts go |
 | `TF_VAR_model_retirement_buffer_days` | `90` | Refuse models retiring within this many days |
+| `TF_VAR_create_demo_users` | `true` | Create one demo user per role |
+| `TF_VAR_local_redirect_uris` | `'["https://localhost:7207/signin-oidc"]'` | Sign-in addresses for running locally |
+| `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
 | `TF_STATE_*` | | Written by the bootstrap script on its first run |
 
 **What isn't configuration.** Model names and versions live in `ai/manifest.yaml` rather than in environment variables. Changing a model changes the system's behaviour, so it goes through a pull request and evaluation. Platform constants, such as built-in Azure role IDs and GitHub's OIDC issuer, are written in the code because they don't vary.
@@ -84,6 +89,30 @@ Later runs apply against the remote state directly. To check for drift, run the 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
 
 **Why two resource groups.** `gh-deploy` is Contributor on the environment's resource group, which would include changing managed identities and their federated credentials. Keeping the pipeline identities and Terraform state in a separate group, where the pipeline has no rights, means a workflow can't widen its own trust or delete its own state. It also lets an environment be torn down and rebuilt without touching what the pipeline depends on.
+
+## Identity
+
+Users sign in through an Entra app registration, which needs directory rights no pipeline holds. After the first platform deployment (the sign-in address comes from the deployed web app):
+
+```bash
+scripts/identity.sh            # creates or updates the Entra objects, records their IDs in .env
+scripts/configure-github.sh    # passes the IDs to the deployment pipeline
+```
+
+It creates the app registration with the `Ops.Reader`, `Ops.Engineer` and `Ops.Admin` roles, assigns you `Ops.Admin`, creates the Risk and Compliance group and, with `TF_VAR_create_demo_users=true`, one demo user per role. The demo users can sign in to this app and nothing else. Their passwords exist only in the Entra-protected Terraform state:
+
+```bash
+scripts/terraform.sh identity output -json demo_user_sign_ins
+```
+
+### Running locally with sign-in
+
+Set the tenant and client ID for the local app (they're identifiers, not secrets):
+
+```bash
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:TenantId <tenant-id>
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:ClientId <client-id>
+```
 
 ## Platform
 

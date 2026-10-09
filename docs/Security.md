@@ -1,13 +1,30 @@
 # Security
 
-How access is controlled, as built so far. User sign-in, retrieval-time authorization, tool authorization and prompt-injection defences are added with the features they protect, and documented here when they land.
+How access is controlled, as built so far. Retrieval-time authorization, tool authorization and prompt-injection defences are added with the features they protect, and documented here when they land.
 
 ## Principles
 
 - **No keys.** Every service-to-service call uses a managed identity with an Entra ID token. API keys, storage account keys and workspace keys are disabled, so there are no secrets to store, rotate or leak.
 - **Least privilege, narrowest scope.** Each identity gets only the roles it needs, assigned on the specific resource rather than the subscription where possible.
 - **Authority sits with people, not pipelines.** Granting roles to users, registering resource providers and creating pipeline identities require Owner rights, which no CI identity holds.
-- **Only the pipeline changes environments.** The bootstrap, which creates the pipeline's identities and state, is the single step run by a person. Everything else is deployed only by the deployment pipeline, after approval.
+- **Only the pipeline changes environments.** Two steps are run by a person because they need rights no pipeline should hold: the bootstrap (the pipeline's own identities and state) and identity (the Entra app registration, groups and demo users). Everything else is deployed only by the deployment pipeline, after approval.
+
+## Users and sign-in
+
+Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.md)).
+
+- **Assignment required.** Entra refuses anyone without a role assignment on the enterprise app, before they reach it.
+- **No sign-in credential.** The app needs only an ID token, so its registration has no client secret or certificate.
+- **Tokens stay on the server.** The browser holds an encrypted session cookie; the server keeps the user in a scoped `IUserContext`, built from the token's claims, which every authorization decision reads.
+- **Everything requires a role** unless it's explicitly public: `/health`, `/health/ready` and the signed-out page.
+
+| App role | Can |
+|---|---|
+| `Ops.Reader` | Ask questions, run investigations, view citations |
+| `Ops.Engineer` | Everything a Reader can, plus approve proposed actions |
+| `Ops.Admin` | Everything an Engineer can, plus administration |
+
+Higher roles include lower ones. Membership of the **Risk and Compliance** security group grants access to Restricted knowledge. The token carries only groups assigned to the app, which keeps unrelated group IDs out of it and avoids overage for users in many groups.
 
 ## Identities
 
@@ -18,6 +35,7 @@ How access is controlled, as built so far. User sign-in, retrieval-time authoriz
 | `id-<prefix>-<env>-app` | User-assigned managed identity | The web app |
 | Foundry project identity | System-assigned managed identity | Foundry's trace views |
 | Developers | Entra ID users | Running the app locally against Azure (optional) |
+| App users | Entra ID users and groups, assigned app roles | Signing in to the web app, including optional demo users per role |
 
 ## Role assignments
 
