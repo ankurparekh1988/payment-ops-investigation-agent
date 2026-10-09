@@ -123,6 +123,7 @@ if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
   # shellcheck disable=SC2046
   terraform init -input=false -reconfigure $(backend_args)
   terraform apply
+  set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$(terraform output -raw operator_state_container_name)"
   exit 0
 fi
 
@@ -141,10 +142,12 @@ terraform apply
 TF_STATE_RESOURCE_GROUP="$(terraform output -raw state_resource_group_name)"
 TF_STATE_STORAGE_ACCOUNT="$(terraform output -raw state_storage_account_name)"
 TF_STATE_CONTAINER="$(terraform output -raw state_container_name)"
+TF_STATE_OPERATOR_CONTAINER="$(terraform output -raw operator_state_container_name)"
 
 set_env_value "$env_file" TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
 set_env_value "$env_file" TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"
 set_env_value "$env_file" TF_STATE_CONTAINER "$TF_STATE_CONTAINER"
+set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$TF_STATE_OPERATOR_CONTAINER"
 
 rm -f backend_override.tf
 echo "Moving bootstrap state into $TF_STATE_STORAGE_ACCOUNT/$TF_STATE_CONTAINER/$state_key."

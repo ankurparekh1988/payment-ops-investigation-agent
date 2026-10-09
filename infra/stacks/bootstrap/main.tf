@@ -268,3 +268,11 @@ resource "azurerm_role_assignment" "operator_state_contributor" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.operator_object_id
 }
+
+# The only assignment on the operator-only container: state with credentials stays out of reach of
+# the pipeline identities, including pull request plans.
+resource "azurerm_role_assignment" "operator_only_state_contributor" {
+  scope                = module.state.operator_container_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = var.operator_object_id
+}

@@ -52,10 +52,10 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_monthly_budget` | `10` | Budget that triggers alert emails |
 | `TF_VAR_alert_email` | | Where budget and operational alerts go |
 | `TF_VAR_model_retirement_buffer_days` | `90` | Refuse models retiring within this many days |
-| `TF_VAR_create_demo_users` | `true` | Create one demo user per role |
+| `TF_VAR_create_demo_users` | `false` | Create one demo user per role; enable only to demonstrate role behaviour |
 | `TF_VAR_local_app_urls` | `'["https://localhost:7207"]'` | Addresses the app runs on locally, allowed to sign in and out |
 | `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
-| `TF_STATE_*` | | Written by the bootstrap script on its first run |
+| `TF_STATE_*` | | Written by the bootstrap script |
 
 **What isn't configuration.** Model names and versions live in `ai/manifest.yaml` rather than in environment variables. Changing a model changes the system's behaviour, so it goes through a pull request and evaluation. Platform constants, such as built-in Azure role IDs and GitHub's OIDC issuer, are written in the code because they don't vary.
 
@@ -99,9 +99,13 @@ scripts/identity.sh            # creates or updates the Entra objects, records t
 scripts/configure-github.sh    # passes the IDs to the deployment pipeline
 ```
 
-`scripts/identity.sh` reads the web app address from the platform deployment's outputs, so nothing needs to be entered by hand.
+`scripts/identity.sh` reads the web app's address and managed identity from the platform deployment's outputs, so nothing needs to be entered by hand.
 
-It creates the app registration with the `Ops.Reader`, `Ops.Engineer` and `Ops.Admin` roles, assigns you `Ops.Admin`, creates the Risk and Compliance group and, with `TF_VAR_create_demo_users=true`, one demo user per role. The demo users can sign in to this app and nothing else. Their passwords exist only in the Entra-protected Terraform state:
+It creates the app registration with the `Ops.Reader`, `Ops.Engineer` and `Ops.Admin` roles, assigns you `Ops.Admin`, and creates the Risk and Compliance group. The registration trusts the web app's managed identity through a federated credential, which is how the deployed app redeems sign-ins without a secret.
+
+With `TF_VAR_create_demo_users=true` it also creates one demo user per role. They're tenant accounts assigned roles only on this application, with passwords that don't expire, so enable them only to demonstrate role behaviour and turn them off afterwards.
+
+The identity deployment's state holds those passwords and the local sign-in secret, so it's kept in a separate state container that only the bootstrap operator can read. The pipeline identities have no access to it:
 
 ```bash
 scripts/terraform.sh identity output -json demo_user_sign_ins
@@ -109,11 +113,14 @@ scripts/terraform.sh identity output -json demo_user_sign_ins
 
 ### Running locally with sign-in
 
-Add the local address to `TF_VAR_local_app_urls` and rerun `scripts/identity.sh`, then set the tenant and client ID for the local app (they're identifiers, not secrets). Without them, pages return 503:
+A laptop has no managed identity, so local sign-in uses a client secret instead. Setting `TF_VAR_local_app_urls` and rerunning `scripts/identity.sh` registers the local address and creates a secret that expires after `TF_VAR_local_secret_lifetime_days` (30 by default). Rerunning the script after that replaces it, and clearing the variable removes it. Keep it in user-secrets, outside the repository. Without these settings, pages return 503:
 
 ```bash
 dotnet user-secrets --project src/PaymentOps.Web set AzureAd:TenantId <tenant-id>
 dotnet user-secrets --project src/PaymentOps.Web set AzureAd:ClientId <client-id>
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:ClientCredentials:0:SourceType ClientSecret
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:ClientCredentials:0:ClientSecret \
+  "$(scripts/terraform.sh identity output -raw local_client_secret)"
 ```
 
 ## Platform

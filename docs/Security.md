@@ -14,8 +14,9 @@ How access is controlled, as built so far. Retrieval-time authorization, tool au
 Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.md)).
 
 - **Assignment required.** Entra refuses anyone without a role assignment on the enterprise app, before they reach it.
-- **No sign-in credential.** The app needs only an ID token, so its registration has no client secret or certificate.
-- **Tokens stay on the server.** The browser holds an encrypted session cookie; the server keeps the user in a scoped `IUserContext`, built from the token's claims, which every authorization decision reads.
+- **Authorization code flow with PKCE.** The browser carries only a one-time code. The server redeems it, keeps the tokens on the server, and gives the browser an encrypted session cookie. The user is held in a scoped `IUserContext`, built from the token's claims, which every authorization decision reads.
+- **No stored sign-in credential in Azure.** The deployed app redeems codes as its managed identity, which the app registration trusts through a federated credential: no client secret, certificate or credential in the app settings. Local development uses a separate, short-lived secret kept in .NET user-secrets, which exists only while local addresses are configured.
+- **Demo users are opt-in.** They're ordinary tenant accounts, created only when `TF_VAR_create_demo_users=true` and assigned roles only on this application. Their passwords don't expire because they're shared for demonstrations, so remove them when not in use.
 - **Everything requires a role** unless it's explicitly public: `/health`, `/health/ready`, sign-out and the signed-out and access-denied pages. A signed-in user without a role sees the access-denied page.
 - **Sign-ins last a fixed time.** Roles and groups come from the token, so a sign-in ends after `PaymentOps:Authorization:SessionLifetime` (8 hours by default) without sliding, and changes made in Entra apply at the next one. Open pages are signed out at the same moment.
 
@@ -53,6 +54,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | `gh-deploy` | Environment resource group | Contributor | Apply infrastructure changes |
 | `gh-deploy` | Environment resource group | RBAC Administrator, conditional | Assign only allow-listed platform roles, only to service principals ([details](Deployment.md#pipeline-identities)) |
 | `gh-deploy` | State container | Storage Blob Data Contributor | Read and write Terraform state |
+| Bootstrap operator | Operator-only state container | Storage Blob Data Contributor | The identity deployment's state, which holds demo user passwords and the local sign-in secret. No pipeline identity has any role on this container |
 | `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog, quota and regional capacity for the preflight and the pre-apply capacity check; nothing else |
 | Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader, Storage Blob Data Reader | Run the app locally |
 

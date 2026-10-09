@@ -13,6 +13,11 @@ output "state_container_name" {
   value       = module.state.container_name
 }
 
+output "operator_state_container_name" {
+  description = "Container for state only people may read, such as the identity deployment's."
+  value       = module.state.operator_container_name
+}
+
 output "workload_resource_group_name" {
   description = "Resource group the platform stack deploys into."
   value       = azurerm_resource_group.workload.name
