@@ -33,6 +33,11 @@ output "app_identity_client_id" {
   value       = azurerm_user_assigned_identity.app.client_id
 }
 
+output "app_identity_principal_id" {
+  description = "Principal ID of the web app's identity, trusted by the Entra app registration for sign-in."
+  value       = azurerm_user_assigned_identity.app.principal_id
+}
+
 output "knowledge_storage_account" {
   description = "Storage account for the knowledge corpus."
   value       = module.knowledge_storage.name

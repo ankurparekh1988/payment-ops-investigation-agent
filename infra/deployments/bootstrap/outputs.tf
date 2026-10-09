@@ -10,6 +10,10 @@ output "state_container_name" {
   value = module.bootstrap.state_container_name
 }
 
+output "operator_state_container_name" {
+  value = module.bootstrap.operator_state_container_name
+}
+
 output "workload_resource_group_name" {
   value = module.bootstrap.workload_resource_group_name
 }

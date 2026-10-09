@@ -19,6 +19,7 @@ There are two kinds of deployment:
 | | What it creates | Who applies it |
 |---|---|---|
 | **Bootstrap** | Terraform state storage, the GitHub pipeline identities, the environment's resource group, resource provider registration | A person with Owner rights. Re-run only when the bootstrap itself changes |
+| **Identity** | The Entra app registration and its app roles, the Risk and Compliance group, optional demo users | A person with directory rights, after the first platform deployment and whenever the identity setup changes |
 | **Platform** | Everything the application runs on: models, hosting, storage, monitoring, budget | The deployment pipeline (`cd.yml`), after approval. Workstations only run plans |
 
 The bootstrap can't run through the pipeline, because it creates what the pipeline needs to run: the identity the pipeline signs in as, and the storage that holds its state. Creating them also needs Owner-level rights, which shouldn't sit with any CI identity. So a person runs it with reviewed Terraform code, and the pipeline works inside the boundaries it set up.
@@ -26,6 +27,7 @@ The bootstrap can't run through the pipeline, because it creates what the pipeli
 ## Prerequisites
 
 - An Azure subscription where you're **Owner** (needed for the bootstrap only)
+- Rights to create applications, groups and users in Entra ID, such as Application Administrator plus User Administrator (needed for identity only)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in with `az login`
 - [Terraform](https://developer.hashicorp.com/terraform/install) 1.10 or later
 - Bash. On Windows, Git Bash works.
@@ -50,7 +52,10 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_monthly_budget` | `10` | Budget that triggers alert emails |
 | `TF_VAR_alert_email` | | Where budget and operational alerts go |
 | `TF_VAR_model_retirement_buffer_days` | `90` | Refuse models retiring within this many days |
-| `TF_STATE_*` | | Written by the bootstrap script on its first run |
+| `TF_VAR_create_demo_users` | `false` | Create one demo user per role; enable only to demonstrate role behaviour |
+| `TF_VAR_local_app_urls` | `'["https://localhost:7207"]'` | Addresses the app runs on locally, allowed to sign in and out |
+| `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
+| `TF_STATE_*` | | Written by the bootstrap script |
 
 **What isn't configuration.** Model names and versions live in `ai/manifest.yaml` rather than in environment variables. Changing a model changes the system's behaviour, so it goes through a pull request and evaluation. Platform constants, such as built-in Azure role IDs and GitHub's OIDC issuer, are written in the code because they don't vary.
 
@@ -84,6 +89,39 @@ Later runs apply against the remote state directly. To check for drift, run the 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
 
 **Why two resource groups.** `gh-deploy` is Contributor on the environment's resource group, which would include changing managed identities and their federated credentials. Keeping the pipeline identities and Terraform state in a separate group, where the pipeline has no rights, means a workflow can't widen its own trust or delete its own state. It also lets an environment be torn down and rebuilt without touching what the pipeline depends on.
+
+## Identity
+
+Users sign in through an Entra app registration, which needs directory rights no pipeline holds. Its sign-in address is the web app's, so in a new environment the order is: deploy the platform, run identity, then deploy the platform again so the app picks up the sign-in settings. Until then the health checks answer, every page returns 503 because sign-in isn't configured, and the smoke test's sign-in check fails.
+
+```bash
+scripts/identity.sh            # creates or updates the Entra objects, records their IDs in .env
+scripts/configure-github.sh    # passes the IDs to the deployment pipeline
+```
+
+`scripts/identity.sh` reads the web app's address and managed identity from the platform deployment's outputs, so nothing needs to be entered by hand.
+
+It creates the app registration with the `Ops.Reader`, `Ops.Engineer` and `Ops.Admin` roles, assigns you `Ops.Admin`, and creates the Risk and Compliance group. The registration trusts the web app's managed identity through a federated credential, which is how the deployed app redeems sign-ins without a secret.
+
+With `TF_VAR_create_demo_users=true` it also creates one demo user per role. They're tenant accounts assigned roles only on this application, with passwords that don't expire, so enable them only to demonstrate role behaviour and turn them off afterwards.
+
+The identity deployment's state holds those passwords and the local sign-in secret, so it's kept in a separate state container that only the bootstrap operator can read. The pipeline identities have no access to it:
+
+```bash
+scripts/terraform.sh identity output -json demo_user_sign_ins
+```
+
+### Running locally with sign-in
+
+A laptop has no managed identity, so local sign-in uses a client secret instead. Setting `TF_VAR_local_app_urls` and rerunning `scripts/identity.sh` registers the local address and creates a secret that expires after `TF_VAR_local_secret_lifetime_days` (30 by default). Rerunning the script after that replaces it, and clearing the variable removes it. Keep it in user-secrets, outside the repository. Without these settings, pages return 503:
+
+```bash
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:TenantId <tenant-id>
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:ClientId <client-id>
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:ClientCredentials:0:SourceType ClientSecret
+dotnet user-secrets --project src/PaymentOps.Web set AzureAd:ClientCredentials:0:ClientSecret \
+  "$(scripts/terraform.sh identity output -raw local_client_secret)"
+```
 
 ## Platform
 
@@ -122,7 +160,7 @@ The upgrade path, once the evaluation gate is in place: add the new chat model v
 scripts/terraform.sh platform plan
 ```
 
-`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions for everything except the bootstrap, which is the one root-of-trust step run by a person.
+`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions. The exceptions, listed in the script, are the bootstrap and identity, which need rights no pipeline should hold.
 
 ## Continuous integration
 
