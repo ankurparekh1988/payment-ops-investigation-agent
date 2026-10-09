@@ -59,6 +59,7 @@ resource "azuread_service_principal" "this" {
 # Lets a managed identity authenticate as this application, so the deployed app redeems sign-in
 # codes without a secret. Issuer and audience are Entra's public-cloud values for managed identities.
 resource "azuread_application_federated_identity_credential" "managed_identity" {
+  #checkov:skip=CKV_AZURE_249:Checks GitHub Actions subjects; this trusts one managed identity by object ID.
   for_each = var.managed_identity_credentials
 
   application_id = azuread_application.this.id
