@@ -52,6 +52,16 @@ variable "alert_email" {
   sensitive   = true
 }
 
+variable "entra_client_id" {
+  description = "Client ID of the Entra app registration, from scripts/identity.sh."
+  type        = string
+}
+
+variable "restricted_group_id" {
+  description = "Object ID of the Risk and Compliance group, from scripts/identity.sh."
+  type        = string
+}
+
 variable "model_retirement_buffer_days" {
   description = "Refuse to deploy a model retiring within this many days, for example 90."
   type        = number

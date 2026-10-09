@@ -52,4 +52,6 @@ module "platform" {
   log_daily_quota_gb       = var.log_daily_quota_gb
   monthly_budget           = var.monthly_budget
   alert_email              = var.alert_email
+  entra_client_id          = var.entra_client_id
+  restricted_group_id      = var.restricted_group_id
 }

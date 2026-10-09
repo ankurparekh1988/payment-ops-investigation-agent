@@ -75,6 +75,16 @@ variable "alert_email" {
   sensitive   = true
 }
 
+variable "entra_client_id" {
+  description = "Client ID of the Entra app registration users sign in through (identity deployment)."
+  type        = string
+}
+
+variable "restricted_group_id" {
+  description = "Object ID of the group whose members can retrieve Restricted knowledge (identity deployment)."
+  type        = string
+}
+
 variable "tags" {
   description = "Extra tags for every resource."
   type        = map(string)

@@ -110,6 +110,14 @@ module "web_app" {
     PaymentOps__Foundry__EmbedDeployment  = var.embedding_deployment
     PaymentOps__Knowledge__BlobEndpoint   = module.knowledge_storage.blob_endpoint
     PaymentOps__Knowledge__Container      = local.knowledge_container
+
+    # Sign-in. The client ID and group ID are identifiers, not credentials.
+    AzureAd__TenantId                            = data.azurerm_client_config.current.tenant_id
+    AzureAd__ClientId                            = var.entra_client_id
+    PaymentOps__Authorization__RestrictedGroupId = var.restricted_group_id
+
+    # App Service terminates TLS, so sign-in redirects must come from the forwarded scheme.
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED = "true"
   }
 }
 
