@@ -40,10 +40,7 @@ public sealed class PaymentOpsWebApplicationFactory : WebApplicationFactory<Prog
         var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         client.DefaultRequestHeaders.Add(TestAuthenticationHandler.NameHeader, name);
         client.DefaultRequestHeaders.Add(TestAuthenticationHandler.RolesHeader, string.Join(',', roles));
-        if (groups.Length > 0)
-        {
-            client.DefaultRequestHeaders.Add(TestAuthenticationHandler.GroupsHeader, string.Join(',', groups));
-        }
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.GroupsHeader, string.Join(',', groups));
         return client;
     }
 

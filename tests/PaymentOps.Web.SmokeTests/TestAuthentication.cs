@@ -31,12 +31,18 @@ internal sealed class TestAuthenticationHandler(
         claims.AddRange(Values(RolesHeader).Select(role => new Claim("roles", role)));
         claims.AddRange(Values(GroupsHeader).Select(group => new Claim("groups", group)));
 
-        var identity = new ClaimsIdentity(claims, SchemeName, nameType: "name", roleType: "roles");
-        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
+        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(TestPrincipal.From(claims), SchemeName)));
     }
 
     private string[] Values(string header) =>
         Request.Headers.TryGetValue(header, out var value)
             ? value.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : [];
+}
+
+/// <summary>A signed-in principal shaped like one built from an Entra ID token.</summary>
+internal static class TestPrincipal
+{
+    public static ClaimsPrincipal From(IEnumerable<Claim> claims) =>
+        new(new ClaimsIdentity(claims, TestAuthenticationHandler.SchemeName, nameType: "name", roleType: "roles"));
 }

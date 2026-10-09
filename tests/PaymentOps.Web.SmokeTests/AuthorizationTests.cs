@@ -2,14 +2,23 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 using PaymentOps.Domain.Security;
 using PaymentOps.Web.Security;
 
 namespace PaymentOps.Web.SmokeTests;
 
-public sealed class AuthorizationTests(PaymentOpsWebApplicationFactory factory) : IClassFixture<PaymentOpsWebApplicationFactory>
+public sealed class AuthorizationTests
 {
+    private const string RestrictedGroupId = "group-restricted";
+
+    private static readonly IAuthorizationService Authorization = new ServiceCollection()
+        .AddLogging()
+        .AddAuthorization(AuthorizationPolicies.Configure)
+        .BuildServiceProvider()
+        .GetRequiredService<IAuthorizationService>();
+
     [Theory]
     [InlineData(OpsRoles.Reader, false)]
     [InlineData(OpsRoles.Engineer, true)]
@@ -44,45 +53,40 @@ public sealed class AuthorizationTests(PaymentOpsWebApplicationFactory factory) 
     [Fact]
     public void User_context_reads_identity_roles_and_groups_from_entra_claims()
     {
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(
-            [
-                new Claim("oid", "3f2a"),
-                new Claim("name", "Casey Compliance"),
-                new Claim("roles", OpsRoles.Engineer),
-                new Claim("groups", "group-a"),
-                new Claim("groups", "group-b"),
-            ],
-            authenticationType: "Test",
-            nameType: "name",
-            roleType: "roles"));
+        var principal = TestPrincipal.From(
+        [
+            new Claim("oid", "3f2a"),
+            new Claim("name", "Casey Compliance"),
+            new Claim("roles", OpsRoles.Engineer),
+            new Claim("groups", "group-a"),
+            new Claim("groups", RestrictedGroupId),
+        ]);
 
-        var user = new ClaimsUserContext(new CurrentUserAccessor { User = principal });
+        var user = UserContextFor(principal);
 
         Assert.True(user.IsAuthenticated);
         Assert.Equal("3f2a", user.UserId);
         Assert.Equal("Casey Compliance", user.DisplayName);
         Assert.True(user.IsInRole(OpsRoles.Reader));
         Assert.False(user.IsInRole(OpsRoles.Admin));
-        Assert.Equal(["group-a", "group-b"], user.GroupIds.Order(StringComparer.Ordinal));
+        Assert.Equal(["group-a", RestrictedGroupId], user.GroupIds.Order(StringComparer.Ordinal));
+        Assert.True(user.CanAccessRestrictedKnowledge);
     }
 
     [Fact]
     public void An_anonymous_user_has_no_roles_or_groups()
     {
-        var user = new ClaimsUserContext(new CurrentUserAccessor());
+        var user = UserContextFor(new ClaimsPrincipal());
 
         Assert.False(user.IsAuthenticated);
         Assert.Empty(user.Roles);
         Assert.Empty(user.GroupIds);
+        Assert.False(user.CanAccessRestrictedKnowledge);
     }
 
-    private async Task<AuthorizationResult> Authorize(string policy, string role)
-    {
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim("roles", role)], authenticationType: "Test", nameType: "name", roleType: "roles"));
+    private static Task<AuthorizationResult> Authorize(string policy, string role) =>
+        Authorization.AuthorizeAsync(TestPrincipal.From([new Claim("roles", role)]), policy);
 
-        using var scope = factory.Services.CreateScope();
-        var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
-        return await authorization.AuthorizeAsync(principal, policy);
-    }
+    private static ClaimsUserContext UserContextFor(ClaimsPrincipal principal) =>
+        new(new CurrentUserAccessor { User = principal }, Options.Create(new AccessOptions { RestrictedGroupId = RestrictedGroupId }));
 }

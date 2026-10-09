@@ -1,8 +1,5 @@
 @page "/"
-@using Microsoft.Extensions.Options
-@using PaymentOps.Web.Security
 @inject IUserContext CurrentUser
-@inject IOptions<AccessOptions> Access
 
 <PageTitle>Payment Ops Investigation Agent</PageTitle>
 
@@ -21,11 +18,6 @@
         <dt>Roles</dt>
         <dd>@string.Join(", ", CurrentUser.Roles.Order(StringComparer.Ordinal))</dd>
         <dt>Restricted knowledge</dt>
-        <dd>@(HasRestrictedAccess ? "Yes, through Risk and Compliance" : "No")</dd>
+        <dd>@(CurrentUser.CanAccessRestrictedKnowledge ? "Yes, through Risk and Compliance" : "No")</dd>
     </dl>
 </section>
-
-@code {
-    private bool HasRestrictedAccess =>
-        !string.IsNullOrEmpty(Access.Value.RestrictedGroupId) && CurrentUser.GroupIds.Contains(Access.Value.RestrictedGroupId);
-}

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Components.Server.Circuits;
@@ -42,8 +41,7 @@ internal static class SecurityExtensions
         {
             await antiforgery.ValidateRequestAsync(context);
             return Results.SignOut(
-                new AuthenticationProperties { RedirectUri = "/signed-out" },
-                [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]);
+                authenticationSchemes: [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]);
         });
 
         return endpoints;

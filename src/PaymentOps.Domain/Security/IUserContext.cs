@@ -19,5 +19,8 @@ public interface IUserContext
     /// <summary>Object IDs of the security groups assigned to the application that the user belongs to.</summary>
     IReadOnlySet<string> GroupIds { get; }
 
+    /// <summary>Whether the user may retrieve knowledge classified as Restricted.</summary>
+    bool CanAccessRestrictedKnowledge { get; }
+
     bool IsInRole(string role);
 }

@@ -17,4 +17,16 @@ public static class OpsRoles
         var highest = assignedRoles.Select(role => Array.IndexOf(Hierarchy, role)).DefaultIfEmpty(-1).Max();
         return Hierarchy.Take(highest + 1).ToHashSet(StringComparer.Ordinal);
     }
+
+    /// <summary>The given role and every role above it, for checks against assigned roles.</summary>
+    public static string[] AtLeast(string role)
+    {
+        var index = Array.IndexOf(Hierarchy, role);
+        if (index < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(role), role, "Not an app role.");
+        }
+
+        return Hierarchy[index..];
+    }
 }

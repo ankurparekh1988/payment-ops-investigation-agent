@@ -15,10 +15,10 @@ internal static class AuthorizationPolicies
         // Every page and endpoint requires an app role unless it explicitly allows anonymous access.
         options.FallbackPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .RequireRole(OpsRoles.Reader, OpsRoles.Engineer, OpsRoles.Admin)
+            .RequireRole(OpsRoles.AtLeast(OpsRoles.Reader))
             .Build();
 
-        options.AddPolicy(ApproveActions, policy => policy.RequireRole(OpsRoles.Engineer, OpsRoles.Admin));
-        options.AddPolicy(Administer, policy => policy.RequireRole(OpsRoles.Admin));
+        options.AddPolicy(ApproveActions, policy => policy.RequireRole(OpsRoles.AtLeast(OpsRoles.Engineer)));
+        options.AddPolicy(Administer, policy => policy.RequireRole(OpsRoles.AtLeast(OpsRoles.Admin)));
     }
 }
