@@ -40,6 +40,10 @@ locals {
   enabled_demo_users = var.create_demo_users ? local.demo_users : {}
 
   web_app_url = trimsuffix(var.web_app_url, "/")
+
+  # Entra returns users only to registered addresses: after sign-in, and after sign-out
+  # (Microsoft.Identity.Web's default callback paths).
+  app_urls = concat([local.web_app_url], [for url in var.local_app_urls : trimsuffix(url, "/")])
 }
 
 data "azuread_domains" "initial" {
@@ -55,10 +59,7 @@ module "app" {
   owner_object_ids  = [var.operator_object_id]
   logout_url        = "${local.web_app_url}/signout-oidc"
 
-  redirect_uris = concat(
-    ["${local.web_app_url}/signin-oidc"],
-    var.local_redirect_uris,
-  )
+  redirect_uris = flatten([for url in local.app_urls : ["${url}/signin-oidc", "${url}/signout-callback-oidc"]])
 }
 
 # Members can retrieve Restricted knowledge. Assigning the group to the app is what makes Entra

@@ -24,14 +24,16 @@ if [[ ! -d "$deployment_dir" ]]; then
   exit 2
 fi
 
-# Only the deployment pipeline changes environments. Workstations can plan and inspect. A deployment
-# that needs rights no pipeline should hold declares itself with a HUMAN_RUN file saying why.
+# Only the deployment pipeline changes environments. Workstations can plan and inspect. The exceptions
+# need rights no pipeline should hold: the bootstrap creates the pipeline's own identities and state
+# (Owner), and identity creates Entra app registrations, groups and users (directory rights).
+human_run_deployments=(bootstrap identity)
 changes_environment=false
 case "$1" in
   apply | destroy | import | taint | untaint | force-unlock) changes_environment=true ;;
   state) [[ "${2:-}" =~ ^(rm|mv|push|replace-provider)$ ]] && changes_environment=true ;;
 esac
-if [[ "$changes_environment" == "true" && ! -f "$deployment_dir/HUMAN_RUN" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
+if [[ "$changes_environment" == "true" && " ${human_run_deployments[*]} " != *" $deployment "* && "${GITHUB_ACTIONS:-}" != "true" ]]; then
   echo "'terraform $*' for '$deployment' runs only in the deployment pipeline. Use 'plan' locally." >&2
   exit 1
 fi

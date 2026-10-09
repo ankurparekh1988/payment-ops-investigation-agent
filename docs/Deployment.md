@@ -53,7 +53,7 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_alert_email` | | Where budget and operational alerts go |
 | `TF_VAR_model_retirement_buffer_days` | `90` | Refuse models retiring within this many days |
 | `TF_VAR_create_demo_users` | `true` | Create one demo user per role |
-| `TF_VAR_local_redirect_uris` | `'["https://localhost:7207/signin-oidc"]'` | Sign-in addresses for running locally |
+| `TF_VAR_local_app_urls` | `'["https://localhost:7207"]'` | Addresses the app runs on locally, allowed to sign in and out |
 | `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
 | `TF_STATE_*` | | Written by the bootstrap script on its first run |
 
@@ -92,7 +92,7 @@ It also registers the Azure resource providers the platform uses, because regist
 
 ## Identity
 
-Users sign in through an Entra app registration, which needs directory rights no pipeline holds. Its sign-in address is the web app's, so in a new environment the order is: deploy the platform, run identity, then deploy the platform again so the app picks up the sign-in settings. Until then the app runs without sign-in and the smoke test fails.
+Users sign in through an Entra app registration, which needs directory rights no pipeline holds. Its sign-in address is the web app's, so in a new environment the order is: deploy the platform, run identity, then deploy the platform again so the app picks up the sign-in settings. Until then the health checks answer, every page returns 503 because sign-in isn't configured, and the smoke test's sign-in check fails.
 
 ```bash
 scripts/identity.sh            # creates or updates the Entra objects, records their IDs in .env
@@ -109,7 +109,7 @@ scripts/terraform.sh identity output -json demo_user_sign_ins
 
 ### Running locally with sign-in
 
-Set the tenant and client ID for the local app (they're identifiers, not secrets):
+Add the local address to `TF_VAR_local_app_urls` and rerun `scripts/identity.sh`, then set the tenant and client ID for the local app (they're identifiers, not secrets). Without them, pages return 503:
 
 ```bash
 dotnet user-secrets --project src/PaymentOps.Web set AzureAd:TenantId <tenant-id>
@@ -153,7 +153,7 @@ The upgrade path, once the evaluation gate is in place: add the new chat model v
 scripts/terraform.sh platform plan
 ```
 
-`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions. The exceptions are deployments that contain a `HUMAN_RUN` file saying why they need rights no pipeline should hold: today, the bootstrap and identity.
+`scripts/terraform.sh` loads `.env`, connects to the remote state for the environment, and passes the rest of the arguments to Terraform. Commands that change an environment (`apply`, `destroy`, `import` and state changes) are refused outside GitHub Actions. The exceptions, listed in the script, are the bootstrap and identity, which need rights no pipeline should hold.
 
 ## Continuous integration
 

@@ -79,12 +79,22 @@ variable "entra_client_id" {
   description = "Client ID of the Entra app registration users sign in through (identity deployment)."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.entra_client_id == null || can(regex("^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", var.entra_client_id))
+    error_message = "Must be a GUID, or unset until the identity deployment has run."
+  }
 }
 
 variable "restricted_group_id" {
   description = "Object ID of the group whose members can retrieve Restricted knowledge (identity deployment)."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.restricted_group_id == null || can(regex("^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", var.restricted_group_id))
+    error_message = "Must be a GUID, or unset until the identity deployment has run."
+  }
 }
 
 variable "tags" {

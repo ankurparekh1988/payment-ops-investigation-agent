@@ -20,8 +20,8 @@ variable "bootstrap_operator_object_id" {
   type        = string
 }
 
-variable "local_redirect_uris" {
-  description = "Extra sign-in redirect addresses for running the app locally, as a JSON list."
+variable "local_app_urls" {
+  description = "Base addresses the app runs on locally, as a JSON list."
   type        = list(string)
   default     = []
 }

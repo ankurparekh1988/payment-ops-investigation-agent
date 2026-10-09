@@ -23,8 +23,8 @@ variable "operator_object_id" {
   type        = string
 }
 
-variable "local_redirect_uris" {
-  description = "Extra sign-in redirect addresses for running the app locally."
+variable "local_app_urls" {
+  description = "Base addresses the app runs on locally (for example https://localhost:7207), allowed to sign in and out."
   type        = list(string)
   default     = []
 }
