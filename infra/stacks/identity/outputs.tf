@@ -13,3 +13,9 @@ output "demo_user_sign_ins" {
   value       = { for key, user in azuread_user.demo : user.user_principal_name => random_password.demo_user[key].result }
   sensitive   = true
 }
+
+output "local_client_secret" {
+  description = "Client secret for signing in from a local run; null when no local addresses are configured."
+  value       = one(azuread_application_password.local[*].value)
+  sensitive   = true
+}

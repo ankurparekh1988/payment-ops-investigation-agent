@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.9"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.13"
+    }
   }
 }
 
@@ -46,6 +50,8 @@ locals {
   app_urls = concat([local.web_app_url], [for url in var.local_app_urls : trimsuffix(url, "/")])
 }
 
+data "azuread_client_config" "current" {}
+
 data "azuread_domains" "initial" {
   only_initial = true
 }
@@ -60,6 +66,31 @@ module "app" {
   logout_url        = "${local.web_app_url}/signout-oidc"
 
   redirect_uris = flatten([for url in local.app_urls : ["${url}/signin-oidc", "${url}/signout-callback-oidc"]])
+
+  # The deployed app redeems sign-in codes as its managed identity: no secret or certificate.
+  managed_identity_credentials = {
+    web-app = {
+      tenant_id    = data.azuread_client_config.current.tenant_id
+      principal_id = var.app_identity_principal_id
+    }
+  }
+}
+
+# A laptop has no managed identity, so local sign-in uses a short-lived secret that exists only
+# while local addresses are configured. It's kept in user-secrets and never used by the deployed app.
+resource "time_rotating" "local_secret" {
+  count = length(var.local_app_urls) > 0 ? 1 : 0
+
+  rotation_days = var.local_secret_lifetime_days
+}
+
+resource "azuread_application_password" "local" {
+  count = length(var.local_app_urls) > 0 ? 1 : 0
+
+  application_id      = module.app.application_id
+  display_name        = "Local development"
+  end_date            = time_rotating.local_secret[0].rotation_rfc3339
+  rotate_when_changed = { rotation = time_rotating.local_secret[0].id }
 }
 
 # Members can retrieve Restricted knowledge. Assigning the group to the app is what makes Entra
@@ -94,9 +125,12 @@ resource "random_password" "demo_user" {
 resource "azuread_user" "demo" {
   for_each = local.enabled_demo_users
 
-  display_name                = each.value.display_name
-  user_principal_name         = "${var.name_prefix}-${var.environment}-${each.key}@${data.azuread_domains.initial.domains[0].domain_name}"
-  password                    = random_password.demo_user[each.key].result
+  display_name        = each.value.display_name
+  user_principal_name = "${var.name_prefix}-${var.environment}-${each.key}@${data.azuread_domains.initial.domains[0].domain_name}"
+  password            = random_password.demo_user[each.key].result
+
+  # Demo accounts are shared for showing role behaviour, so their passwords don't expire. They're
+  # off by default and should be removed when not in use.
   disable_password_expiration = true
 }
 

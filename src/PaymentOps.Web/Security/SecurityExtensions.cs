@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Identity.Web;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 using PaymentOps.Domain.Security;
 
@@ -61,14 +62,17 @@ internal static class SecurityExtensions
 
     private static void AddEntraSignIn(IServiceCollection services, IConfigurationSection signIn, AccessOptions access)
     {
+        // Authorization code flow: the browser only carries a one-time code, which the server redeems
+        // with the client credentials in AzureAd:ClientCredentials (the managed identity in Azure).
+        // Token acquisition is what redeems the code; the app calls no API as the user.
         services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-            .AddMicrosoftIdentityWebApp(signIn);
+            .AddMicrosoftIdentityWebApp(signIn)
+            .EnableTokenAcquisitionToCallDownstreamApi()
+            .AddInMemoryTokenCaches();
 
-        // Sign-in only: the app reaches every service with its managed identity and never calls an
-        // API on a user's behalf, so an ID token is all it needs and no client credential exists.
         services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
         {
-            options.ResponseType = "id_token";
+            options.ResponseType = OpenIdConnectResponseType.Code;
             options.SignedOutRedirectUri = "/signed-out";
 
             // Roles and groups come from the token, so a sign-in lasts a fixed time and changes

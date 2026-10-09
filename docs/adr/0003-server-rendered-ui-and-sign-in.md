@@ -13,19 +13,20 @@ A common shape is a single-page app in the browser calling a separate API. The b
 
 **One deployable: a Blazor Web App with interactive server rendering**, which acts as its own backend for the browser.
 
-- Tokens never reach the browser. The server holds the session as an encrypted cookie and keeps the signed-in user in a scoped `IUserContext`.
+- Tokens stay on the server. The browser carries only a one-time authorization code; the server redeems it, holds the session as an encrypted cookie and keeps the signed-in user in a scoped `IUserContext`.
 - The agent's progress streams over the connection Blazor already maintains.
 - Pages and endpoints call application services through one contract, so the UI never reaches into the agent, tools or data directly. Splitting out an API later is a hosting change, not a rewrite.
 
-**Sign-in uses an ID token only, so the app registration has no client secret or certificate.** The app reaches every Azure service with its managed identity and never calls an API on a user's behalf, so it needs proof of who the user is, not a token to act as them.
+**Sign-in uses the authorization code flow with PKCE, and the deployed app has no stored credential.** It redeems codes as its user-assigned managed identity, which the app registration trusts through a federated identity credential (`SignedAssertionFromManagedIdentity` in Microsoft.Identity.Web). The implicit flow is not enabled. A laptop has no managed identity, so local development uses a separate, short-lived client secret kept in .NET user-secrets.
 
 **Access is assignment-based.** The enterprise app requires a role assignment, so Entra refuses anyone who hasn't been assigned before they reach the app. Every page and endpoint then requires an app role unless it's explicitly public, as the health endpoints are.
 
 ## Consequences
 
-- No credential to store, rotate or leak for sign-in, and no tokens in the browser.
+- The deployed app has no sign-in credential to store, rotate or leak, and no tokens reach the browser.
+- The local-development secret is the one credential on the app registration. It exists only while local addresses are configured and expires after 30 days by default.
 - A Blazor Server circuit holds memory per connected user and needs session affinity, which suits an internal tool rather than high public traffic.
-- If the app ever needs to call an API as the user, sign-in moves to the authorization code flow with the app's managed identity as a federated credential, which is still secret-free.
+- If the app needs to call an API as the user, the same sign-in already provides the tokens.
 - The app registration, groups and users are tenant-level objects, so they're created by a person with directory rights (`scripts/identity.sh`), alongside the bootstrap.
 
 ## Alternatives considered
@@ -33,4 +34,5 @@ A common shape is a single-page app in the browser calling a separate API. The b
 - **Single-page app with a separate API.** Puts tokens in the browser and doubles the moving parts, with no benefit for an internal tool of this size.
 - **Blazor WebAssembly.** Also puts tokens in the browser.
 - **App Service built-in authentication.** Simple, but the app needs the user's roles and groups in its own authorization model, and the built-in option keeps that outside the code.
-- **Authorization code flow with a client secret.** A credential to manage for capabilities the app doesn't use.
+- **ID token only (implicit flow).** Needs no credential at all, but Microsoft advises against the implicit grant for new apps, and the token passes through the browser.
+- **Authorization code flow with a client secret in Azure.** A long-lived credential to store and rotate, which the managed identity makes unnecessary.

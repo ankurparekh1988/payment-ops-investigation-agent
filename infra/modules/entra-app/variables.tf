@@ -31,3 +31,12 @@ variable "owner_object_ids" {
   description = "Object IDs of the application's owners."
   type        = list(string)
 }
+
+variable "managed_identity_credentials" {
+  description = "Managed identities that may authenticate as this application, keyed by credential name."
+  type = map(object({
+    tenant_id    = string
+    principal_id = string
+  }))
+  default = {}
+}

@@ -24,7 +24,7 @@ What runs where, and how each part authenticates. Every service-to-service call 
 flowchart LR
   U["Ops users<br/>(browser)"] -->|HTTPS, session cookie| APP["Web app<br/>App Service, Linux, .NET 10"]
   U -->|sign in| E["Microsoft Entra ID<br/>app roles, groups"]
-  E -->|ID token| APP
+  E -->|"authorization code,<br/>redeemed as the app's managed identity"| APP
   APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat, embedding and judge deployments<br/>strict content filter"]
   APP -->|"Entra token<br/>Blob Data Reader"| ST[("Knowledge storage")]
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]

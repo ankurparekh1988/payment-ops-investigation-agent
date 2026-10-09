@@ -28,10 +28,11 @@ resource "azuread_application" "this" {
     redirect_uris = var.redirect_uris
     logout_url    = var.logout_url
 
-    # Sign-in only: the app never calls APIs on a user's behalf, so it needs an ID token and no
-    # client credential.
+    # Authorization code flow only. Set explicitly, because omitting the block leaves an existing
+    # registration's implicit grant as it was.
     implicit_grant {
-      id_token_issuance_enabled = true
+      access_token_issuance_enabled = false
+      id_token_issuance_enabled     = false
     }
   }
 
@@ -53,4 +54,17 @@ resource "azuread_service_principal" "this" {
 
   # Only users and groups assigned an app role can sign in.
   app_role_assignment_required = true
+}
+
+# Lets a managed identity authenticate as this application, so the deployed app redeems sign-in
+# codes without a secret. Issuer and audience are Entra's public-cloud values for managed identities.
+resource "azuread_application_federated_identity_credential" "managed_identity" {
+  for_each = var.managed_identity_credentials
+
+  application_id = azuread_application.this.id
+  display_name   = each.key
+  description    = "Managed identity ${each.value.principal_id}"
+  audiences      = ["api://AzureADTokenExchange"]
+  issuer         = "https://login.microsoftonline.com/${each.value.tenant_id}/v2.0"
+  subject        = each.value.principal_id
 }

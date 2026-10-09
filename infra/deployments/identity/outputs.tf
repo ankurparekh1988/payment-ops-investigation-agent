@@ -10,3 +10,8 @@ output "demo_user_sign_ins" {
   value     = module.identity.demo_user_sign_ins
   sensitive = true
 }
+
+output "local_client_secret" {
+  value     = module.identity.local_client_secret
+  sensitive = true
+}

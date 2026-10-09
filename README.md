@@ -34,6 +34,8 @@ dotnet test PaymentOps.slnx
 dotnet run --project src/PaymentOps.Web
 ```
 
+Without sign-in settings the health checks answer and pages return 503. To sign in locally, see [Running locally with sign-in](docs/Deployment.md#running-locally-with-sign-in).
+
 ## License
 
 [MIT](LICENSE)

@@ -12,3 +12,8 @@ output "app_role_ids" {
   description = "App role IDs keyed by role value."
   value       = local.app_role_ids
 }
+
+output "application_id" {
+  description = "Resource ID of the application, for attaching credentials."
+  value       = azuread_application.this.id
+}

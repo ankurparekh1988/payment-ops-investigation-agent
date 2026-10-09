@@ -45,11 +45,14 @@ locals {
 
   # Sign-in settings come from the identity deployment, which needs the deployed web app's address
   # first. Until it has run, the app is deployed without them and its sign-in smoke test fails.
-  # The client ID and group ID are identifiers, not credentials.
+  # The client ID and group ID are identifiers, not credentials: sign-in codes are redeemed with the
+  # app's managed identity.
   sign_in_settings = var.entra_client_id == null ? {} : {
-    AzureAd__TenantId                            = data.azurerm_client_config.current.tenant_id
-    AzureAd__ClientId                            = var.entra_client_id
-    PaymentOps__Authorization__RestrictedGroupId = var.restricted_group_id == null ? "" : var.restricted_group_id
+    AzureAd__TenantId                                      = data.azurerm_client_config.current.tenant_id
+    AzureAd__ClientId                                      = var.entra_client_id
+    AzureAd__ClientCredentials__0__SourceType              = "SignedAssertionFromManagedIdentity"
+    AzureAd__ClientCredentials__0__ManagedIdentityClientId = azurerm_user_assigned_identity.app.client_id
+    PaymentOps__Authorization__RestrictedGroupId           = var.restricted_group_id == null ? "" : var.restricted_group_id
   }
 }
 

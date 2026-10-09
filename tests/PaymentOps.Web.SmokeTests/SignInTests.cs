@@ -2,10 +2,12 @@ using System.Net;
 using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 using PaymentOps.Web.Security;
 
@@ -25,6 +27,16 @@ public sealed class SignInTests(PaymentOpsWebApplicationFactory factory) : IClas
 
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, home.StatusCode);
+    }
+
+    [Fact]
+    public void Sign_in_uses_the_authorization_code_flow_with_pkce()
+    {
+        var oidc = factory.Services.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>()
+            .Get(OpenIdConnectDefaults.AuthenticationScheme);
+
+        Assert.Equal(OpenIdConnectResponseType.Code, oidc.ResponseType);
+        Assert.True(oidc.UsePkce);
     }
 
     [Fact]
