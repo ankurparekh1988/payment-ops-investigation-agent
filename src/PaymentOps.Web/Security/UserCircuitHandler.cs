@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 
@@ -29,7 +31,14 @@ internal sealed class UserCircuitHandler(AuthenticationStateProvider authenticat
 
     private async Task UpdateUser(Task<AuthenticationState> task)
     {
-        var state = await task;
-        accessor.User = state.User;
+        try
+        {
+            accessor.User = (await task).User;
+        }
+        catch (Exception)
+        {
+            // Fail closed: if the new state can't be read, nobody is signed in.
+            accessor.User = new ClaimsPrincipal(new ClaimsIdentity());
+        }
     }
 }
