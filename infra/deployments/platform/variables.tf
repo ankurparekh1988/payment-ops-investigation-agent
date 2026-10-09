@@ -55,11 +55,13 @@ variable "alert_email" {
 variable "entra_client_id" {
   description = "Client ID of the Entra app registration, from scripts/identity.sh."
   type        = string
+  default     = null
 }
 
 variable "restricted_group_id" {
   description = "Object ID of the Risk and Compliance group, from scripts/identity.sh."
   type        = string
+  default     = null
 }
 
 variable "model_retirement_buffer_days" {

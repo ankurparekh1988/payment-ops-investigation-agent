@@ -42,6 +42,15 @@ locals {
   })
 
   knowledge_container = "knowledge"
+
+  # Sign-in settings come from the identity deployment, which needs the deployed web app's address
+  # first. Until it has run, the app is deployed without them and its sign-in smoke test fails.
+  # The client ID and group ID are identifiers, not credentials.
+  sign_in_settings = var.entra_client_id == null ? {} : {
+    AzureAd__TenantId                            = data.azurerm_client_config.current.tenant_id
+    AzureAd__ClientId                            = var.entra_client_id
+    PaymentOps__Authorization__RestrictedGroupId = var.restricted_group_id == null ? "" : var.restricted_group_id
+  }
 }
 
 module "monitoring" {
@@ -103,7 +112,7 @@ module "web_app" {
   tags                = local.tags
 
   # Non-secret settings only. The app reaches every service with its managed identity.
-  app_settings = {
+  app_settings = merge({
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.monitoring.connection_string
     PaymentOps__Foundry__Endpoint         = module.foundry.openai_endpoint
     PaymentOps__Foundry__ChatDeployment   = var.active_chat_deployment
@@ -111,14 +120,9 @@ module "web_app" {
     PaymentOps__Knowledge__BlobEndpoint   = module.knowledge_storage.blob_endpoint
     PaymentOps__Knowledge__Container      = local.knowledge_container
 
-    # Sign-in. The client ID and group ID are identifiers, not credentials.
-    AzureAd__TenantId                            = data.azurerm_client_config.current.tenant_id
-    AzureAd__ClientId                            = var.entra_client_id
-    PaymentOps__Authorization__RestrictedGroupId = var.restricted_group_id
-
     # App Service terminates TLS, so sign-in redirects must come from the forwarded scheme.
     ASPNETCORE_FORWARDEDHEADERS_ENABLED = "true"
-  }
+  }, local.sign_in_settings)
 }
 
 module "cost_guardrail" {
