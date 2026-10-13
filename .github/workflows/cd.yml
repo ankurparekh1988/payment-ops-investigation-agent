@@ -218,6 +218,8 @@ jobs:
   smoke:
     name: Smoke test
     needs: deploy-app
+    # Without always(), a skipped apply further up the chain skips this job too.
+    if: always() && needs.deploy-app.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Check liveness and readiness
