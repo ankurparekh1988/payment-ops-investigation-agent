@@ -238,3 +238,15 @@ jobs:
             echo "::error::/$endpoint never became healthy."
             exit 1
           done
+
+      - name: Check that sign-in is enforced
+        env:
+          APP_URL: ${{ needs.deploy-app.outputs.url }}
+        run: |
+          read -r status location < <(curl --silent --output /dev/null --max-time 30 \
+            --write-out '%{http_code} %{redirect_url}' "$APP_URL/")
+          if [[ "$status" != "302" || "$location" != *"/oauth2/v2.0/authorize"* ]]; then
+            echo "::error::An anonymous request to / returned $status instead of a redirect to Entra ID sign-in."
+            exit 1
+          fi
+          echo "Anonymous requests are redirected to Entra ID sign-in."

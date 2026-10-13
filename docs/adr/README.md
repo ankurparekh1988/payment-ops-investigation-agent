@@ -6,3 +6,4 @@ Significant design decisions, why they were made, and what they cost. Each recor
 |---|---|---|
 | [0001](0001-terraform-for-infrastructure.md) | Terraform for infrastructure | Accepted |
 | [0002](0002-pinned-model-versions.md) | Pinned model versions, upgraded through evaluation | Accepted |
+| [0003](0003-server-rendered-ui-and-sign-in.md) | Server-rendered UI as its own backend, with credential-free sign-in | Accepted |

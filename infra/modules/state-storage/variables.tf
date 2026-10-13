@@ -24,6 +24,12 @@ variable "container_name" {
   default     = "tfstate"
 }
 
+variable "operator_container_name" {
+  description = "Blob container for state that only people may read."
+  type        = string
+  default     = "tfstate-operator"
+}
+
 variable "replication_type" {
   description = "Storage redundancy. ZRS keeps state available through a zone outage."
   type        = string

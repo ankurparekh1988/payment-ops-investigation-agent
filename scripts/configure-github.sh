@@ -47,17 +47,19 @@ fi
 
 # --- Settings ----------------------------------------------------------------------------------
 
-settings_keys=(
+required_settings=(
   TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER
   TF_VAR_location TF_VAR_name_prefix TF_VAR_environment TF_VAR_app_service_sku TF_VAR_dotnet_version
   TF_VAR_storage_replication_type TF_VAR_log_retention_days TF_VAR_log_daily_quota_gb
   TF_VAR_monthly_budget TF_VAR_model_retirement_buffer_days
 )
+# Written by scripts/identity.sh, which needs a deployed platform, so empty on a first run.
+identity_settings=(TF_VAR_entra_client_id TF_VAR_restricted_group_id)
+
 settings="{"
-for key in "${settings_keys[@]}"; do
-  value="${!key:?Set $key in .env}"
-  settings+="\"$key\":\"${value//\"/\\\"}\","
-done
+add_setting() { settings+="\"$1\":\"${2//\"/\\\"}\","; }
+for key in "${required_settings[@]}"; do add_setting "$key" "${!key:?Set $key in .env}"; done
+for key in "${identity_settings[@]}"; do [[ -z "${!key:-}" ]] || add_setting "$key" "${!key}"; done
 settings="${settings%,}}"
 gh variable set TERRAFORM_SETTINGS --repo "$repo" --body "$settings"
 

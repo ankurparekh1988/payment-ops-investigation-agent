@@ -26,6 +26,10 @@ output "app_identity_client_id" {
   value = module.platform.app_identity_client_id
 }
 
+output "app_identity_principal_id" {
+  value = module.platform.app_identity_principal_id
+}
+
 output "knowledge_storage_account" {
   value = module.platform.knowledge_storage_account
 }

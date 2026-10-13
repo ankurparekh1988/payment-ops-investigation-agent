@@ -1,4 +1,5 @@
 @page "/"
+@inject IUserContext CurrentUser
 
 <PageTitle>Payment Ops Investigation Agent</PageTitle>
 
@@ -10,3 +11,13 @@
 </p>
 
 <p>Only the project foundation is in place so far. The investigation experience will replace this page.</p>
+
+<section aria-labelledby="access-heading">
+    <h2 id="access-heading">Your access</h2>
+    <dl>
+        <dt>Roles</dt>
+        <dd>@string.Join(", ", CurrentUser.Roles.Order(StringComparer.Ordinal))</dd>
+        <dt>Restricted knowledge</dt>
+        <dd>@(CurrentUser.CanAccessRestrictedKnowledge ? "Yes, through Risk and Compliance" : "No")</dd>
+    </dl>
+</section>

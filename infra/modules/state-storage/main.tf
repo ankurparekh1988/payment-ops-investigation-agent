@@ -57,6 +57,18 @@ resource "azurerm_storage_container" "this" {
   }
 }
 
+# State that holds credentials, such as demo user passwords. No pipeline identity is granted access
+# to it, so it's readable only by the people given a role on it.
+resource "azurerm_storage_container" "operator" {
+  name                  = var.operator_container_name
+  storage_account_id    = azurerm_storage_account.this.id
+  container_access_type = "private"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "azurerm_management_lock" "this" {
   count = var.delete_lock_enabled ? 1 : 0
 

@@ -17,3 +17,13 @@ output "container_name" {
   description = "Name of the state container."
   value       = azurerm_storage_container.this.name
 }
+
+output "operator_container_id" {
+  description = "Resource ID of the operator-only state container."
+  value       = azurerm_storage_container.operator.id
+}
+
+output "operator_container_name" {
+  description = "Name of the operator-only state container."
+  value       = azurerm_storage_container.operator.name
+}

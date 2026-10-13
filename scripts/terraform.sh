@@ -24,14 +24,16 @@ if [[ ! -d "$deployment_dir" ]]; then
   exit 2
 fi
 
-# Only the deployment pipeline changes environments. Workstations can plan and inspect; the
-# bootstrap is the one exception because it creates the pipeline's own identities and state.
+# Only the deployment pipeline changes environments. Workstations can plan and inspect. The exceptions
+# need rights no pipeline should hold: the bootstrap creates the pipeline's own identities and state
+# (Owner), and identity creates Entra app registrations, groups and users (directory rights).
+human_run_deployments=(bootstrap identity)
 changes_environment=false
 case "$1" in
   apply | destroy | import | taint | untaint | force-unlock) changes_environment=true ;;
   state) [[ "${2:-}" =~ ^(rm|mv|push|replace-provider)$ ]] && changes_environment=true ;;
 esac
-if [[ "$changes_environment" == "true" && "$deployment" != "bootstrap" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
+if [[ "$changes_environment" == "true" && " ${human_run_deployments[*]} " != *" $deployment "* && "${GITHUB_ACTIONS:-}" != "true" ]]; then
   echo "'terraform $*' for '$deployment' runs only in the deployment pipeline. Use 'plan' locally." >&2
   exit 1
 fi
@@ -60,15 +62,20 @@ if (( ${#missing[@]} )); then
   exit 1
 fi
 
-# One state file per deployment and environment.
+# One state file per deployment and environment. Identity state holds demo user passwords and the
+# local sign-in secret, so it lives in a container no pipeline identity can read.
 state_key="$TF_VAR_environment/$deployment.tfstate"
+state_container="$TF_STATE_CONTAINER"
 [[ "$deployment" == "bootstrap" ]] && state_key="bootstrap.tfstate"
+if [[ "$deployment" == "identity" ]]; then
+  state_container="${TF_STATE_OPERATOR_CONTAINER:?Missing TF_STATE_OPERATOR_CONTAINER; rerun scripts/bootstrap.sh to record it.}"
+fi
 
 cd "$deployment_dir"
 terraform init -input=false -reconfigure \
   -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP" \
   -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT" \
-  -backend-config="container_name=$TF_STATE_CONTAINER" \
+  -backend-config="container_name=$state_container" \
   -backend-config="key=$state_key" >/dev/null
 
 terraform "$@"

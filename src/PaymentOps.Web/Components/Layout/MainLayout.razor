@@ -1,6 +1,21 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject IUserContext CurrentUser
 
-@Body
+<header class="app-header">
+    <span class="app-name">Payment Ops Investigation Agent</span>
+    @if (CurrentUser.IsAuthenticated)
+    {
+        <span class="signed-in-user">@CurrentUser.DisplayName</span>
+        <form method="post" action="account/sign-out">
+            <AntiforgeryToken />
+            <button type="submit">Sign out</button>
+        </form>
+    }
+</header>
+
+<main>
+    @Body
+</main>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
