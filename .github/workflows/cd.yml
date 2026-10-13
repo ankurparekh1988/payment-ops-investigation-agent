@@ -243,8 +243,9 @@ jobs:
         env:
           APP_URL: ${{ needs.deploy-app.outputs.url }}
         run: |
+          # The trailing newline matters: without it read returns non-zero and -e ends the step.
           read -r status location < <(curl --silent --output /dev/null --max-time 30 \
-            --write-out '%{http_code} %{redirect_url}' "$APP_URL/")
+            --write-out '%{http_code} %{redirect_url}\n' "$APP_URL/")
           if [[ "$status" != "302" || "$location" != *"/oauth2/v2.0/authorize"* ]]; then
             echo "::error::An anonymous request to / returned $status instead of a redirect to Entra ID sign-in."
             exit 1
