@@ -1,3 +1,18 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <!-- The AI release travels inside the build artifact. Logical names are explicit so they don't
+       depend on folder layout or the build machine's path separator. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\ai\manifest.yaml" LogicalName="ai/manifest.yaml" />
+    <EmbeddedResource Include="..\..\ai\prompts\*.md" LogicalName="ai/prompts/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaymentOps.Platform.Tests" />
+  </ItemGroup>
 
 </Project>

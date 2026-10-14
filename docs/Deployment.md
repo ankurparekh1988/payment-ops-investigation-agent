@@ -57,7 +57,7 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
 | `TF_STATE_*` | | Written by the bootstrap script |
 
-**What isn't configuration.** Model names and versions live in `ai/manifest.yaml` rather than in environment variables. Changing a model changes the system's behaviour, so it goes through a pull request and evaluation. Platform constants, such as built-in Azure role IDs and GitHub's OIDC issuer, are written in the code because they don't vary.
+**What isn't configuration.** Model names and versions, content filters and prompts live in `ai/manifest.yaml` and `ai/prompts/` rather than in environment variables, and the app reads them from its own build rather than from app settings. Changing a model changes the system's behaviour, so it goes through a pull request and evaluation. Platform constants, such as built-in Azure role IDs and GitHub's OIDC issuer, are written in the code because they don't vary.
 
 ## Bootstrap
 
@@ -152,7 +152,7 @@ Quota is shared by every deployment of the same model and deployment type, and d
 
 Model versions are temporary: Microsoft deprecates a generally available version after about 12 months and retires it after about 18, after which calls fail. Every deployment here is pinned and never upgrades automatically, so a model changes only through a reviewed change to `ai/manifest.yaml` that passes evaluation ([ADR 0002](adr/0002-pinned-model-versions.md)).
 
-The upgrade path, once the evaluation gate is in place: add the new chat model version as the inactive slot in the manifest (for example `green`), have the evaluation compare it with the active one, switch `active`, then remove the old slot. An embedding upgrade builds a new search index alongside the existing one instead, because vectors from different models can't be mixed.
+The upgrade path, once the evaluation gate is in place: add the new chat model version as the inactive slot in the manifest (for example `green`), have the evaluation compare it with the active one, switch `active`, then remove the old slot in a later change. The release check rejects removing a deployment the current release uses, or changing its model, version, deployment type or filter in place, because the running app keeps calling it until the new build is deployed, which happens after the infrastructure apply. Only its capacity can change. An embedding upgrade builds a new search index alongside the existing one instead, because vectors from different models can't be mixed.
 
 ### Planning locally
 
@@ -168,7 +168,7 @@ scripts/terraform.sh platform plan
 
 | Job | What it checks |
 |---|---|
-| Build and test | .NET build, tests and formatting |
+| Build and test | .NET build, tests and formatting; the AI release check, which also requires a higher version for any prompt whose body changed |
 | Validate infrastructure | `terraform fmt` and `validate` for every deployment, TFLint, and a Checkov security scan. Accepted Checkov findings are listed with reasons in `.checkov.yaml` |
 | Plan platform | A plan of the environment as `gh-plan`, including the model preflight. The PR gets one comment listing the resources that would change (pull requests only) |
 | CodeQL | Static analysis of the C# code and the workflows themselves |

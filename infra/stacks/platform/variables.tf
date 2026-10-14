@@ -24,16 +24,6 @@ variable "model_deployments" {
   }))
 }
 
-variable "active_chat_deployment" {
-  description = "Name of the chat deployment currently serving traffic."
-  type        = string
-}
-
-variable "embedding_deployment" {
-  description = "Name of the embedding deployment."
-  type        = string
-}
-
 variable "model_retirement_buffer_days" {
   description = "Refuse to deploy a model that retires within this many days."
   type        = number

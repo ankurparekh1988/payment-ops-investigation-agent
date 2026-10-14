@@ -37,6 +37,19 @@ jobs:
       - run: dotnet test PaymentOps.slnx --no-build --configuration Release
       - run: dotnet format PaymentOps.slnx --no-restore --verify-no-changes
 
+      # On pull requests, a prompt whose body changed must also have a higher version than on the base branch.
+      - name: Check the AI release
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          base_args=()
+          if [[ -n "$BASE_REF" ]]; then
+            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            git show FETCH_HEAD:ai/manifest.yaml > "$RUNNER_TEMP/base-manifest.yaml"
+            base_args=(--base "$RUNNER_TEMP/base-manifest.yaml")
+          fi
+          dotnet run --project tools/PaymentOps.ReleaseCheck --no-build --configuration Release -- ai "${base_args[@]}"
+
   iac-validate:
     name: Validate infrastructure
     runs-on: ubuntu-latest

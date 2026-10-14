@@ -1,5 +1,7 @@
 using System.Xml.Linq;
 
+using PaymentOps.Tests.Shared;
+
 namespace PaymentOps.ArchitectureTests;
 
 /// <summary>
@@ -8,15 +10,9 @@ namespace PaymentOps.ArchitectureTests;
 /// </summary>
 internal static class SolutionProjects
 {
-    private const string SolutionFile = "PaymentOps.slnx";
-
-    private static readonly Lazy<string> Root = new(FindRepositoryRoot);
-
-    public static string RepositoryRoot => Root.Value;
-
     /// <summary>All production projects under <c>src/</c>, keyed by project name.</summary>
     public static IReadOnlyDictionary<string, ProjectInfo> Source() =>
-        Directory.EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.csproj", SearchOption.AllDirectories)
+        Directory.EnumerateFiles(Path.Combine(RepositoryRoot.FullPath, "src"), "*.csproj", SearchOption.AllDirectories)
             .Select(Load)
             .ToDictionary(p => p.Name, StringComparer.Ordinal);
 
@@ -33,19 +29,6 @@ internal static class SolutionProjects
         var sdk = (string?)xml.Root?.Attribute("Sdk") ?? string.Empty;
 
         return new ProjectInfo(Path.GetFileNameWithoutExtension(path), sdk, projectReferences, packageReferences);
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, SolutionFile)))
-            {
-                return dir.FullName;
-            }
-        }
-
-        throw new InvalidOperationException($"Could not find {SolutionFile} above {AppContext.BaseDirectory}.");
     }
 }
 

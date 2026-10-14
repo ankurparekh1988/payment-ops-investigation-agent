@@ -118,8 +118,6 @@ module "web_app" {
   app_settings = merge({
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.monitoring.connection_string
     PaymentOps__Foundry__Endpoint         = module.foundry.openai_endpoint
-    PaymentOps__Foundry__ChatDeployment   = var.active_chat_deployment
-    PaymentOps__Foundry__EmbedDeployment  = var.embedding_deployment
     PaymentOps__Knowledge__BlobEndpoint   = module.knowledge_storage.blob_endpoint
     PaymentOps__Knowledge__Container      = local.knowledge_container
 
