@@ -26,14 +26,14 @@ flowchart LR
   U["Ops users<br/>(browser)"] -->|HTTPS, session cookie| APP["Web app<br/>App Service, Linux, .NET 10"]
   U -->|sign in| E["Microsoft Entra ID<br/>app roles, groups"]
   E -->|"authorization code,<br/>redeemed as the app's managed identity"| APP
-  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat, embedding and judge deployments<br/>strict content filter"]
+  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>embedding: no filter<br/>judge: default filter"]
   APP -->|"Entra token<br/>Blob Data Reader"| ST[("Knowledge storage")]
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
   F -.->|"project identity<br/>Metrics Publisher, Log Analytics Reader"| AI
 ```
 
-*As of 2026-10-07.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
+*As of 2026-10-14.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
 
 ## AI release
 
@@ -58,7 +58,7 @@ flowchart LR
 
 - **One loader.** `AiReleaseLoader` parses the manifest strictly, reads each listed prompt, checks its `id`, `version` and body hash against the manifest, and rejects prompt files the manifest doesn't list. The app runs it before anything else is built, so a bad release stops startup. CI runs the same loader through `tools/PaymentOps.ReleaseCheck`.
 - **Prompt identity.** The hash is SHA-256 over the prompt body's UTF-8 bytes with line endings converted to LF, written as `sha256:<hex>`. A changed body needs a higher version.
-- **Model changes.** A change can't remove a deployment the release on `main` uses; switching away from it and removing it are separate changes.
+- **Model changes.** A deployment the release on `main` uses keeps its name, model, version, deployment type and filter; only its capacity can change. A new model or filter goes in under a new name, and switching to it and removing the old one are separate changes.
 - **Access.** Code reads prompts through `IPromptProvider`. Placeholders are `{{name}}`, filled in one pass.
 - **Visibility.** At startup the app logs its schema version, deployment names and each prompt's id, version and hash, never prompt text.
 
