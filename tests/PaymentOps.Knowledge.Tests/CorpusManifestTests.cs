@@ -39,30 +39,79 @@ public sealed class CorpusManifestTests
     [Fact]
     public void A_rebuild_removes_documents_that_are_gone()
     {
-        using var output = new SourceTree().Add("corpus.json", "{}").Add("removed-runbook.md", "# Old\n");
-        using var tree = new SourceTree().Add("general/missing-settlement-batch.md", SourceTree.Source());
+        using var output = new SourceTree();
+        using (var before = new SourceTree()
+            .Add("general/missing-settlement-batch.md", SourceTree.Source())
+            .Add("general/removed-runbook.md", SourceTree.Source(docId: "removed-runbook")))
+        {
+            CorpusManifest.Write(before.Read(), output.Root);
+        }
 
-        CorpusManifest.Write(tree.Read(), output.Root);
+        using var after = new SourceTree().Add("general/missing-settlement-batch.md", SourceTree.Source());
+        CorpusManifest.Write(after.Read(), output.Root);
 
-        Assert.False(File.Exists(Path.Combine(output.Root, "removed-runbook.md")));
+        Assert.Equal(
+            ["corpus.json", "missing-settlement-batch.md"],
+            Directory.EnumerateFiles(output.Root).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
     [Theory]
     [InlineData("notes.txt")]
+    [InlineData("corpus.json", "notes.txt")]
     [InlineData("corpus.json", "nested/x.md")]
-    public void Refuses_to_empty_a_directory_it_did_not_write(params string[] existing)
+    public void Refuses_a_directory_without_a_readable_manifest(params string[] existing)
     {
         using var output = new SourceTree();
         foreach (var path in existing)
         {
-            output.Add(path, "x");
+            output.Add(path, "not a manifest");
         }
 
+        AssertRefusedAndUntouched(output);
+    }
+
+    [Fact]
+    public void Refuses_a_previous_build_with_an_unexpected_file()
+    {
+        using var output = PreviousBuild();
+        output.Add("important.csv", "keep me");
+
+        AssertRefusedAndUntouched(output);
+    }
+
+    [Theory]
+    [InlineData("\"schemaVersion\": 1", "\"schemaVersion\": 99")]
+    [InlineData("\"contentPath\": \"missing-settlement-batch.md\"", "\"contentPath\": \"../outside.md\"")]
+    [InlineData("\"contentPath\": \"missing-settlement-batch.md\"", "\"contentPath\": \"corpus.json\"")]
+    public void Refuses_a_manifest_it_does_not_trust(string original, string replacement)
+    {
+        using var output = PreviousBuild();
+        var manifestPath = Path.Combine(output.Root, CorpusManifest.FileName);
+        File.WriteAllText(manifestPath, File.ReadAllText(manifestPath).Replace(original, replacement, StringComparison.Ordinal));
+
+        AssertRefusedAndUntouched(output);
+    }
+
+    private static SourceTree PreviousBuild()
+    {
+        var output = new SourceTree();
         using var tree = new SourceTree().Add("general/missing-settlement-batch.md", SourceTree.Source());
+        CorpusManifest.Write(tree.Read(), output.Root);
+        return output;
+    }
+
+    private static void AssertRefusedAndUntouched(SourceTree output)
+    {
+        static Dictionary<string, string> Snapshot(string root) =>
+            Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).ToDictionary(f => f, File.ReadAllText);
+
+        var before = Snapshot(output.Root);
+        using var tree = new SourceTree().Add("general/missing-settlement-batch.md", SourceTree.Source(body: SourceTree.Body + "\n\nChanged.\n"));
 
         var error = Assert.Throws<KnowledgeCorpusException>(() => CorpusManifest.Write(tree.Read(), output.Root));
-        Assert.Contains("isn't a previous corpus build", error.Errors[0], StringComparison.Ordinal);
-        Assert.True(File.Exists(Path.Combine(output.Root, existing[0])));
+
+        Assert.Contains("isn't exactly a previous corpus build", error.Errors[0], StringComparison.Ordinal);
+        Assert.Equal(before, Snapshot(output.Root));
     }
 
     [Fact]

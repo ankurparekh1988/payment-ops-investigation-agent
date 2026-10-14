@@ -139,7 +139,7 @@ public static partial class KnowledgeSourceReader
     }
 
     [GeneratedRegex("^(?=.{1,64}$)[a-z0-9]+(-[a-z0-9]+)*$")]
-    private static partial Regex DocIdPattern();
+    internal static partial Regex DocIdPattern();
 }
 
 internal sealed class SourceFrontMatter

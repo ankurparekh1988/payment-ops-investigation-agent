@@ -53,23 +53,55 @@ public sealed record CorpusManifest(int SchemaVersion, IReadOnlyList<CorpusDocum
     public string ToJson() =>
         JsonSerializer.Serialize(this with { Documents = [.. Documents.OrderBy(d => d.DocId, StringComparer.Ordinal)] }, Json) + "\n";
 
-    // Only a directory a previous build wrote (it has corpus.json and no subfolders) is ever emptied.
+    // A non-empty directory is reused only if it holds exactly the files its own corpus.json lists, and
+    // only those files are deleted. Anything else is refused before a single file is touched.
     private static void PrepareOutput(string outputDirectory)
     {
-        if (Directory.Exists(outputDirectory) && Directory.EnumerateFileSystemEntries(outputDirectory).Any())
+        if (!Directory.Exists(outputDirectory) || !Directory.EnumerateFileSystemEntries(outputDirectory).Any())
         {
-            if (!File.Exists(Path.Combine(outputDirectory, FileName)) || Directory.EnumerateDirectories(outputDirectory).Any())
-            {
-                throw new KnowledgeCorpusException([$"Output directory '{outputDirectory}' isn't empty and isn't a previous corpus build; choose another."]);
-            }
-
-            foreach (var file in Directory.EnumerateFiles(outputDirectory))
-            {
-                File.Delete(file);
-            }
+            Directory.CreateDirectory(outputDirectory);
+            return;
         }
 
-        Directory.CreateDirectory(outputDirectory);
+        var refused = new KnowledgeCorpusException([$"Output directory '{outputDirectory}' isn't empty and isn't exactly a previous corpus build; choose another."]);
+        if (Directory.EnumerateDirectories(outputDirectory).Any() || PreviousBuildFiles(outputDirectory) is not { } generated)
+        {
+            throw refused;
+        }
+
+        var existing = Directory.EnumerateFiles(outputDirectory).Select(Path.GetFileName).ToList();
+        if (existing.Any(name => !generated.Contains(name!)))
+        {
+            throw refused;
+        }
+
+        foreach (var name in existing)
+        {
+            File.Delete(Path.Combine(outputDirectory, name!));
+        }
+    }
+
+    // The files a previous build wrote, according to its corpus.json, or null if that file isn't a
+    // corpus manifest this build understands. Every name is checked to be a plain <docId>.md.
+    private static HashSet<string>? PreviousBuildFiles(string outputDirectory)
+    {
+        CorpusManifest? previous;
+        try
+        {
+            previous = JsonSerializer.Deserialize<CorpusManifest>(File.ReadAllText(Path.Combine(outputDirectory, FileName)), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or NotSupportedException)
+        {
+            return null;
+        }
+
+        if (previous is not { SchemaVersion: CurrentSchemaVersion, Documents: { } documents }
+            || documents.Any(d => d?.DocId is null || !KnowledgeSourceReader.DocIdPattern().IsMatch(d.DocId) || d.ContentPath != $"{d.DocId}.md"))
+        {
+            return null;
+        }
+
+        return new HashSet<string>(documents.Select(d => d.ContentPath).Append(FileName), StringComparer.Ordinal);
     }
 }
 
