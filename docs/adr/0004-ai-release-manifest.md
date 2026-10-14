@@ -13,7 +13,7 @@ Prompts also change behaviour in ways a compiler can't check. A one-word edit ca
 
 **`ai/manifest.yaml` is the only source of AI configuration, and it ships inside the build.**
 
-- Terraform reads the model deployments and each model's content filter (`strict` for chat, `default` for the judge) from the manifest.
+- Terraform reads the model deployments and their content filters (`strict` on each chat slot, `default` on the judge, none on the embedding) from the manifest.
 - The application embeds the manifest and the prompt files at build time, under fixed resource names. Nothing is read from a runtime store, so the artifact that was tested is the artifact that runs, in every environment.
 - At startup the app loads the release once, before anything else is built. Unknown or duplicate YAML keys, missing fields, unsupported values, missing or unlisted prompt files and hash mismatches all stop startup, with every problem listed.
 
@@ -22,7 +22,7 @@ Prompts also change behaviour in ways a compiler can't check. A one-word edit ca
 - Each prompt is `ai/prompts/<id>.md`: front matter with only its `id` and `version`, then the body.
 - The manifest lists each prompt's version and the SHA-256 of its body. The hash covers the UTF-8 bytes after front matter is removed, with CRLF and CR converted to LF; nothing else is normalised. Files with a byte-order mark are rejected.
 - On a pull request, CI compares the manifest with the base branch's: a prompt whose body changed must have a higher `MAJOR.MINOR.PATCH` version, and an unchanged body keeps its version.
-- The same check rejects removing any deployment the base branch's release uses (the active chat slot, the embedding and the judge). The infrastructure is applied before the new build is deployed, so the running app would call a deployment that no longer exists. Stopping use of a deployment and removing it are separate changes.
+- The same check protects every deployment the base branch's release uses (the active chat slot, the embedding and the judge): it can't be removed, and its model, version, deployment type and content filter can't change. The infrastructure is applied before the new build is deployed, so the running app would otherwise call a deployment that no longer exists, or one that now behaves differently from the release it was built with. Capacity can change in place. A new model or filter goes in under a new deployment name; switching to it and removing the old one are separate changes.
 - Placeholders are `{{name}}` only, filled in one pass; values are inserted as data and never re-read as template text.
 - A version identifies a prompt's content. It doesn't say whether the prompt passed evaluation; that will be recorded as evidence for a specific prompt version, hash and model version.
 
@@ -34,6 +34,8 @@ Sections are added with the code that first reads them: prompts with the feature
 
 - One reviewed file decides what models, filters and prompts a build runs, and the app logs its schema version, deployments and prompt hashes when it starts.
 - Changing a prompt means a pull request that updates the prompt, its version and its hash together. The release check's error message gives the expected hash.
+- The content filter is set per chat slot rather than per role, so a filter change goes through blue/green like a model change.
+- The embedding and the judge are single entries, so they can't yet hold an old and a candidate deployment side by side, and the release check blocks changing them. Their manifest shape changes when the index rebuild and the evaluation gate add those upgrade paths.
 - Rolling back the application also rolls back its prompts, because they're part of the same artifact. Rolling back to a model slot that has since been removed is handled with the rollback workflow, when it exists.
 - The manifest is read by two parsers, Terraform's `yamldecode` and the application's. The application's is strict and runs in the required CI check, so a typo or unsupported value can't be merged even though Terraform's parser would accept it.
 

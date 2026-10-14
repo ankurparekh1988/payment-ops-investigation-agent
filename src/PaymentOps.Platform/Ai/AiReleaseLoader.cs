@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace PaymentOps.Platform.Ai;
 
 /// <summary>
@@ -51,9 +53,13 @@ public static class AiReleaseLoader
             models.Chat.Deployments[models.Chat.Active].Deployment,
             models.Embedding.Deployment,
             models.Judge.Deployment,
-            ReleaseManifestValidator.AllDeployments(manifest).Select(d => d.Deployment.Deployment).ToHashSet(StringComparer.Ordinal),
-            prompts);
+            ReleaseManifestValidator.AllDeployments(manifest).ToFrozenDictionary(
+                d => d.Deployment.Deployment, d => Identity(d.Deployment), StringComparer.Ordinal),
+            prompts.ToFrozenDictionary(StringComparer.Ordinal));
     }
+
+    private static DeploymentIdentity Identity(ModelDeployment deployment) =>
+        new(deployment.Model, deployment.Version, deployment.DeploymentType, (deployment as FilteredModelDeployment)?.ContentFilterPolicy);
 
     private static ReleaseManifest? ReadManifest(byte[]? bytes, List<string> errors)
     {

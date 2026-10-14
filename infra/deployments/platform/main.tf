@@ -9,7 +9,7 @@ locals {
       version        = d.version
       sku            = d.deploymentType
       capacity       = d.capacityK
-      content_filter = local.models.chat.contentFilterPolicy
+      content_filter = d.contentFilterPolicy
     }
   }
 

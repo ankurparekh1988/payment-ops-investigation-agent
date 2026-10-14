@@ -8,15 +8,17 @@
 # billed per token, so capacity costs nothing while idle.
 #
 # contentFilterPolicy: "strict" is this project's policy; "default" is Microsoft's default filter.
+#
+# A deployment the release on main uses keeps its name, model, version, deployment type and filter:
+# Terraform changes it before the new build replaces the running app. Capacity can change in place.
 
 schemaVersion: 1
 
 models:
   chat:
-    # Blue/green slots: a new model version goes into the inactive slot, is evaluated there,
-    # and is promoted by switching "active". Outside an upgrade only the active slot exists.
+    # Blue/green slots: a new model version or filter goes into the inactive slot, is evaluated
+    # there, and is promoted by switching "active". Outside an upgrade only the active slot exists.
     active: blue
-    contentFilterPolicy: strict
     deployments:
       blue:
         deployment: chat-blue
@@ -24,6 +26,7 @@ models:
         version: "2026-03-17"
         deploymentType: GlobalStandard
         capacityK: 50
+        contentFilterPolicy: strict
 
   embedding:
     deployment: embed-v1

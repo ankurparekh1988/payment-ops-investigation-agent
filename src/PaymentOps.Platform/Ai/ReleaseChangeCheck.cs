@@ -7,8 +7,9 @@ namespace PaymentOps.Platform.Ai;
 /// Rules about how a release may change relative to its base branch:
 /// <list type="bullet">
 /// <item>a prompt whose body hash changed needs a higher version, and an unchanged one keeps its version;</item>
-/// <item>no deployment the base release uses (active chat, embedding, judge) can be removed, because
-/// the running app keeps calling it until the new build is deployed, after the infrastructure apply.</item>
+/// <item>a deployment the base release uses (active chat, embedding, judge) can't be removed or change
+/// its model, version, deployment type or content filter, because the running app keeps calling it until
+/// the new build is deployed, after the infrastructure apply. Capacity can change.</item>
 /// </list>
 /// The change's own release has already passed <see cref="AiReleaseLoader"/>. The base manifest may use
 /// another schema version, so only the fields these rules compare are read from it.
@@ -46,9 +47,28 @@ public static class ReleaseChangeCheck
             }
         }
 
-        foreach (var removed in before.InUseDeployments.Where(d => !head.Deployments.Contains(d)).Order(StringComparer.Ordinal))
+        foreach (var used in before.InUseDeployments.OrderBy(d => d.Name, StringComparer.Ordinal))
         {
-            errors.Add($"Deployment '{removed}' is in use on the base branch and removed here. Stop using it in one change and remove it in a later one.");
+            if (!head.Deployments.TryGetValue(used.Name, out var current))
+            {
+                errors.Add($"Deployment '{used.Name}' is in use on the base branch and removed here. Stop using it in one change and remove it in a later one.");
+                continue;
+            }
+
+            (string Field, string? Was, string? Now)[] fields =
+            [
+                ("model", used.Model, current.Model),
+                ("version", used.Version, current.Version),
+                ("deploymentType", used.DeploymentType, current.DeploymentType),
+                ("contentFilterPolicy", used.ContentFilterPolicy, current.ContentFilterPolicy),
+            ];
+
+            // A field the base doesn't declare (an older schema) can't be compared.
+            foreach (var (field, was, now) in fields.Where(f => f.Was is not null && f.Was != f.Now))
+            {
+                errors.Add($"Deployment '{used.Name}' is in use on the base branch and its {field} changes here from '{was}' to '{now ?? "none"}'. "
+                    + "Put the change under a new deployment name instead, so the running app keeps what it was built for.");
+            }
         }
 
         return errors;
@@ -56,7 +76,9 @@ public static class ReleaseChangeCheck
 
     private sealed record BaseRelease(
         IReadOnlyDictionary<string, (string? Version, string? Sha256)> Prompts,
-        IReadOnlyList<string> InUseDeployments);
+        IReadOnlyList<BaseDeployment> InUseDeployments);
+
+    private sealed record BaseDeployment(string Name, string? Model, string? Version, string? DeploymentType, string? ContentFilterPolicy);
 
     private static BaseRelease? ReadBase(byte[] manifest, List<string> errors)
     {
@@ -82,15 +104,20 @@ public static class ReleaseChangeCheck
         var models = Child(root, "models");
         var chat = Child(models, "chat");
         var activeSlot = Child(Child(chat, "deployments"), Scalar(Child(chat, "active")) ?? string.Empty);
-        string?[] inUse =
-        [
-            Scalar(Child(activeSlot, "deployment")),
-            Scalar(Child(Child(models, "embedding"), "deployment")),
-            Scalar(Child(Child(models, "judge"), "deployment")),
-        ];
+        YamlNode?[] inUse = [activeSlot, Child(models, "embedding"), Child(models, "judge")];
 
-        return new BaseRelease(prompts, inUse.OfType<string>().ToList());
+        return new BaseRelease(prompts, inUse.Select(ReadDeployment).OfType<BaseDeployment>().ToList());
     }
+
+    private static BaseDeployment? ReadDeployment(YamlNode? node) =>
+        Scalar(Child(node, "deployment")) is { } name
+            ? new BaseDeployment(
+                name,
+                Scalar(Child(node, "model")),
+                Scalar(Child(node, "version")),
+                Scalar(Child(node, "deploymentType")),
+                Scalar(Child(node, "contentFilterPolicy")))
+            : null;
 
     private static YamlNode? Child(YamlNode? node, string key) =>
         node is YamlMappingNode mapping && mapping.Children.TryGetValue(new YamlScalarNode(key), out var child) ? child : null;

@@ -14,7 +14,10 @@ public sealed class AiReleaseLoaderTests
         Assert.Equal("chat-blue", release.ActiveChatDeployment);
         Assert.Equal("embed-v1", release.EmbeddingDeployment);
         Assert.Equal("judge", release.JudgeDeployment);
-        Assert.Equal(["chat-blue", "embed-v1", "judge"], release.Deployments.Order(StringComparer.Ordinal));
+        Assert.Equal(["chat-blue", "embed-v1", "judge"], release.Deployments.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(new DeploymentIdentity("gpt-test", "2026-01-01", "GlobalStandard", "strict"), release.Deployments["chat-blue"]);
+        Assert.Null(release.Deployments["embed-v1"].ContentFilterPolicy);
+        Assert.Equal("default", release.Deployments["judge"].ContentFilterPolicy);
 
         var prompt = new PromptProvider(release).GetPrompt("grounded-answer");
         Assert.Equal("0.1.0", prompt.Version);
@@ -43,7 +46,7 @@ public sealed class AiReleaseLoaderTests
 
     [Theory]
     [InlineData("capacityK: 10\n  judge", "capacityK: 10\n    contentFilterPolicy: strict\n  judge")]
-    [InlineData("capacityK: 10\n  embedding", "capacityK: 10\n        contentFilterPolicy: default\n  embedding")]
+    [InlineData("active: blue", "active: blue\n    contentFilterPolicy: strict")]
     public void A_content_filter_is_rejected_where_nothing_reads_it(string from, string to)
     {
         var models = TestRelease.EditModels(from, to);
@@ -94,10 +97,11 @@ public sealed class AiReleaseLoaderTests
 
     [Theory]
     [InlineData("active: blue", "active: green", "isn't one of the chat deployments")]
-    [InlineData("contentFilterPolicy: strict", "contentFilterPolicy: relaxed", "models.chat.contentFilterPolicy must be one of")]
+    [InlineData("contentFilterPolicy: strict", "contentFilterPolicy: relaxed", "models.chat.deployments.blue.contentFilterPolicy must be one of")]
+    [InlineData("\n        contentFilterPolicy: strict", "", "Missing properties, 'contentFilterPolicy'")]
     [InlineData("\n    contentFilterPolicy: default", "", "Missing properties, 'contentFilterPolicy'")]
     [InlineData("deployment: judge", "deployment: embed-v1", "'embed-v1' is used more than once")]
-    [InlineData("capacityK: 10\n  embedding", "capacityK: 0\n  embedding", "capacityK must be positive")]
+    [InlineData("capacityK: 10\n  judge", "capacityK: 0\n  judge", "capacityK must be positive")]
     public void Manifest_rules_are_enforced(string from, string to, string expected)
     {
         var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: TestRelease.EditModels(from, to))).LoadErrors();

@@ -41,7 +41,10 @@ public sealed class ReleaseChangeCheckTests
     [Fact]
     public void A_base_with_another_schema_is_compared_on_the_fields_it_shares()
     {
-        var legacyBase = Base($"manifestVersion: 0.1.0\n{TestRelease.Models}\nunknownSection: {{}}\n");
+        // The release before this schema had no prompts section and no content filters in the manifest.
+        var legacyModels = TestRelease.EditModels("\n        contentFilterPolicy: strict", string.Empty)
+            .Replace("\n    contentFilterPolicy: default", string.Empty, StringComparison.Ordinal);
+        var legacyBase = Base($"manifestVersion: 0.1.0\n{legacyModels}\nunknownSection: {{}}\n");
 
         Assert.Empty(ReleaseChangeCheck.Compare(legacyBase, HeadWithPrompt("0.1.0", Before)));
     }
@@ -64,16 +67,49 @@ public sealed class ReleaseChangeCheckTests
         Assert.Contains(errors, e => e.Contains($"'{removed}' is in use on the base branch and removed here", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("model: gpt-test\n        version", "model: gpt-next\n        version", "chat-blue", "model")]
+    [InlineData("version: \"2026-01-01\"\n        deploymentType", "version: \"2026-02-01\"\n        deploymentType", "chat-blue", "version")]
+    [InlineData("deploymentType: GlobalStandard\n        capacityK", "deploymentType: DataZoneStandard\n        capacityK", "chat-blue", "deploymentType")]
+    [InlineData("contentFilterPolicy: strict", "contentFilterPolicy: default", "chat-blue", "contentFilterPolicy")]
+    [InlineData("model: embed-test", "model: embed-next", "embed-v1", "model")]
+    [InlineData("contentFilterPolicy: default", "contentFilterPolicy: strict", "judge", "contentFilterPolicy")]
+    public void A_deployment_the_base_release_uses_cannot_change_what_it_runs(string from, string to, string deployment, string field)
+    {
+        // Terraform would change it under the running app, which was built for the old one.
+        var errors = ReleaseChangeCheck.Compare(Base(TestRelease.Manifest()), Head(TestRelease.EditModels(from, to)));
+
+        Assert.Contains(errors, e => e.Contains($"'{deployment}' is in use on the base branch and its {field} changes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Capacity_of_a_deployment_in_use_can_change()
+    {
+        var models = TestRelease.EditModels("capacityK: 10\n        contentFilterPolicy", "capacityK: 99\n        contentFilterPolicy");
+
+        Assert.Empty(ReleaseChangeCheck.Compare(Base(TestRelease.Manifest()), Head(models)));
+    }
+
     [Fact]
     public void Switching_active_while_keeping_the_old_slot_is_allowed()
     {
-        var bothSlots = TestRelease.EditModels(
-            "      blue:\n",
-            "      green:\n        deployment: chat-green\n        model: gpt-test\n        version: \"2026-02-01\"\n        deploymentType: GlobalStandard\n        capacityK: 10\n      blue:\n");
-        var switched = bothSlots.Replace("active: blue", "active: green", StringComparison.Ordinal);
+        var switched = BothSlots().Replace("active: blue", "active: green", StringComparison.Ordinal);
 
-        Assert.Empty(ReleaseChangeCheck.Compare(Base(TestRelease.Manifest(models: bothSlots)), Head(switched)));
+        Assert.Empty(ReleaseChangeCheck.Compare(Base(TestRelease.Manifest(models: BothSlots())), Head(switched)));
     }
+
+    [Fact]
+    public void An_inactive_slot_can_change_in_place()
+    {
+        // Nothing calls the candidate slot except evaluation, so it can be revised before promotion.
+        var revised = BothSlots().Replace("version: \"2026-02-01\"", "version: \"2026-03-01\"", StringComparison.Ordinal);
+
+        Assert.Empty(ReleaseChangeCheck.Compare(Base(TestRelease.Manifest(models: BothSlots())), Head(revised)));
+    }
+
+    private static string BothSlots() => TestRelease.EditModels(
+        "      blue:\n",
+        "      green:\n        deployment: chat-green\n        model: gpt-test\n        version: \"2026-02-01\"\n        deploymentType: GlobalStandard\n        capacityK: 10\n        contentFilterPolicy: strict\n      blue:\n");
 
     [Fact]
     public void A_malformed_base_is_reported_as_the_base()

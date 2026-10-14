@@ -21,13 +21,14 @@ internal static partial class ReleaseManifestValidator
             errors.Add($"models.chat.active is '{chat.Active}', which isn't one of the chat deployments.");
         }
 
-        CheckFilter("models.chat", chat.ContentFilterPolicy, errors);
-        CheckFilter("models.judge", manifest.Models.Judge.ContentFilterPolicy, errors);
-
         var deployments = AllDeployments(manifest);
         foreach (var (path, deployment) in deployments)
         {
             CheckDeployment(path, deployment, errors);
+            if (deployment is FilteredModelDeployment filtered)
+            {
+                CheckFilter(path, filtered.ContentFilterPolicy, errors);
+            }
         }
 
         foreach (var duplicate in deployments.GroupBy(d => d.Deployment.Deployment, StringComparer.Ordinal).Where(g => g.Count() > 1))
@@ -58,9 +59,9 @@ internal static partial class ReleaseManifestValidator
 
     /// <summary>Every model deployment the manifest declares, with its path for error messages.</summary>
     public static IReadOnlyList<(string Path, ModelDeployment Deployment)> AllDeployments(ReleaseManifest manifest) =>
-        manifest.Models.Chat.Deployments.Select(d => ($"models.chat.deployments.{d.Key}", d.Value))
+        manifest.Models.Chat.Deployments.Select(d => ($"models.chat.deployments.{d.Key}", (ModelDeployment)d.Value))
             .Append(("models.embedding", manifest.Models.Embedding))
-            .Append(("models.judge", (ModelDeployment)manifest.Models.Judge))
+            .Append(("models.judge", manifest.Models.Judge))
             .ToList();
 
     private static void CheckFilter(string path, string policy, List<string> errors)

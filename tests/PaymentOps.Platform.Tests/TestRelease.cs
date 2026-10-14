@@ -11,7 +11,6 @@ internal sealed class TestRelease : IAiReleaseSource
         models:
           chat:
             active: blue
-            contentFilterPolicy: strict
             deployments:
               blue:
                 deployment: chat-blue
@@ -19,6 +18,7 @@ internal sealed class TestRelease : IAiReleaseSource
                 version: "2026-01-01"
                 deploymentType: GlobalStandard
                 capacityK: 10
+                contentFilterPolicy: strict
           embedding:
             deployment: embed-v1
             model: embed-test
