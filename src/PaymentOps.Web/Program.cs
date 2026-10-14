@@ -55,7 +55,9 @@ if (foundry?.Endpoint is { } foundryEndpoint)
 }
 
 var app = builder.Build();
-AiReleaseLog.Loaded(app.Logger, aiRelease);
+
+// Telemetry exports only once the host has started, so the release is logged then.
+app.Lifetime.ApplicationStarted.Register(() => AiReleaseLog.Loaded(app.Logger, aiRelease));
 
 if (!app.Environment.IsDevelopment())
 {
