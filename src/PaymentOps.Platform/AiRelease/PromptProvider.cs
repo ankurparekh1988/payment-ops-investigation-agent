@@ -1,6 +1,6 @@
 namespace PaymentOps.Platform.AiRelease;
 
-/// <summary>Prompts from the AI release, by id. There is no other way to obtain prompt text.</summary>
+/// <summary>Prompts from the AI release, by id.</summary>
 public interface IPromptProvider
 {
     Prompt GetPrompt(string id);

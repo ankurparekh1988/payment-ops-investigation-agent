@@ -14,6 +14,7 @@
 | Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry with its managed identity) |
 | Sign-in and roles | ✅ Entra ID sign-in, app roles and the Risk and Compliance group; the server-side `IUserContext` and authorization policies ([Security](Security.md)) |
 | Telemetry | ✅ OpenTelemetry to Application Insights, sent with the app's managed identity |
+| AI release | ✅ `ai/manifest.yaml` drives the model deployments and is built into the app, which verifies it and its prompts at startup ([below](#ai-release)) |
 | Product and AI capabilities | Not started |
 
 ## Azure platform
@@ -32,7 +33,35 @@ flowchart LR
   F -.->|"project identity<br/>Metrics Publisher, Log Analytics Reader"| AI
 ```
 
-*As of 2026-10-07.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application will also read, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
+*As of 2026-10-07.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
+
+## AI release
+
+Models, content filters and prompts are configuration that changes behaviour, so they come from one reviewed file and travel inside the build ([ADR 0004](adr/0004-ai-release-manifest.md)).
+
+```mermaid
+flowchart LR
+  M["ai/manifest.yaml<br/>models, filters, prompt versions and hashes"]
+  P["ai/prompts/*.md"]
+  TF["Terraform<br/>model deployments, filters"]
+  B["Build<br/>embedded in PaymentOps.Platform"]
+  APP["App startup<br/>load, verify, log"]
+  CI["CI release check<br/>versions against the base branch"]
+
+  M --> TF
+  M --> B
+  P --> B
+  B --> APP
+  M --> CI
+  P --> CI
+```
+
+- **One loader.** `AiReleaseLoader` parses the manifest strictly, reads each listed prompt, checks its `id`, `version` and body hash against the manifest, and rejects prompt files the manifest doesn't list. The app runs it before anything else is built, so a bad release stops startup. CI runs the same loader through `tools/PaymentOps.ReleaseCheck`.
+- **Prompt identity.** The hash is SHA-256 over the prompt body's UTF-8 bytes with line endings converted to LF, written as `sha256:<hex>`. A changed body needs a higher version.
+- **Access.** Code reads prompts through `IPromptProvider`. Placeholders are `{{name}}`, filled in one pass.
+- **Visibility.** At startup the app logs its schema version, deployment names and each prompt's id, version and hash, never prompt text.
+
+*As of 2026-10-14.* The manifest has no prompts yet: each prompt is added with the feature that first uses it, starting with grounded answers.
 
 ## Project references
 

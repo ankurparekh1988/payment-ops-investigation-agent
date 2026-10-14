@@ -57,7 +57,7 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
 | `TF_STATE_*` | | Written by the bootstrap script |
 
-**What isn't configuration.** Model names and versions live in `ai/manifest.yaml` rather than in environment variables. Changing a model changes the system's behaviour, so it goes through a pull request and evaluation. Platform constants, such as built-in Azure role IDs and GitHub's OIDC issuer, are written in the code because they don't vary.
+**What isn't configuration.** Model names and versions, content filters and prompts live in `ai/manifest.yaml` and `ai/prompts/` rather than in environment variables, and the app reads them from its own build rather than from app settings. Changing a model changes the system's behaviour, so it goes through a pull request and evaluation. Platform constants, such as built-in Azure role IDs and GitHub's OIDC issuer, are written in the code because they don't vary.
 
 ## Bootstrap
 
@@ -168,7 +168,7 @@ scripts/terraform.sh platform plan
 
 | Job | What it checks |
 |---|---|
-| Build and test | .NET build, tests and formatting |
+| Build and test | .NET build, tests and formatting; the AI release check, which also requires a higher version for any prompt whose body changed |
 | Validate infrastructure | `terraform fmt` and `validate` for every deployment, TFLint, and a Checkov security scan. Accepted Checkov findings are listed with reasons in `.checkov.yaml` |
 | Plan platform | A plan of the environment as `gh-plan`, including the model preflight. The PR gets one comment listing the resources that would change (pull requests only) |
 | CodeQL | Static analysis of the C# code and the workflows themselves |
