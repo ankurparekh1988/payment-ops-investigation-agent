@@ -50,6 +50,9 @@ jobs:
           fi
           dotnet run --project tools/PaymentOps.ReleaseCheck --no-build --configuration Release -- ai "${base_args[@]}"
 
+      - name: Build the knowledge corpus
+        run: dotnet run --project tools/PaymentOps.CorpusBuild --no-build --configuration Release -- data/knowledge/src --out "$RUNNER_TEMP/knowledge"
+
   iac-validate:
     name: Validate infrastructure
     runs-on: ubuntu-latest

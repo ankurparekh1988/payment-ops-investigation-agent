@@ -1,5 +1,7 @@
 using System.Collections.Frozen;
 
+using PaymentOps.Platform.Text;
+
 namespace PaymentOps.Platform.Ai;
 
 /// <summary>
@@ -12,8 +14,6 @@ public static class AiReleaseLoader
 
     /// <summary>The manifest format this build reads.</summary>
     public const int SupportedSchemaVersion = 1;
-
-    private const string Delimiter = "---";
 
     public static AiRelease Load(IAiReleaseSource source)
     {
@@ -69,8 +69,8 @@ public static class AiReleaseLoader
             return null;
         }
 
-        var yaml = AiReleaseText.Decode(bytes, ManifestPath, errors);
-        return yaml is null ? null : AiReleaseText.Deserialize<ReleaseManifest>(yaml, ManifestPath, errors);
+        var yaml = SourceText.Decode(bytes, ManifestPath, errors);
+        return yaml is null ? null : SourceText.Deserialize<ReleaseManifest>(yaml, ManifestPath, errors);
     }
 
     // A prompt that adds errors is still returned; Load throws before any of them are used.
@@ -84,13 +84,13 @@ public static class AiReleaseLoader
             return null;
         }
 
-        var text = AiReleaseText.Decode(bytes, path, errors);
-        if (text is null || SplitFrontMatter(text, path, errors) is not var (frontMatterYaml, body))
+        var text = SourceText.Decode(bytes, path, errors);
+        if (text is null || SourceText.SplitFrontMatter(text, path, errors) is not var (frontMatterYaml, body, _))
         {
             return null;
         }
 
-        var frontMatter = AiReleaseText.Deserialize<PromptFrontMatter>(frontMatterYaml, path, errors);
+        var frontMatter = SourceText.Deserialize<PromptFrontMatter>(frontMatterYaml, path, errors);
         if (frontMatter is null)
         {
             return null;
@@ -114,34 +114,5 @@ public static class AiReleaseLoader
 
         var template = PromptTemplate.Parse(body, path, errors);
         return template is null ? null : new Prompt(id, entry.Version, hash, template);
-    }
-
-    // The first line must be exactly "---"; the next line that is exactly "---" ends the front matter,
-    // and everything after that line is the body. Line endings are already LF.
-    private static (string FrontMatter, string Body)? SplitFrontMatter(string text, string path, List<string> errors)
-    {
-        const string Opening = Delimiter + "\n";
-        const string Closing = "\n" + Delimiter;
-
-        if (!text.StartsWith(Opening, StringComparison.Ordinal))
-        {
-            errors.Add($"{path} must start with a '{Delimiter}' line opening its front matter.");
-            return null;
-        }
-
-        // Searching from the opening line's own newline also finds an empty front matter.
-        var close = text.IndexOf(Closing + "\n", Opening.Length - 1, StringComparison.Ordinal);
-        if (close >= 0)
-        {
-            return (text[Opening.Length..(close + 1)], text[(close + Closing.Length + 1)..]);
-        }
-
-        if (text.Length > Opening.Length && text.EndsWith(Closing, StringComparison.Ordinal))
-        {
-            return (text[Opening.Length..(text.Length - Delimiter.Length)], string.Empty);
-        }
-
-        errors.Add($"{path} has no closing '{Delimiter}' line after its front matter.");
-        return null;
     }
 }

@@ -8,4 +8,8 @@
     <ProjectReference Include="..\..\src\PaymentOps.Platform\PaymentOps.Platform.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\GitHubAnnotation.cs" Link="Shared\GitHubAnnotation.cs" />
+  </ItemGroup>
+
 </Project>

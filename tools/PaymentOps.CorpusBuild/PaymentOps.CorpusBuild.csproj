@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PaymentOps.Knowledge\PaymentOps.Knowledge.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\GitHubAnnotation.cs" Link="Shared\GitHubAnnotation.cs" />
+  </ItemGroup>
+
+</Project>

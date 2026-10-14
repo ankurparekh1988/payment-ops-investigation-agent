@@ -15,6 +15,7 @@
 | Sign-in and roles | ✅ Entra ID sign-in, app roles and the Risk and Compliance group; the server-side `IUserContext` and authorization policies ([Security](Security.md)) |
 | Telemetry | ✅ OpenTelemetry to Application Insights, sent with the app's managed identity |
 | AI release | ✅ `ai/manifest.yaml` drives the model deployments and is built into the app, which verifies it and its prompts at startup ([below](#ai-release)) |
+| Knowledge corpus | ✅ Reviewed Markdown sources, validated and built into the files that will be indexed ([below](#knowledge-corpus)) |
 | Product and AI capabilities | Not started |
 
 ## Azure platform
@@ -63,6 +64,28 @@ flowchart LR
 - **Visibility.** At startup the app logs its schema version, deployment names and each prompt's id, version and hash, never prompt text.
 
 *As of 2026-10-14.* The manifest has no prompts yet: each prompt is added with the feature that first uses it, starting with grounded answers.
+
+## Knowledge corpus
+
+Structured facts come from tools: payment and settlement state, processor configuration, outages, closure calendars and risk holds. The corpus holds only what explains those facts or says what to do about them: runbooks, processor operating guides, policies, escalation procedures and postmortems. A value the platform already stores, such as a cut-off or a risk threshold, is never copied into a document.
+
+```mermaid
+flowchart LR
+  S["data/knowledge/src<br/>general/, restricted/<br/>front matter + Markdown"]
+  B["CorpusBuild<br/>validate"]
+  C["&lt;docId&gt;.md<br/>body only"]
+  J["corpus.json<br/>metadata, heading paths, hashes"]
+
+  S --> B
+  B --> C
+  B --> J
+```
+
+- **Sources.** Each file has front matter (`docId`, `title`, `docType`) and a Markdown body. Classification comes from the folder, `general/` or `restricted/`, never from the file. Authoring rules are in [data/knowledge](../data/knowledge/README.md).
+- **Validation.** The front matter is read strictly. The body must start with one `#` heading matching the title, use `#` headings down to `###` without skipping a level, and keep every heading path unique. HTML, images, relative links, email addresses and URLs outside example domains, and numbers that pass the card checksum are rejected. Every problem is reported at once, with its file and line.
+- **Output.** The build writes each body, without front matter, as `<docId>.md`, plus `corpus.json` with each document's metadata, heading paths and `contentSha256` (SHA-256 of the uploaded bytes). The front matter is build metadata, so the index never has to interpret it.
+- **Identity.** A citation is a doc id plus a heading path. The doc id is permanent; a heading path is stable while the headings are. Moving a file between folders changes its classification but not its content hash, so publishing compares metadata as well as content.
+- **CI.** Every change builds the corpus; a shipped-corpus test also validates it.
 
 ## Project references
 

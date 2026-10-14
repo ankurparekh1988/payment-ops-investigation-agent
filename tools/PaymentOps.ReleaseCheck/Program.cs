@@ -4,6 +4,7 @@
 // Usage: PaymentOps.ReleaseCheck <ai-directory> [--base <manifest-file>]
 
 using PaymentOps.Platform.Ai;
+using PaymentOps.Tools.Shared;
 
 if (args.Length is not (1 or 3) || (args.Length == 3 && args[1] != "--base"))
 {
@@ -33,11 +34,7 @@ catch (AiReleaseException ex)
 
 foreach (var error in errors)
 {
-    // Workflow commands end at a newline, so the message is escaped as GitHub requires.
-    var escaped = error.Replace("%", "%25", StringComparison.Ordinal)
-        .Replace("\r", "%0D", StringComparison.Ordinal)
-        .Replace("\n", "%0A", StringComparison.Ordinal);
-    Console.Error.WriteLine($"::error title=AI release::{escaped}");
+    GitHubAnnotation.Error("AI release", error);
 }
 
 return errors.Count == 0 ? 0 : 1;

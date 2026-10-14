@@ -2,6 +2,12 @@
 
 *Contoso Payments is a fictional company. All data in this repository is synthetic.*
 
+## Setting
+
+Contoso Payments is a payment orchestration platform: it routes merchants' payments to downstream processors and acquirers and pays merchants out from their settlement files.
+
+The agent is an internal tool for Contoso's operations, engineering, admin and risk teams, and merchants never use it. That's why it may see routing, processor responses and internal risk state.
+
 ## Problem
 
 Contoso Payments' operations team investigates payout delays, settlement failures and processor issues. Today an engineer reconstructs each incident by hand: querying settlement records, scanning error logs, checking processor status pages and finding the right runbook. This is slow, depends on individual knowledge, and leaves no consistent record of how a conclusion was reached.
@@ -32,6 +38,7 @@ Every tool must be required by at least one scenario.
 ## What it does
 
 1. **Investigate with tools.** The agent chooses which read-only tools to call (merchant profile, settlement batches, error events, processor status, knowledge search) and with which arguments. No sequence is hard-coded.
+   Facts come from tools: payment and settlement state, processor configuration, outages and risk holds. Knowledge documents hold only what explains those facts or says what to do about them: runbooks, processor operating guides, policies, escalation procedures and postmortems.
 2. **Cite evidence.** Every factual claim cites a retrieved knowledge passage or a data evidence id. The server rejects citations that were not retrieved in the current turn.
 3. **Refuse rather than guess.** When evidence is missing or inaccessible, the agent says so and suggests escalation.
 4. **Respect authorization.** Knowledge retrieval is filtered by the user's group membership on the server. The model never sees documents the user may not read, and never learns that they exist.

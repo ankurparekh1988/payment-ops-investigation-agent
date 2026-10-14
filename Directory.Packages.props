@@ -12,6 +12,9 @@
   <ItemGroup Label="Platform">
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
+  <ItemGroup Label="Knowledge">
+    <PackageVersion Include="Markdig" Version="1.4.0" />
+  </ItemGroup>
   <ItemGroup Label="Security pins">
     <!-- Microsoft.Identity.Web references 10.0.10, which has DoS advisories fixed in 10.0.13.
          Remove once it references a fixed version. -->
