@@ -5,11 +5,19 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
+using PaymentOps.Platform.AiRelease;
+using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
 using PaymentOps.Web.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// The AI release is part of this build. It's verified before anything else, so an inconsistent
+// manifest or prompt stops startup instead of failing on a later request.
+var aiRelease = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+builder.Services.AddSingleton(aiRelease);
+builder.Services.AddSingleton<IPromptProvider, PromptProvider>();
 
 // In Azure this resolves to the app's managed identity (AZURE_CLIENT_ID); locally, the developer's sign-in.
 TokenCredential azureCredential = new DefaultAzureCredential();
@@ -47,6 +55,7 @@ if (foundry?.Endpoint is { } foundryEndpoint)
 }
 
 var app = builder.Build();
+AiReleaseLog.Loaded(app.Logger, aiRelease);
 
 if (!app.Environment.IsDevelopment())
 {

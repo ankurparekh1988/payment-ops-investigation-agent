@@ -1,19 +1,22 @@
-# AI release manifest: the models this release runs on.
+# AI release manifest: the models and prompts this release runs on.
 #
-# Terraform creates the model deployments from this file, and the application will read the same
-# file, so infrastructure and application can't disagree about which model is live. Changes go
-# through a pull request. Versions are pinned and never auto-upgraded.
+# Terraform creates the model deployments from this file, and the application embeds the same file
+# at build time, so infrastructure and application can't disagree about which model or prompt is
+# live. Changes go through a pull request. Versions are pinned and never auto-upgraded.
 #
 # capacityK is the deployment's rate limit in thousands of tokens per minute. Global Standard is
 # billed per token, so capacity costs nothing while idle.
+#
+# contentFilterPolicy: "strict" is this project's policy; "default" is Microsoft's default filter.
 
-manifestVersion: 0.1.0
+schemaVersion: 1
 
 models:
   chat:
     # Blue/green slots: a new model version goes into the inactive slot, is evaluated there,
     # and is promoted by switching "active". Outside an upgrade only the active slot exists.
     active: blue
+    contentFilterPolicy: strict
     deployments:
       blue:
         deployment: chat-blue
@@ -30,9 +33,16 @@ models:
     capacityK: 50
 
   # Scores answers during evaluation. Pinned separately so judge behaviour changes only on purpose.
+  # It reads deliberately unsafe answers in safety evaluations, so it keeps Microsoft's default filter.
   judge:
     deployment: judge
     model: gpt-5.4-mini
     version: "2026-03-17"
     deploymentType: GlobalStandard
     capacityK: 50
+    contentFilterPolicy: default
+
+# Prompts embedded in the application, keyed by id. A prompt's body can't change without a higher
+# version: CI compares this section with the base branch. Each prompt is added with the code that
+# first uses it.
+prompts: {}

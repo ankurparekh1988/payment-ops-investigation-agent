@@ -9,7 +9,7 @@ locals {
       version        = d.version
       sku            = d.deploymentType
       capacity       = d.capacityK
-      content_filter = "strict"
+      content_filter = local.models.chat.contentFilterPolicy
     }
   }
 
@@ -19,16 +19,14 @@ locals {
       version        = local.models.embedding.version
       sku            = local.models.embedding.deploymentType
       capacity       = local.models.embedding.capacityK
-      content_filter = null
+      content_filter = try(local.models.embedding.contentFilterPolicy, null)
     }
-    # The judge reads candidate answers, including deliberately unsafe ones in safety evaluations,
-    # so it uses Microsoft's default filter rather than the strict one.
     (local.models.judge.deployment) = {
       model          = local.models.judge.model
       version        = local.models.judge.version
       sku            = local.models.judge.deploymentType
       capacity       = local.models.judge.capacityK
-      content_filter = "default"
+      content_filter = local.models.judge.contentFilterPolicy
     }
   })
 }
@@ -41,8 +39,6 @@ module "platform" {
   environment = var.environment
 
   model_deployments            = local.model_deployments
-  active_chat_deployment       = local.models.chat.deployments[local.models.chat.active].deployment
-  embedding_deployment         = local.models.embedding.deployment
   model_retirement_buffer_days = var.model_retirement_buffer_days
 
   app_service_sku          = var.app_service_sku

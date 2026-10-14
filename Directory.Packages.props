@@ -9,6 +9,9 @@
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
     <PackageVersion Include="Microsoft.Identity.Web" Version="4.16.0" />
   </ItemGroup>
+  <ItemGroup Label="Platform">
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
   <ItemGroup Label="Security pins">
     <!-- Microsoft.Identity.Web references 10.0.10, which has DoS advisories fixed in 10.0.13.
          Remove once it references a fixed version. -->
