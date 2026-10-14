@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+using PaymentOps.Platform.Text;
 
 namespace PaymentOps.Platform.Ai;
 
@@ -10,8 +9,5 @@ namespace PaymentOps.Platform.Ai;
 /// </summary>
 public static class PromptHasher
 {
-    public const string Prefix = "sha256:";
-
-    public static string Hash(string body) =>
-        Prefix + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(AiReleaseText.NormalizeLineEndings(body))));
+    public static string Hash(string body) => SourceText.Sha256(body);
 }

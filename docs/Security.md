@@ -82,6 +82,14 @@ The repository is public, so workflow logs, artifacts and PR comments are too.
 
 Model choices, content filters and prompts are part of the build ([ADR 0004](adr/0004-ai-release-manifest.md)). They can't be changed at runtime: they change only through a pull request to `main`, which requires the CI checks to pass, including the release check that rejects a changed prompt without a higher version. Prompts are public, and the model can repeat them, so they must not contain secrets, URLs or access logic; today that rule is checked in review, and authorization is always enforced in code. Independent review of AI changes is a production gap ([ProductionGapAnalysis](ProductionGapAnalysis.md)).
 
+## Knowledge classification
+
+Knowledge documents are `general` (every signed-in user) or `restricted` (the Risk and Compliance group as well). The classification comes from the folder a source file is in, so it's visible in review and can't be set from inside a document. Restricted documents will be filtered out at retrieval time, before the model sees them.
+
+The repository is public, so restricted sources are readable by anyone there. "Restricted" controls what the assistant shows to whom; it doesn't make the text secret, and nothing in the corpus may be real or sensitive. The build rejects numbers that pass the card checksum, and email addresses and `http`, `https` or `ftp` URLs outside reserved example domains. A bare host name in prose isn't checked, so review still matters.
+
+Facts that decide outcomes, such as risk-rule thresholds, aren't in any document: they belong to the system that applies them.
+
 ## Content safety
 
 Chat deployments use a strict content filter policy. Anything above "Safe" in the hate, sexual, violence and self-harm categories is blocked, on both prompts and completions, along with jailbreak attempts in user prompts and protected text in completions. Filtering is synchronous, so blocked output is never streamed. The trade-off is that some legitimate operational language may be blocked; that false-positive rate will be measured once the evaluation suite exists.

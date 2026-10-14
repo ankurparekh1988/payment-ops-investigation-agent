@@ -1,8 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\PaymentOps.Domain\PaymentOps.Domain.csproj" />
     <ProjectReference Include="..\PaymentOps.Platform\PaymentOps.Platform.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Markdig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaymentOps.Knowledge.Tests" />
   </ItemGroup>
 
 </Project>
