@@ -3,7 +3,7 @@
 //
 // Usage: PaymentOps.ReleaseCheck <ai-directory> [--base <manifest-file>]
 
-using PaymentOps.Platform.AiRelease;
+using PaymentOps.Platform.Ai;
 
 if (args.Length is not (1 or 3) || (args.Length == 3 && args[1] != "--base"))
 {
@@ -11,26 +11,19 @@ if (args.Length is not (1 or 3) || (args.Length == 3 && args[1] != "--base"))
     return 2;
 }
 
-var aiDirectory = args[0];
 var errors = new List<string>();
 
 try
 {
-    var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(aiDirectory));
+    var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(args[0]));
     Console.WriteLine($"AI release is valid: {release.Prompts.Count} prompts, chat deployment {release.ActiveChatDeployment}.");
 
     // Change rules only mean something once the release itself is valid.
     if (args.Length == 3)
     {
-        if (File.Exists(args[2]))
-        {
-            var head = File.ReadAllBytes(Path.Combine(aiDirectory, AiReleaseLoader.ManifestPath));
-            errors.AddRange(ReleaseChangeCheck.Compare(File.ReadAllBytes(args[2]), head));
-        }
-        else
-        {
-            errors.Add($"Base manifest '{args[2]}' doesn't exist.");
-        }
+        errors.AddRange(File.Exists(args[2])
+            ? ReleaseChangeCheck.Compare(File.ReadAllBytes(args[2]), release)
+            : [$"Base manifest '{args[2]}' doesn't exist."]);
     }
 }
 catch (AiReleaseException ex)

@@ -1,6 +1,6 @@
 using System.Text;
 
-using PaymentOps.Platform.AiRelease;
+using PaymentOps.Platform.Ai;
 
 namespace PaymentOps.Platform.Tests;
 
@@ -11,10 +11,10 @@ public sealed class AiReleaseLoaderTests
     {
         var release = AiReleaseLoader.Load(TestRelease.WithOnePrompt());
 
-        Assert.Equal(1, release.SchemaVersion);
         Assert.Equal("chat-blue", release.ActiveChatDeployment);
         Assert.Equal("embed-v1", release.EmbeddingDeployment);
         Assert.Equal("judge", release.JudgeDeployment);
+        Assert.Equal(["chat-blue", "embed-v1", "judge"], release.Deployments.Order(StringComparer.Ordinal));
 
         var prompt = new PromptProvider(release).GetPrompt("grounded-answer");
         Assert.Equal("0.1.0", prompt.Version);
@@ -35,20 +35,18 @@ public sealed class AiReleaseLoaderTests
     [InlineData("capacityK: 10\n    capacityK: 20", "Duplicate key")]
     public void Unknown_and_duplicate_keys_fail_instead_of_being_ignored(string replacement, string expected)
     {
-        var models = TestRelease.Models.Replace("deploymentType: GlobalStandard\n    capacityK: 10", replacement, StringComparison.Ordinal);
+        var models = TestRelease.EditModels("deploymentType: GlobalStandard\n    capacityK: 10", replacement);
         var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: models)).LoadErrors();
 
         Assert.Contains(errors, e => e.Contains(expected, StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
-    [InlineData("capacityK: 10\n  judge|capacityK: 10\n    contentFilterPolicy: strict\n  judge")]
-    [InlineData("capacityK: 10\n  embedding|capacityK: 10\n        contentFilterPolicy: default\n  embedding")]
-    public void A_content_filter_is_rejected_where_nothing_reads_it(string modelsEdit)
+    [InlineData("capacityK: 10\n  judge", "capacityK: 10\n    contentFilterPolicy: strict\n  judge")]
+    [InlineData("capacityK: 10\n  embedding", "capacityK: 10\n        contentFilterPolicy: default\n  embedding")]
+    public void A_content_filter_is_rejected_where_nothing_reads_it(string from, string to)
     {
-        var parts = modelsEdit.Split('|');
-        Assert.Contains(parts[0], TestRelease.Models, StringComparison.Ordinal);
-        var models = TestRelease.Models.Replace(parts[0], parts[1], StringComparison.Ordinal);
+        var models = TestRelease.EditModels(from, to);
 
         var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: models)).LoadErrors();
 
@@ -86,24 +84,23 @@ public sealed class AiReleaseLoaderTests
         Assert.Contains(errors, e => e.Contains("prompts", StringComparison.OrdinalIgnoreCase));
     }
 
-    [Theory]
-    [InlineData("schemaVersion: 2", "", "schemaVersion is 2")]
-    [InlineData("schemaVersion: 1", "active: blue|active: green", "isn't one of the chat deployments")]
-    [InlineData("schemaVersion: 1", "contentFilterPolicy: strict|contentFilterPolicy: relaxed", "models.chat.contentFilterPolicy must be one of")]
-    [InlineData("schemaVersion: 1", "\n    contentFilterPolicy: default|", "Missing properties, 'contentFilterPolicy'")]
-    [InlineData("schemaVersion: 1", "deployment: judge|deployment: embed-v1", "'embed-v1' is used more than once")]
-    [InlineData("schemaVersion: 1", "capacityK: 10\n  embedding|capacityK: 0\n  embedding", "capacityK must be positive")]
-    public void Manifest_rules_are_enforced(string schema, string modelsEdit, string expected)
+    [Fact]
+    public void An_unsupported_schema_version_fails()
     {
-        var models = TestRelease.Models;
-        if (modelsEdit.Length > 0)
-        {
-            var parts = modelsEdit.Split('|');
-            Assert.Contains(parts[0], models, StringComparison.Ordinal);
-            models = models.Replace(parts[0], parts[1], StringComparison.Ordinal);
-        }
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(schema: "schemaVersion: 2")).LoadErrors();
 
-        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: models, schema: schema)).LoadErrors();
+        Assert.Contains(errors, e => e.Contains("schemaVersion is 2", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("active: blue", "active: green", "isn't one of the chat deployments")]
+    [InlineData("contentFilterPolicy: strict", "contentFilterPolicy: relaxed", "models.chat.contentFilterPolicy must be one of")]
+    [InlineData("\n    contentFilterPolicy: default", "", "Missing properties, 'contentFilterPolicy'")]
+    [InlineData("deployment: judge", "deployment: embed-v1", "'embed-v1' is used more than once")]
+    [InlineData("capacityK: 10\n  embedding", "capacityK: 0\n  embedding", "capacityK must be positive")]
+    public void Manifest_rules_are_enforced(string from, string to, string expected)
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: TestRelease.EditModels(from, to))).LoadErrors();
 
         Assert.Contains(errors, e => e.Contains(expected, StringComparison.Ordinal));
     }
@@ -188,7 +185,7 @@ public sealed class AiReleaseLoaderTests
     [Fact]
     public void All_problems_are_reported_together()
     {
-        var models = TestRelease.Models.Replace("active: blue", "active: green", StringComparison.Ordinal);
+        var models = TestRelease.EditModels("active: blue", "active: green");
         var errors = new TestRelease()
             .With("manifest.yaml", TestRelease.Manifest(TestRelease.PromptEntry(), models, "schemaVersion: 2"))
             .LoadErrors();

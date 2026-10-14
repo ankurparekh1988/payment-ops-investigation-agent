@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 /// <summary>Where the release files come from, addressed by paths relative to <c>ai/</c>.</summary>
 public interface IAiReleaseSource

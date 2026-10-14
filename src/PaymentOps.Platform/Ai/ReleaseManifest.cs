@@ -1,4 +1,4 @@
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 // The YAML shape of ai/manifest.yaml. Every member is required and non-null, and unknown keys are
 // rejected, so a typo or an empty value fails loading instead of silently taking a default. A key is

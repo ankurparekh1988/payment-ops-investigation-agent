@@ -1,4 +1,4 @@
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 /// <summary>The AI release is invalid. Carries every problem found, not just the first.</summary>
 public sealed class AiReleaseException : Exception

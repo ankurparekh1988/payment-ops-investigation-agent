@@ -1,6 +1,6 @@
 using System.Text;
 
-using PaymentOps.Platform.AiRelease;
+using PaymentOps.Platform.Ai;
 
 namespace PaymentOps.Platform.Tests;
 
@@ -46,6 +46,13 @@ internal sealed class TestRelease : IAiReleaseSource
 
     public static string PromptEntry(string id = "grounded-answer", string version = "0.1.0", string body = Body) =>
         $"prompts:\n  {id}:\n    version: {version}\n    sha256: {PromptHasher.Hash(body)}";
+
+    /// <summary>The test models with one piece of text replaced; fails if that text isn't there.</summary>
+    public static string EditModels(string from, string to)
+    {
+        Assert.Contains(from, Models, StringComparison.Ordinal);
+        return Models.Replace(from, to, StringComparison.Ordinal);
+    }
 
     /// <summary>A valid release with one prompt.</summary>
     public static TestRelease WithOnePrompt() =>

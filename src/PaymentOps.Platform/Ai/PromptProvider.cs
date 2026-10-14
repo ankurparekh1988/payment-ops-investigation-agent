@@ -1,4 +1,4 @@
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 /// <summary>Prompts from the AI release, by id.</summary>
 public interface IPromptProvider

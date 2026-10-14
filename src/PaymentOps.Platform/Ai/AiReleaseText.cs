@@ -4,7 +4,7 @@ using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 /// <summary>Decoding and strict YAML reading shared by the manifest and prompt front matter.</summary>
 internal static class AiReleaseText

@@ -1,4 +1,4 @@
-using PaymentOps.Platform.AiRelease;
+using PaymentOps.Platform.Ai;
 
 namespace PaymentOps.Web;
 
@@ -10,7 +10,7 @@ internal static partial class AiReleaseLog
 {
     public static void Loaded(ILogger logger, AiRelease release)
     {
-        ReleaseLoaded(logger, release.SchemaVersion, release.ActiveChatDeployment, release.EmbeddingDeployment, release.JudgeDeployment, release.Prompts.Count);
+        ReleaseLoaded(logger, AiReleaseLoader.SupportedSchemaVersion, release.ActiveChatDeployment, release.EmbeddingDeployment, release.JudgeDeployment, release.Prompts.Count);
         foreach (var prompt in release.Prompts.Values.OrderBy(p => p.Id, StringComparer.Ordinal))
         {
             PromptLoaded(logger, prompt.Id, prompt.Version, prompt.Sha256);

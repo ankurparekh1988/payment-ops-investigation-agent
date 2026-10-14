@@ -152,7 +152,7 @@ Quota is shared by every deployment of the same model and deployment type, and d
 
 Model versions are temporary: Microsoft deprecates a generally available version after about 12 months and retires it after about 18, after which calls fail. Every deployment here is pinned and never upgrades automatically, so a model changes only through a reviewed change to `ai/manifest.yaml` that passes evaluation ([ADR 0002](adr/0002-pinned-model-versions.md)).
 
-The upgrade path, once the evaluation gate is in place: add the new chat model version as the inactive slot in the manifest (for example `green`), have the evaluation compare it with the active one, switch `active`, then remove the old slot in a later change. The release check rejects removing the live slot in the same change, because the running app keeps calling it until the new build is deployed, which happens after the infrastructure apply. An embedding upgrade builds a new search index alongside the existing one instead, because vectors from different models can't be mixed.
+The upgrade path, once the evaluation gate is in place: add the new chat model version as the inactive slot in the manifest (for example `green`), have the evaluation compare it with the active one, switch `active`, then remove the old slot in a later change. The release check rejects removing any deployment the current release uses in the same change, because the running app keeps calling it until the new build is deployed, which happens after the infrastructure apply. An embedding upgrade builds a new search index alongside the existing one instead, because vectors from different models can't be mixed.
 
 ### Planning locally
 

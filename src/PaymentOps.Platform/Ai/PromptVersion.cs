@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 /// <summary>A strict MAJOR.MINOR.PATCH version: no prefixes, pre-release tags or leading zeros.</summary>
 internal readonly partial record struct PromptVersion(int Major, int Minor, int Patch)

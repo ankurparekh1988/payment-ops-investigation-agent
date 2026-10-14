@@ -5,7 +5,7 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-using PaymentOps.Platform.AiRelease;
+using PaymentOps.Platform.Ai;
 using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;

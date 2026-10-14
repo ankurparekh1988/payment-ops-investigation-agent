@@ -1,4 +1,4 @@
-using PaymentOps.Platform.AiRelease;
+using PaymentOps.Platform.Ai;
 
 namespace PaymentOps.Platform.Tests;
 

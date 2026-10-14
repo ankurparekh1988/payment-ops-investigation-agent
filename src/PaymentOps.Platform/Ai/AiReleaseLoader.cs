@@ -1,4 +1,4 @@
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 /// <summary>
 /// Loads and verifies an AI release once: the manifest, then each prompt it lists, checking the
@@ -7,6 +7,9 @@ namespace PaymentOps.Platform.AiRelease;
 public static class AiReleaseLoader
 {
     public const string ManifestPath = "manifest.yaml";
+
+    /// <summary>The manifest format this build reads.</summary>
+    public const int SupportedSchemaVersion = 1;
 
     private const string Delimiter = "---";
 
@@ -45,14 +48,14 @@ public static class AiReleaseLoader
 
         var models = manifest.Models;
         return new AiRelease(
-            manifest.SchemaVersion,
             models.Chat.Deployments[models.Chat.Active].Deployment,
             models.Embedding.Deployment,
             models.Judge.Deployment,
+            ReleaseManifestValidator.AllDeployments(manifest).Select(d => d.Deployment.Deployment).ToHashSet(StringComparer.Ordinal),
             prompts);
     }
 
-    internal static ReleaseManifest? ReadManifest(byte[]? bytes, List<string> errors)
+    private static ReleaseManifest? ReadManifest(byte[]? bytes, List<string> errors)
     {
         if (bytes is null)
         {
@@ -64,6 +67,7 @@ public static class AiReleaseLoader
         return yaml is null ? null : AiReleaseText.Deserialize<ReleaseManifest>(yaml, ManifestPath, errors);
     }
 
+    // A prompt that adds errors is still returned; Load throws before any of them are used.
     private static Prompt? LoadPrompt(IAiReleaseSource source, string id, ManifestPrompt entry, List<string> errors)
     {
         var path = ReleaseManifestValidator.PromptPath(id);
@@ -86,7 +90,6 @@ public static class AiReleaseLoader
             return null;
         }
 
-        var errorCount = errors.Count;
         if (frontMatter.Id != id)
         {
             errors.Add($"{path} declares id '{frontMatter.Id}'; the manifest lists it as '{id}'.");
@@ -104,37 +107,32 @@ public static class AiReleaseLoader
         }
 
         var template = PromptTemplate.Parse(body, path, errors);
-        return errors.Count == errorCount && template is not null ? new Prompt(id, entry.Version, hash, template) : null;
+        return template is null ? null : new Prompt(id, entry.Version, hash, template);
     }
 
     // The first line must be exactly "---"; the next line that is exactly "---" ends the front matter,
-    // and everything after that line is the body.
+    // and everything after that line is the body. Line endings are already LF.
     private static (string FrontMatter, string Body)? SplitFrontMatter(string text, string path, List<string> errors)
     {
-        if (!text.StartsWith(Delimiter + "\n", StringComparison.Ordinal))
+        const string Opening = Delimiter + "\n";
+        const string Closing = "\n" + Delimiter;
+
+        if (!text.StartsWith(Opening, StringComparison.Ordinal))
         {
             errors.Add($"{path} must start with a '{Delimiter}' line opening its front matter.");
             return null;
         }
 
-        var lineStart = Delimiter.Length + 1;
-        while (lineStart <= text.Length)
+        // Searching from the opening line's own newline also finds an empty front matter.
+        var close = text.IndexOf(Closing + "\n", Opening.Length - 1, StringComparison.Ordinal);
+        if (close >= 0)
         {
-            var lineEnd = text.IndexOf('\n', lineStart);
-            var line = lineEnd < 0 ? text[lineStart..] : text[lineStart..lineEnd];
-            if (line == Delimiter)
-            {
-                var frontMatter = text[(Delimiter.Length + 1)..lineStart];
-                var body = lineEnd < 0 ? string.Empty : text[(lineEnd + 1)..];
-                return (frontMatter, body);
-            }
+            return (text[Opening.Length..(close + 1)], text[(close + Closing.Length + 1)..]);
+        }
 
-            if (lineEnd < 0)
-            {
-                break;
-            }
-
-            lineStart = lineEnd + 1;
+        if (text.Length > Opening.Length && text.EndsWith(Closing, StringComparison.Ordinal))
+        {
+            return (text[Opening.Length..(text.Length - Delimiter.Length)], string.Empty);
         }
 
         errors.Add($"{path} has no closing '{Delimiter}' line after its front matter.");

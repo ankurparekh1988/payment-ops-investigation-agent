@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace PaymentOps.Platform.AiRelease;
+namespace PaymentOps.Platform.Ai;
 
 /// <summary>
 /// SHA-256 over the UTF-8 bytes of a prompt body, after front matter is removed and CRLF and bare
