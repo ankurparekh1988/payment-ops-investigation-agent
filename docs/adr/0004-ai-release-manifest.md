@@ -22,6 +22,7 @@ Prompts also change behaviour in ways a compiler can't check. A one-word edit ca
 - Each prompt is `ai/prompts/<id>.md`: front matter with only its `id` and `version`, then the body.
 - The manifest lists each prompt's version and the SHA-256 of its body. The hash covers the UTF-8 bytes after front matter is removed, with CRLF and CR converted to LF; nothing else is normalised. Files with a byte-order mark are rejected.
 - On a pull request, CI compares the manifest with the base branch's: a prompt whose body changed must have a higher `MAJOR.MINOR.PATCH` version, and an unchanged body keeps its version.
+- The same check rejects removing the base branch's active chat deployment in the change that switches away from it. The infrastructure is applied before the new build is deployed, so the running app would call a deployment that no longer exists.
 - Placeholders are `{{name}}` only, filled in one pass; values are inserted as data and never re-read as template text.
 - A version identifies a prompt's content. It doesn't say whether the prompt passed evaluation; that will be recorded as evidence for a specific prompt version, hash and model version.
 

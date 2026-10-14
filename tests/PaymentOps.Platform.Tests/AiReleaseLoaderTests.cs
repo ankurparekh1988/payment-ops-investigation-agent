@@ -41,6 +41,43 @@ public sealed class AiReleaseLoaderTests
         Assert.Contains(errors, e => e.Contains(expected, StringComparison.OrdinalIgnoreCase));
     }
 
+    [Theory]
+    [InlineData("capacityK: 10\n  judge|capacityK: 10\n    contentFilterPolicy: strict\n  judge")]
+    [InlineData("capacityK: 10\n  embedding|capacityK: 10\n        contentFilterPolicy: default\n  embedding")]
+    public void A_content_filter_is_rejected_where_nothing_reads_it(string modelsEdit)
+    {
+        var parts = modelsEdit.Split('|');
+        Assert.Contains(parts[0], TestRelease.Models, StringComparison.Ordinal);
+        var models = TestRelease.Models.Replace(parts[0], parts[1], StringComparison.Ordinal);
+
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: models)).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("contentFilterPolicy", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("prompts: {}", "prompts:")]
+    [InlineData("active: blue", "active:")]
+    [InlineData("deployment: judge", "deployment:")]
+    public void An_empty_value_is_reported_instead_of_crashing(string original, string emptied)
+    {
+        var manifest = TestRelease.Manifest().Replace(original, emptied, StringComparison.Ordinal);
+
+        var errors = new TestRelease().With("manifest.yaml", manifest).LoadErrors();
+
+        Assert.NotEmpty(errors);
+    }
+
+    [Fact]
+    public void An_empty_prompt_hash_is_reported_instead_of_crashing()
+    {
+        var manifest = TestRelease.Manifest(TestRelease.PromptEntry()).Replace(PromptHasher.Hash(TestRelease.Body), string.Empty, StringComparison.Ordinal);
+
+        var errors = new TestRelease().With("manifest.yaml", manifest).With("prompts/grounded-answer.md", TestRelease.PromptFile()).LoadErrors();
+
+        Assert.NotEmpty(errors);
+    }
+
     [Fact]
     public void A_missing_required_key_fails()
     {
@@ -53,8 +90,7 @@ public sealed class AiReleaseLoaderTests
     [InlineData("schemaVersion: 2", "", "schemaVersion is 2")]
     [InlineData("schemaVersion: 1", "active: blue|active: green", "isn't one of the chat deployments")]
     [InlineData("schemaVersion: 1", "contentFilterPolicy: strict|contentFilterPolicy: relaxed", "models.chat.contentFilterPolicy must be one of")]
-    [InlineData("schemaVersion: 1", "\n    contentFilterPolicy: default|", "models.judge.contentFilterPolicy must be one of")]
-    [InlineData("schemaVersion: 1", "capacityK: 10\n  judge|capacityK: 10\n    contentFilterPolicy: strict\n  judge", "embedding deployments don't take one")]
+    [InlineData("schemaVersion: 1", "\n    contentFilterPolicy: default|", "Missing properties, 'contentFilterPolicy'")]
     [InlineData("schemaVersion: 1", "deployment: judge|deployment: embed-v1", "'embed-v1' is used more than once")]
     [InlineData("schemaVersion: 1", "capacityK: 10\n  embedding|capacityK: 0\n  embedding", "capacityK must be positive")]
     public void Manifest_rules_are_enforced(string schema, string modelsEdit, string expected)

@@ -40,7 +40,8 @@ public sealed partial class PromptTemplate
             var name = close < 0 ? null : text[(open + 2)..close];
             if (name is null || !Name().IsMatch(name))
             {
-                errors.Add($"{path} has a malformed placeholder at offset {open}; use {{{{name}}}} with letters and digits only.");
+                var line = text.AsSpan(0, open).Count('\n') + 1;
+                errors.Add($"{path} has a malformed placeholder on line {line} of its body; use {{{{name}}}} with letters and digits only.");
                 return null;
             }
 

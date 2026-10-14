@@ -1,7 +1,8 @@
 namespace PaymentOps.Platform.AiRelease;
 
-// The YAML shape of ai/manifest.yaml. Every member is required unless nullable, and unknown keys
-// are rejected, so a typo fails loading instead of silently taking a default.
+// The YAML shape of ai/manifest.yaml. Every member is required and non-null, and unknown keys are
+// rejected, so a typo or an empty value fails loading instead of silently taking a default. A key is
+// only accepted where something reads it: contentFilterPolicy exists on the chat role and the judge.
 
 internal sealed class ReleaseManifest
 {
@@ -18,7 +19,7 @@ internal sealed class ManifestModels
 
     public required ModelDeployment Embedding { get; init; }
 
-    public required ModelDeployment Judge { get; init; }
+    public required JudgeDeployment Judge { get; init; }
 }
 
 internal sealed class ChatModels
@@ -30,7 +31,7 @@ internal sealed class ChatModels
     public required Dictionary<string, ModelDeployment> Deployments { get; init; }
 }
 
-internal sealed class ModelDeployment
+internal class ModelDeployment
 {
     public required string Deployment { get; init; }
 
@@ -41,8 +42,11 @@ internal sealed class ModelDeployment
     public required string DeploymentType { get; init; }
 
     public required int CapacityK { get; init; }
+}
 
-    public string? ContentFilterPolicy { get; init; }
+internal sealed class JudgeDeployment : ModelDeployment
+{
+    public required string ContentFilterPolicy { get; init; }
 }
 
 internal sealed class ManifestPrompt

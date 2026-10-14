@@ -11,10 +11,12 @@ internal static class AiReleaseText
 {
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    // Unknown keys fail by default; required members and duplicate keys are enforced explicitly.
+    // Unknown keys fail by default; required members, non-null values and duplicate keys are
+    // enforced explicitly.
     private static readonly IDeserializer Yaml = new DeserializerBuilder()
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .WithEnforceRequiredMembers()
+        .WithEnforceNullability()
         .WithDuplicateKeyChecking()
         .Build();
 

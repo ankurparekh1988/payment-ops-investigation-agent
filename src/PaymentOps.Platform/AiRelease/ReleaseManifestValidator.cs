@@ -25,10 +25,6 @@ internal static partial class ReleaseManifestValidator
 
         CheckFilter("models.chat", chat.ContentFilterPolicy, errors);
         CheckFilter("models.judge", manifest.Models.Judge.ContentFilterPolicy, errors);
-        if (manifest.Models.Embedding.ContentFilterPolicy is not null)
-        {
-            errors.Add("models.embedding has a contentFilterPolicy; embedding deployments don't take one.");
-        }
 
         var deployments = chat.Deployments.Select(d => ($"models.chat.deployments.{d.Key}", d.Value))
             .Append(("models.embedding", manifest.Models.Embedding))
@@ -66,7 +62,7 @@ internal static partial class ReleaseManifestValidator
 
     public static string PromptPath(string id) => $"prompts/{id}.md";
 
-    private static void CheckFilter(string path, string? policy, List<string> errors)
+    private static void CheckFilter(string path, string policy, List<string> errors)
     {
         if (!ContentFilterPolicies.Contains(policy, StringComparer.Ordinal))
         {

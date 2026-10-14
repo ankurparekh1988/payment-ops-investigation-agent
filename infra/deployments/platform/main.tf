@@ -19,7 +19,7 @@ locals {
       version        = local.models.embedding.version
       sku            = local.models.embedding.deploymentType
       capacity       = local.models.embedding.capacityK
-      content_filter = try(local.models.embedding.contentFilterPolicy, null)
+      content_filter = null
     }
     (local.models.judge.deployment) = {
       model          = local.models.judge.model
