@@ -36,6 +36,14 @@ jobs:
         with:
           persist-credentials: false
 
+      # The workflow reaches main before the publisher does, so a run on a ref without it fails clearly.
+      - name: Check for the publisher
+        run: |
+          if [[ ! -f tools/PaymentOps.KnowledgePublish/PaymentOps.KnowledgePublish.csproj ]]; then
+            echo "::error::The knowledge publisher doesn't exist on $GITHUB_REF_NAME. Run this workflow on a branch that has it."
+            exit 1
+          fi
+
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
