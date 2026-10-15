@@ -43,6 +43,11 @@ output "knowledge_storage_account" {
   value       = module.knowledge_storage.name
 }
 
+output "search_endpoint" {
+  description = "Endpoint of the search service holding the knowledge index."
+  value       = module.search.endpoint
+}
+
 output "application_insights_name" {
   description = "Application Insights resource receiving telemetry."
   value       = module.monitoring.application_insights_name

@@ -44,6 +44,11 @@ variable "storage_replication_type" {
   type        = string
 }
 
+variable "search_sku" {
+  description = "Search service tier. free has no SLA and may be reclaimed when idle; basic and above have one."
+  type        = string
+}
+
 variable "log_retention_days" {
   description = "Days telemetry is kept."
   type        = number

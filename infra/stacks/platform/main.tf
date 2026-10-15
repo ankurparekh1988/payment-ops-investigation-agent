@@ -93,6 +93,16 @@ module "knowledge_storage" {
   tags                = local.tags
 }
 
+module "search" {
+  source = "../../modules/search-service"
+
+  name              = "srch-${local.base}-${local.suffix}"
+  resource_group_id = data.azurerm_resource_group.this.id
+  location          = var.location
+  sku               = var.search_sku
+  tags              = local.tags
+}
+
 # Separate from the app so its role assignments survive the app being replaced.
 resource "azurerm_user_assigned_identity" "app" {
   name                = "id-${local.base}-app"

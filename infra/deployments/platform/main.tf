@@ -44,6 +44,7 @@ module "platform" {
   app_service_sku          = var.app_service_sku
   dotnet_version           = var.dotnet_version
   storage_replication_type = var.storage_replication_type
+  search_sku               = var.search_sku
   log_retention_days       = var.log_retention_days
   log_daily_quota_gb       = var.log_daily_quota_gb
   monthly_budget           = var.monthly_budget
