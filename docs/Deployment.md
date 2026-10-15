@@ -202,6 +202,7 @@ flowchart LR
   P -->|no changes| D
   D --> S["Smoke test<br/>/health, /health/ready"]
   AP --> K["Check keyless search<br/>environment dev"]
+  B -->|no changes| K
   P -->|no changes| K
 ```
 

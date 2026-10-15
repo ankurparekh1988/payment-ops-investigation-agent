@@ -217,12 +217,11 @@ jobs:
 
   check-search:
     name: Check keyless search
-    needs: [plan, apply]
-    # After an apply, or when there was nothing to apply; not when apply was skipped by a failed build.
+    needs: [build, plan, apply]
+    # Same gate as deploy-app: it changes the environment (a throwaway index), so only with a good build.
     if: >-
-      always() && needs.plan.result == 'success'
-      && (needs.apply.result == 'success'
-        || (needs.apply.result == 'skipped' && needs.plan.outputs.has-changes != 'true'))
+      always() && needs.build.result == 'success' && needs.plan.result == 'success'
+      && (needs.apply.result == 'success' || needs.apply.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
     permissions:
