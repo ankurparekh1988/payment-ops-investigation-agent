@@ -4,7 +4,7 @@ How access is controlled, as built so far. Retrieval-time authorization, tool au
 
 ## Principles
 
-- **No keys.** Every service-to-service call uses a managed identity with an Entra ID token. API keys, storage account keys and workspace keys are disabled, so there are no secrets to store, rotate or leak.
+- **No key-based authentication.** Every service-to-service call uses a managed identity with an Entra ID token. API-key and shared-key authentication is disabled on every service, and the application and pipelines never retrieve, store or pass a key. Azure still holds key material for some services; it can't authenticate while key access is off, and the one place any of it reaches is noted under Log Analytics below.
 - **Least privilege, narrowest scope.** Each identity gets only the roles it needs, assigned on the specific resource rather than the subscription where possible.
 - **Authority sits with people, not pipelines.** Granting roles to users, registering resource providers and creating pipeline identities require Owner rights, which no CI identity holds.
 - **Only the pipeline changes environments.** Two steps are run by a person because they need rights no pipeline should hold: the bootstrap (the pipeline's own identities and state) and identity (the Entra app registration, groups and demo users). `scripts/terraform.sh` names these two and refuses changes to any other deployment outside the pipeline. Everything else is deployed only by the deployment pipeline, after approval.
@@ -65,7 +65,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 |---|---|
 | Foundry | Local (API key) authentication disabled |
 | Storage accounts | Shared key access disabled; Entra ID is the default in the portal |
-| Log Analytics | Local authentication disabled |
+| Log Analytics | Local authentication disabled. The azurerm workspace resource still reads the workspace's shared keys into Terraform state, where they can't be used to authenticate |
 | Application Insights | Local authentication disabled; ingestion requires an Entra token |
 | Azure AI Search | API-key authentication disabled. Deployed through AzAPI rather than the azurerm resource, which would read the admin and query keys into Terraform state |
 

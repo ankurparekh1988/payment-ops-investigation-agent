@@ -21,7 +21,7 @@
 
 ## Azure platform
 
-What runs where, and how each part authenticates. Every service-to-service call uses a managed identity; API keys and shared keys are disabled throughout.
+What runs where, and how each part authenticates. Every service-to-service call uses a managed identity; key-based authentication is disabled throughout.
 
 ```mermaid
 flowchart LR
