@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Never alongside a deployment or teardown, which may be recreating or removing the service.
+concurrency:
+  group: deploy-${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
+  cancel-in-progress: false
+
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true

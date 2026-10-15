@@ -16,6 +16,13 @@ docs_url="$endpoint/indexes/$index/docs"
 
 search() { az rest --resource https://search.azure.com --only-show-errors "$@"; }
 
+# Document writes answer 207 when a document is rejected, so each result's status is checked too.
+write_document() {
+  local status
+  status="$(search --method post --url "$docs_url/index?$api" --body "$1" --query 'value[0].status' --output tsv)" \
+    && [[ "$status" == "true" ]]
+}
+
 fail_with_role_hint() {
   echo "::error::$1 failed. If the response was 403, the deploy identity lacks a Search role: re-run scripts/bootstrap.sh."
   exit 1
@@ -49,26 +56,26 @@ search --method put --url "$index_url" --body '{
 }' >/dev/null || fail_with_role_hint "Creating an index (Search Service Contributor)"
 echo "Created the index."
 
-search --method post --url "$docs_url/index?$api" \
-  --body '{ "value": [ { "@search.action": "upload", "id": "1", "content": "keyless" } ] }' >/dev/null \
+write_document '{ "value": [ { "@search.action": "upload", "id": "1", "content": "keyless" } ] }' \
   || fail_with_role_hint "Uploading a document (Search Index Data Contributor)"
 echo "Uploaded a document."
 
-# A write can take a moment to become readable.
+# A write can take a moment to become readable. The last error is shown if it never does.
+read_error="$(mktemp)"
 for attempt in $(seq 1 10); do
-  content="$(search --method get --url "$docs_url/1?$api" --query content --output tsv 2>/dev/null || true)"
+  content="$(search --method get --url "$docs_url/1?$api" --query content --output tsv 2>"$read_error" || true)"
   if [[ "$content" == "keyless" ]]; then
     echo "Read the document back."
     break
   fi
   if [[ "$attempt" == 10 ]]; then
+    cat "$read_error" >&2
     fail_with_role_hint "Reading the document back (Search Index Data Contributor)"
   fi
   sleep 2
 done
 
-search --method post --url "$docs_url/index?$api" \
-  --body '{ "value": [ { "@search.action": "delete", "id": "1" } ] }' >/dev/null \
+write_document '{ "value": [ { "@search.action": "delete", "id": "1" } ] }' \
   || fail_with_role_hint "Deleting the document (Search Index Data Contributor)"
 echo "Deleted the document."
 

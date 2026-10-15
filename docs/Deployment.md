@@ -92,7 +92,7 @@ It also registers the Azure resource providers the platform uses, because regist
 
 **Why the search roles are granted here, on the resource group.** The pipeline has to manage the index from its first run, and a role granted in the same run as the service it applies to may not be effective yet. The search service doesn't exist when the bootstrap runs, so the grant can't name it; the resource group holds only this environment.
 
-An existing environment picks up a bootstrap change by running `scripts/bootstrap.sh` again: review that its plan adds only what the change describes, then run it once more and confirm it reports no changes.
+An existing environment picks up a bootstrap change by running `scripts/bootstrap.sh` again: review that its plan adds only what the change describes, then run it once more and confirm it reports no changes. A new setting, such as `TF_VAR_search_sku`, goes into `.env` and then `scripts/configure-github.sh`, before the change is planned or deployed; until then every pipeline plan fails on the missing variable. A new setting, such as `TF_VAR_search_sku`, goes into `.env` and then `scripts/configure-github.sh`, before the change is planned or deployed; until then every pipeline plan fails on the missing variable.
 
 **Why two resource groups.** `gh-deploy` is Contributor on the environment's resource group, which would include changing managed identities and their federated credentials. Keeping the pipeline identities and Terraform state in a separate group, where the pipeline has no rights, means a workflow can't widen its own trust or delete its own state. It also lets an environment be torn down and rebuilt without touching what the pipeline depends on.
 
@@ -216,7 +216,7 @@ flowchart LR
 
 **Model capacity.** Quota is shared by every deployment of the same model and deployment type, so `scripts/check-model-capacity.sh` sums the capacity requested in the plan per model and deployment type and compares it with the subscription's quota. The environment's own existing deployments are added back to the headroom, so a re-apply doesn't count them twice. Quota doesn't guarantee that the region has capacity, so any new capacity is also checked against the region's available capacity.
 
-`.github/workflows/knowledge-selftest.yml` is started by hand. It runs the knowledge publisher's self-test against a throwaway index in the `<env>` environment, and never touches the infrastructure or the live index.
+`.github/workflows/knowledge-selftest.yml` is started by hand, and has nothing to run until the knowledge publisher exists. It runs the publisher's self-test against a throwaway index in the `<env>` environment, one deployment at a time with CD and teardown, and never touches the infrastructure or the live index.
 
 `.github/workflows/teardown.yml` destroys the platform on demand. You type the environment name to start it; it plans the destroy and summarises what will be removed, then waits for the same approval and applies exactly that destroy plan. The bootstrap is never touched, so the environment can be redeployed.
 

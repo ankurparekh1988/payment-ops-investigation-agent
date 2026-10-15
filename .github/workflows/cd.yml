@@ -218,10 +218,11 @@ jobs:
   check-search:
     name: Check keyless search
     needs: [plan, apply]
-    # Runs whether or not this run changed infrastructure, as long as nothing upstream failed.
+    # After an apply, or when there was nothing to apply; not when apply was skipped by a failed build.
     if: >-
       always() && needs.plan.result == 'success'
-      && (needs.apply.result == 'success' || needs.apply.result == 'skipped')
+      && (needs.apply.result == 'success'
+        || (needs.apply.result == 'skipped' && needs.plan.outputs.has-changes != 'true'))
     runs-on: ubuntu-latest
     environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
     permissions:

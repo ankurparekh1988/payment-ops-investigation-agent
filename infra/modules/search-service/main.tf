@@ -18,15 +18,16 @@ resource "azapi_resource" "this" {
   location  = var.location
   tags      = var.tags
 
+  # Only non-default properties are set, so nothing can drift on how Azure spells its defaults
+  # (public access, one replica, one partition).
   body = {
     sku = { name = var.sku }
     properties = {
       # Entra ID only: requests with an API key are rejected.
-      disableLocalAuth    = true
-      publicNetworkAccess = "enabled"
-      replicaCount        = 1
-      partitionCount      = 1
-      hostingMode         = "Default"
+      disableLocalAuth = true
     }
   }
+
+  # Azure can't change a search service's tier in place.
+  replace_triggers_external_values = var.sku
 }
