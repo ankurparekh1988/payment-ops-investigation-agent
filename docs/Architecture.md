@@ -16,6 +16,7 @@
 | Telemetry | ✅ OpenTelemetry to Application Insights, sent with the app's managed identity |
 | AI release | ✅ `ai/manifest.yaml` drives the model deployments and is built into the app, which verifies it and its prompts at startup ([below](#ai-release)) |
 | Knowledge corpus | ✅ Reviewed Markdown sources, validated and built into the files that will be indexed ([below](#knowledge-corpus)) |
+| Search service | ✅ Keyless, Free tier. Every deployment checks that the pipeline can manage an index with Entra alone; nothing is indexed yet |
 | Indexing, retrieval and the investigation agent | Not started |
 
 ## Azure platform
@@ -32,6 +33,7 @@ flowchart LR
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
   F -.->|"project identity<br/>Metrics Publisher, Log Analytics Reader"| AI
+  CD["Deployment pipeline<br/>gh-deploy"] -->|"Entra token<br/>Search Service Contributor,<br/>Index Data Contributor"| S[("Azure AI Search<br/>Free, API keys disabled")]
 ```
 
 *As of 2026-10-14.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).

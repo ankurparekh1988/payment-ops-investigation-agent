@@ -54,6 +54,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | `gh-deploy` | Environment resource group | Contributor | Apply infrastructure changes |
 | `gh-deploy` | Environment resource group | RBAC Administrator, conditional | Assign only allow-listed platform roles, only to service principals ([details](Deployment.md#pipeline-identities)) |
 | `gh-deploy` | State container | Storage Blob Data Contributor | Read and write Terraform state |
+| `gh-deploy` | Environment resource group | Search Service Contributor, Search Index Data Contributor | Create the knowledge index and publish its sections |
 | Bootstrap operator | Operator-only state container | Storage Blob Data Contributor | The identity deployment's state, which holds demo user passwords and the local sign-in secret. No pipeline identity has any role on this container |
 | `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog, quota and regional capacity for the preflight and the pre-apply capacity check; nothing else |
 | Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader, Storage Blob Data Reader | Run the app locally |
@@ -66,6 +67,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Storage accounts | Shared key access disabled; Entra ID is the default in the portal |
 | Log Analytics | Local authentication disabled |
 | Application Insights | Local authentication disabled; ingestion requires an Entra token |
+| Azure AI Search | API-key authentication disabled. Deployed through AzAPI rather than the azurerm resource, which would read the admin and query keys into Terraform state |
 
 Foundry's connection to Application Insights authenticates with the project's managed identity. Foundry and the web app both hold the Application Insights connection string, but only to know where to send telemetry: with local authentication disabled, sending still requires an Entra token for the project or the app.
 
