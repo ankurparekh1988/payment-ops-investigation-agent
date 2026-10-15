@@ -217,8 +217,6 @@ flowchart LR
 
 **Model capacity.** Quota is shared by every deployment of the same model and deployment type, so `scripts/check-model-capacity.sh` sums the capacity requested in the plan per model and deployment type and compares it with the subscription's quota. The environment's own existing deployments are added back to the headroom, so a re-apply doesn't count them twice. Quota doesn't guarantee that the region has capacity, so any new capacity is also checked against the region's available capacity.
 
-`.github/workflows/knowledge-selftest.yml` is started by hand, and has nothing to run until the knowledge publisher exists. It runs the publisher's self-test against a throwaway index in the `<env>` environment, one deployment at a time with CD and teardown, and never touches the infrastructure or the live index.
-
 `.github/workflows/teardown.yml` destroys the platform on demand. You type the environment name to start it; it plans the destroy and summarises what will be removed, then waits for the same approval and applies exactly that destroy plan. The bootstrap is never touched, so the environment can be redeployed.
 
 ### One command
