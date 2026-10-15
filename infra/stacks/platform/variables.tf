@@ -45,7 +45,7 @@ variable "storage_replication_type" {
 }
 
 variable "search_sku" {
-  description = "Search service tier. free has no SLA and may be reclaimed when idle; basic and above have one."
+  description = "Search service tier, for example free or basic."
   type        = string
 }
 

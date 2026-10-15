@@ -8,7 +8,8 @@ on:
 permissions:
   contents: read
 
-# Never alongside a deployment or teardown, which may be recreating or removing the service.
+# Never alongside a deployment or teardown, which may be recreating or removing the service. The
+# key must match the one in cd.yml and teardown.yml.
 concurrency:
   group: deploy-${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
   cancel-in-progress: false

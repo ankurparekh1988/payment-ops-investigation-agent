@@ -158,10 +158,10 @@ resource "azurerm_role_assignment" "deploy_state_contributor" {
 resource "azurerm_role_assignment" "deploy_search" {
   for_each = toset(["Search Service Contributor", "Search Index Data Contributor"])
 
-  scope                = azurerm_resource_group.workload.id
-  role_definition_name = each.value
-  principal_id         = module.deploy_identity.principal_id
-  principal_type       = "ServicePrincipal"
+  scope              = azurerm_resource_group.workload.id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles[each.value]}"
+  principal_id       = module.deploy_identity.principal_id
+  principal_type     = "ServicePrincipal"
 }
 
 # The platform needs role assignments (keyless access everywhere), so the deploy identity may

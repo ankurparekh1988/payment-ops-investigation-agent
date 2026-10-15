@@ -5,8 +5,9 @@
 # Usage: scripts/check-search-keyless.sh <resource-group> <search-endpoint>
 set -euo pipefail
 
-resource_group="${1:?Usage: scripts/check-search-keyless.sh <resource-group> <search-endpoint>}"
-endpoint="${2:?Usage: scripts/check-search-keyless.sh <resource-group> <search-endpoint>}"
+usage="Usage: $0 <resource-group> <search-endpoint>"
+resource_group="${1:?$usage}"
+endpoint="${2:?$usage}"
 service="${endpoint#https://}"
 service="${service%%.*}"
 index="keyless-check"
@@ -43,12 +44,12 @@ if [[ "$anonymous" != "401" && "$anonymous" != "403" ]]; then
 fi
 echo "Anonymous requests are refused ($anonymous)."
 
-# A crashed earlier run may have left the index behind, and the free tier allows only three.
-search --method delete --url "$index_url" >/dev/null 2>&1 || true
+# The free tier allows only three indexes. A leftover from a crashed run is reused, since the PUT
+# below creates or updates the same index.
 trap 'search --method delete --url "$index_url" >/dev/null 2>&1 || true' EXIT
 
 search --method put --url "$index_url" --body '{
-  "name": "keyless-check",
+  "name": "'"$index"'",
   "fields": [
     { "name": "id", "type": "Edm.String", "key": true },
     { "name": "content", "type": "Edm.String", "searchable": true }
@@ -62,18 +63,16 @@ echo "Uploaded a document."
 
 # A write can take a moment to become readable. The last error is shown if it never does.
 read_error="$(mktemp)"
-for attempt in $(seq 1 10); do
+for _ in {1..10}; do
   content="$(search --method get --url "$docs_url/1?$api" --query content --output tsv 2>"$read_error" || true)"
-  if [[ "$content" == "keyless" ]]; then
-    echo "Read the document back."
-    break
-  fi
-  if [[ "$attempt" == 10 ]]; then
-    cat "$read_error" >&2
-    fail_with_role_hint "Reading the document back (Search Index Data Contributor)"
-  fi
+  [[ "$content" == "keyless" ]] && break
   sleep 2
 done
+if [[ "$content" != "keyless" ]]; then
+  cat "$read_error" >&2
+  fail_with_role_hint "Reading the document back (Search Index Data Contributor)"
+fi
+echo "Read the document back."
 
 write_document '{ "value": [ { "@search.action": "delete", "id": "1" } ] }' \
   || fail_with_role_hint "Deleting the document (Search Index Data Contributor)"
