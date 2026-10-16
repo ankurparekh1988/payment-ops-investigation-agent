@@ -8,3 +8,4 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0002](0002-pinned-model-versions.md) | Pinned model versions, upgraded through evaluation | Accepted |
 | [0003](0003-server-rendered-ui-and-sign-in.md) | Server-rendered UI as its own backend, with credential-free sign-in | Accepted |
 | [0004](0004-ai-release-manifest.md) | One AI release manifest, built into the application | Accepted |
+| [0005](0005-indexing-by-pushing-from-the-pipeline.md) | Indexing by pushing from the pipeline | Accepted |

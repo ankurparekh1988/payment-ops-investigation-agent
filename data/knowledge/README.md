@@ -44,12 +44,13 @@ docType: runbook
 
 ## Headings and citations
 
-Search splits each document by heading, and a citation points at a doc id and a heading path such as *Risk hold review policy > Risk rules > RF-37 volume spike*.
+The publisher splits each document into sections by heading, and a citation points at a doc id and a heading path such as *Risk hold review policy > Risk rules > RF-37 volume spike*.
 
 - The body starts with one `#` heading that matches the title, and it's the only one.
 - Use `##` and `###` below it without skipping a level. Nothing deeper.
 - Write headings with `#`, as plain text, and keep each heading path unique within the document.
 - A heading path is stable only while the headings are. Renaming a heading changes it, which is fine.
+- Each section with text of its own becomes one search document. A heading with no text directly under it, such as a `##` that only groups `###` sections, isn't indexed on its own. A document with no text under any heading fails the build.
 
 ## Public repository hygiene
 
