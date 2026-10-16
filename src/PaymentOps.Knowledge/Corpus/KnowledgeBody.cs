@@ -5,16 +5,16 @@ using Markdig.Syntax.Inlines;
 namespace PaymentOps.Knowledge.Corpus;
 
 /// <summary>
-/// Rules for a document body, read as CommonMark. Search splits the uploaded Markdown by heading, so
+/// Rules for a document body, read as CommonMark. The publisher splits the content by heading, so
 /// headings are kept to the one unambiguous form whose section paths this computes.
 /// </summary>
 internal static class KnowledgeBody
 {
-    // Search's Markdown parsing is configured to split down to h3; deeper headings would merge into it.
+    // Sections go down to h3; a deeper heading would read as part of its h3 section.
     private const int DeepestHeading = 3;
 
     // Without precise locations, inline nodes such as links all report line 0.
-    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
+    internal static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePreciseSourceLocation().Build();
 
     /// <summary>Checks the body and returns its section paths, in document order.</summary>
     internal static IReadOnlyList<SectionPath> Validate(string body, string title, string path, int firstLine, List<string> errors)
@@ -110,7 +110,7 @@ internal static class KnowledgeBody
     }
 
     // Literal text only, so the heading reads the same in the source, the index and a citation.
-    private static string? PlainText(HeadingBlock heading)
+    internal static string? PlainText(HeadingBlock heading)
     {
         if (heading.Inline is null)
         {
