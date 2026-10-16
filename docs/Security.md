@@ -4,7 +4,7 @@ How access is controlled, as built so far. Retrieval-time authorization, tool au
 
 ## Principles
 
-- **No key-based authentication.** Every service-to-service call uses a managed identity with an Entra ID token. API-key and shared-key authentication is disabled on every service, and the application and pipelines never retrieve, store or pass a key. Azure still holds key material for some services; it can't authenticate while key access is off, and the one place any of it reaches is noted under Log Analytics below.
+- **No key-based authentication.** Every service-to-service call uses a managed identity with an Entra ID token. API-key and shared-key authentication is disabled on every service, and no application or workflow code uses or passes a key. Some azurerm resources still read key material into Terraform state even with key access off; that material can't authenticate, and the known cases are listed below.
 - **Least privilege, narrowest scope.** Each identity gets only the roles it needs, assigned on the specific resource rather than the subscription where possible.
 - **Authority sits with people, not pipelines.** Granting roles to users, registering resource providers and creating pipeline identities require Owner rights, which no CI identity holds.
 - **Only the pipeline changes environments.** Two steps are run by a person because they need rights no pipeline should hold: the bootstrap (the pipeline's own identities and state) and identity (the Entra app registration, groups and demo users). `scripts/terraform.sh` names these two and refuses changes to any other deployment outside the pipeline. Everything else is deployed only by the deployment pipeline, after approval.
