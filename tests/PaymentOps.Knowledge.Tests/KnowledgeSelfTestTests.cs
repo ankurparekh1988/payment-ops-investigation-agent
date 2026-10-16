@@ -59,4 +59,15 @@ public sealed class KnowledgeSelfTestTests
 
         Assert.Equal(4, proved.Count);
     }
+
+    [Fact]
+    public async Task A_failed_cleanup_doesnt_hide_why_the_self_test_failed()
+    {
+        var index = new FakeKnowledgeIndex { FailDeleteOfCreatedIndex = true };
+        index.StuckKeys.Add(SectionKey.For("selftest-policy", new SectionPath("Self-test policy", "Scope", "")));
+
+        var error = await Assert.ThrowsAsync<KnowledgePublishException>(() => Run(index));
+
+        Assert.Contains("still retrievable", error.Message, StringComparison.Ordinal);
+    }
 }

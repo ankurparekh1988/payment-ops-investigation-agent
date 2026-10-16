@@ -15,6 +15,9 @@ internal sealed class FakeKnowledgeIndex : IKnowledgeIndexClient
     /// <summary>Keys a delete leaves in place.</summary>
     public HashSet<string> StuckKeys { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Index deletes fail once the index has been created, like a cleanup that can't reach Search.</summary>
+    public bool FailDeleteOfCreatedIndex { get; set; }
+
     /// <summary>How many more key lookups still find every key asked about, like a delete not yet visible.</summary>
     public int LaggingFinds { get; set; }
 
@@ -48,6 +51,11 @@ internal sealed class FakeKnowledgeIndex : IKnowledgeIndexClient
     public Task DeleteIndexAsync(CancellationToken cancellationToken)
     {
         Operations.Add("delete-index");
+        if (FailDeleteOfCreatedIndex && Exists)
+        {
+            throw new KnowledgePublishException("Deleting the index failed.");
+        }
+
         Exists = false;
         _stored.Clear();
         _visible.Clear();

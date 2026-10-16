@@ -122,12 +122,26 @@ public static class KnowledgeSelfTest
                 Paths(storedB).SequenceEqual(["Self-test policy > Scope", "Self-test runbook", "Self-test runbook > Steps > Split files"]),
                 "a renamed or removed heading leaves no stale section", storedB);
             proved.Add("A renamed heading and a removed heading leave no stale section.");
-
-            return proved;
         }
-        finally
+        catch
+        {
+            await TryDeleteIndexAsync(index);
+            throw;
+        }
+
+        await index.DeleteIndexAsync(CancellationToken.None);
+        return proved;
+    }
+
+    // Cleans up after a failure without replacing it; the next run deletes the index first anyway.
+    private static async Task TryDeleteIndexAsync(IKnowledgeIndexClient index)
+    {
+        try
         {
             await index.DeleteIndexAsync(CancellationToken.None);
+        }
+        catch (KnowledgePublishException)
+        {
         }
     }
 
