@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> Only the foundation is in place so far: module structure, architecture tests, the web host with sign-in and telemetry, and the Azure platform defined in Terraform. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> Only the foundation is in place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, and the knowledge corpus and its search index. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -15,9 +15,9 @@
 | Sign-in and roles | ✅ Entra ID sign-in, app roles and the Risk and Compliance group; the server-side `IUserContext` and authorization policies ([Security](Security.md)) |
 | Telemetry | ✅ OpenTelemetry to Application Insights, sent with the app's managed identity |
 | AI release | ✅ `ai/manifest.yaml` drives the model deployments and is built into the app, which verifies it and its prompts at startup ([below](#ai-release)) |
-| Knowledge corpus | ✅ Reviewed Markdown sources, validated and built into the files that will be indexed ([below](#knowledge-corpus)) |
-| Search service | ✅ Keyless, Free tier. Every deployment checks that the pipeline can manage an index with Entra alone; nothing is indexed yet |
-| Indexing, retrieval and the investigation agent | Not started |
+| Knowledge corpus | ✅ Reviewed Markdown sources, validated and built into the files that are indexed ([below](#knowledge-corpus)) |
+| Knowledge index | ✅ Every deployment publishes the corpus to `knowledge-v1` on a keyless Free-tier search service, one document per section, and verifies every stored field; nothing reads it yet ([below](#knowledge-index)) |
+| Retrieval and the investigation agent | Not started |
 
 ## Azure platform
 
@@ -33,7 +33,7 @@ flowchart LR
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
   F -.->|"project identity<br/>Metrics Publisher, Log Analytics Reader"| AI
-  CD["Deployment pipeline<br/>gh-deploy"] -->|"Entra token<br/>Search Service Contributor,<br/>Index Data Contributor"| S[("Azure AI Search<br/>Free, API keys disabled")]
+  CD["Deployment pipeline<br/>gh-deploy"] -->|"Entra token, publish sections<br/>Search Service Contributor,<br/>Index Data Contributor"| S[("Azure AI Search<br/>Free, API keys disabled")]
 ```
 
 *As of 2026-10-14.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
@@ -77,17 +77,47 @@ flowchart LR
   B["CorpusBuild<br/>validate"]
   C["&lt;docId&gt;.md<br/>body only"]
   J["corpus.json<br/>metadata, heading paths, hashes"]
+  P["KnowledgePublish<br/>plan, tighten, upload,<br/>delete, verify"]
+  X[("knowledge-v1")]
 
   S --> B
   B --> C
   B --> J
+  C --> P
+  J --> P
+  P --> X
 ```
 
 - **Sources.** Each file has front matter (`docId`, `title`, `docType`) and a Markdown body. Classification comes from the folder, `general/` or `restricted/`, never from the file. Authoring rules are in [data/knowledge](../data/knowledge/README.md).
 - **Validation.** The front matter is read strictly. The body must start with one `#` heading matching the title, use `#` headings down to `###` without skipping a level, and keep every heading path unique. HTML, images, relative links, email addresses and URLs outside example domains, and numbers that pass the card checksum are rejected. Every problem is reported at once, with its file and line.
 - **Output.** The build writes each body, without front matter, as `<docId>.md`, plus `corpus.json` with each document's metadata, heading paths and `contentSha256` (SHA-256 of the uploaded bytes). The front matter is build metadata, so the index never has to interpret it.
-- **Identity.** A citation is a doc id plus a heading path. The doc id is permanent; a heading path is stable while the headings are. Moving a file between folders changes its classification but not its content hash, so the publishing step (next, with indexing) must compare metadata as well as content.
+- **Identity.** A citation is a doc id plus a heading path. The doc id is permanent; a heading path is stable while the headings are. Moving a file between folders changes its classification but not its content hash, so the publisher compares every stored field, not hashes.
 - **CI.** Every change builds the corpus; a shipped-corpus test also validates it.
+
+## Knowledge index
+
+CD builds the corpus and pushes it into the search index the AI release names in `retrieval.index` ([ADR 0005](adr/0005-indexing-by-pushing-from-the-pipeline.md)). There's no indexer, data source or search-side identity.
+
+- **Sections.** One search document per heading that has text of its own, split with the same Markdown parse that validated it, so what's indexed is what was checked. Headings without text stay in `corpus.json` for citations. A document with no text at all fails the build.
+- **Keys.** `<docId>--<SHA-256 of the heading path>`, with each heading length-prefixed, so a key is stable while its headings are and two different paths can't collide.
+- **Publishing.** The publisher reads every stored document and compares every field with what the corpus produces. Sections of a document that has become restricted are deleted and confirmed gone first; then new and changed sections are uploaded; then sections no longer in the corpus are deleted. It then reads everything back and requires an exact match, retrying briefly because Search is near-real-time. When the index already matches, no section is uploaded or deleted.
+- **Why tighten first.** A section that's briefly missing is safe; a restricted section that's briefly readable as general isn't.
+- **Index versions.** A schema change Search can't apply in place gets a new name in `retrieval.index`.
+- **Logs.** The publisher logs counts, doc ids and section paths, never section text.
+
+| Field | Type | Behaviour | Purpose |
+|---|---|---|---|
+| `id` | string | key, filterable, sortable | Section key; sorting lets the read-back page through every document |
+| `doc_id` | string | filterable | The document a section belongs to |
+| `title` | string | searchable | Document title |
+| `doc_type` | string | filterable | `runbook`, `processor-doc`, `policy` or `incident-report` |
+| `classification` | string | filterable | `general` or `restricted`; the field retrieval will filter on |
+| `h2`, `h3` | string | searchable | The section's headings below the title |
+| `section_path` | string | retrievable | Heading path for citations |
+| `ordinal` | int | sortable | The heading's position in the document |
+| `content` | string | searchable, `en.microsoft` | The section's Markdown, without headings |
+
+Every field is retrievable, so the publisher can compare it.
 
 ## Project references
 

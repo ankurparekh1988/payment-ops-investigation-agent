@@ -22,7 +22,7 @@ src/
   restricted/   readable by Risk & Compliance only
 ```
 
-Classification comes from the folder, never from the file. Moving a file between the folders changes who can read it and nothing else. The repository is public, so "restricted" decides what the assistant shows to whom, not who can read the source.
+Classification comes from the folder, never from the file. Moving a file between the folders changes who can read it and nothing else. To restrict a document, move its file and keep its doc id: the publisher removes the old general sections before the restricted ones are uploaded only when the doc id is the same. The repository is public, so "restricted" decides what the assistant shows to whom, not who can read the source.
 
 ## File format
 
@@ -44,12 +44,13 @@ docType: runbook
 
 ## Headings and citations
 
-Search splits each document by heading, and a citation points at a doc id and a heading path such as *Risk hold review policy > Risk rules > RF-37 volume spike*.
+The publisher splits each document into sections by heading, and a citation points at a doc id and a heading path such as *Risk hold review policy > Risk rules > RF-37 volume spike*.
 
 - The body starts with one `#` heading that matches the title, and it's the only one.
 - Use `##` and `###` below it without skipping a level. Nothing deeper.
 - Write headings with `#`, as plain text, and keep each heading path unique within the document.
 - A heading path is stable only while the headings are. Renaming a heading changes it, which is fine.
+- Each section with text of its own becomes one search document. A heading with no text directly under it, such as a `##` that only groups `###` sections, isn't indexed on its own. A document with no text under any heading fails the build.
 
 ## Public repository hygiene
 

@@ -10,6 +10,8 @@ internal sealed class ReleaseManifest
 
     public required ManifestModels Models { get; init; }
 
+    public required ManifestRetrieval Retrieval { get; init; }
+
     public required Dictionary<string, ManifestPrompt> Prompts { get; init; }
 }
 
@@ -46,6 +48,12 @@ internal class ModelDeployment
 internal sealed class FilteredModelDeployment : ModelDeployment
 {
     public required string ContentFilterPolicy { get; init; }
+}
+
+internal sealed class ManifestRetrieval
+{
+    // A breaking schema change gets a new name, so a live index is never changed incompatibly.
+    public required string Index { get; init; }
 }
 
 internal sealed class ManifestPrompt

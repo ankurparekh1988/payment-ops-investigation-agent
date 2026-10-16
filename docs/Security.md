@@ -86,7 +86,9 @@ Model choices, content filters and prompts are part of the build ([ADR 0004](adr
 
 ## Knowledge classification
 
-Knowledge documents are `general` (every signed-in user) or `restricted` (the Risk and Compliance group as well). The classification comes from the folder a source file is in, so it's visible in review and can't be set from inside a document. Restricted documents will be filtered out at retrieval time, before the model sees them.
+Knowledge documents are `general` (every signed-in user) or `restricted` (the Risk and Compliance group as well). The classification comes from the folder a source file is in, so it's visible in review and can't be set from inside a document. In the search index, each section carries its document's classification, and retrieval will filter on it before anything reaches the model.
+
+When a document becomes restricted, the publisher deletes its sections and confirms they're gone before uploading them again as restricted, so none of them is readable as general, even briefly. This follows the doc id: content moved into a restricted document with a different doc id leaves the old general sections in place until the end of the run, so a document is restricted by moving its file and keeping its doc id. The index holds restricted text, so it's readable only by identities with a Search data role: developers (Search Index Data Reader) and, from retrieval onwards, the web app. Only `gh-deploy` can write to it. The publish log names doc ids and section paths, never section text.
 
 The repository is public, so restricted sources are readable by anyone there. "Restricted" controls what the assistant shows to whom; it doesn't make the text secret, and nothing in the corpus may be real or sensitive. The build rejects numbers that pass the card checksum, and email addresses and `http`, `https` or `ftp` URLs outside reserved example domains. A bare host name in prose isn't checked, so review still matters.
 

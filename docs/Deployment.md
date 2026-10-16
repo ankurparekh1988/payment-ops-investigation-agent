@@ -139,7 +139,7 @@ The platform stack creates everything the application runs on. Each tier is size
 | Model deployments (`ai/manifest.yaml`) | Global Standard | None, billed per token | Pinned versions, no automatic upgrades |
 | App Service plan and web app (Linux, .NET 10) | F1 (free) | None | Enough for a demo workload. B1 and above add always-on and health-check eviction |
 | Knowledge storage | Standard LRS | Cents | Entra ID only |
-| Azure AI Search | Free | None | Will hold the knowledge index. API keys disabled. No SLA, and Microsoft may delete a free service that stays idle; the next deployment recreates it |
+| Azure AI Search | Free | None | Holds the knowledge index. API keys disabled. No SLA, and Microsoft may delete a free service that stays idle; the next deployment recreates it and publishes the corpus into it again |
 | Log Analytics and Application Insights | Pay per GB, with a daily cap | Within the free allowance | Ingestion requires Entra ID |
 | Budget and action group | | Free | Emails at 50%, 80% and 100% of actual spend, and on a forecast overrun |
 
@@ -201,7 +201,7 @@ flowchart LR
   B -->|no changes| D
   P -->|no changes| D
   D --> S["Smoke test<br/>/health, /health/ready"]
-  AP --> K["Check keyless search<br/>environment dev"]
+  AP --> K["Publish knowledge<br/>environment dev"]
   B -->|no changes| K
   P -->|no changes| K
 ```
@@ -213,9 +213,11 @@ flowchart LR
 | Apply | Runs only if the build also succeeded, so infrastructure never changes without a deployable app. Waits for approval in the `<env>-infra` environment, checks model capacity again (quota can change while approval waits), then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
 | Deploy app | Deploys the built artifact to the web app in the `<env>` environment |
 | Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry with its managed identity) |
-| Check keyless search | As `gh-deploy` in the `<env>` environment: confirms the search service has API keys disabled and refuses anonymous requests, then creates, writes, reads and deletes a throwaway index with an Entra token (`scripts/check-search-keyless.sh`) |
+| Publish knowledge | As `gh-deploy` in the `<env>` environment: builds the corpus, publishes it to the index the AI release names, and verifies every stored field. Runs on every deployment, so a recreated free service is filled again; when the index already matches, no section is uploaded or deleted |
 
 **Model capacity.** Quota is shared by every deployment of the same model and deployment type, so `scripts/check-model-capacity.sh` sums the capacity requested in the plan per model and deployment type and compares it with the subscription's quota. The environment's own existing deployments are added back to the headroom, so a re-apply doesn't count them twice. Quota doesn't guarantee that the region has capacity, so any new capacity is also checked against the region's available capacity.
+
+`.github/workflows/knowledge-selftest.yml` is started by hand. It runs the publisher's self-test against a throwaway index in the `<env>` environment: two small corpora, the second renaming and removing a heading and moving a document to restricted. It checks the sections, their metadata, the tighten order and that no stale section remains, then deletes its index. It refuses to run if `retrieval.index` is `knowledge-selftest`, the self-test's own index. It runs one at a time with CD and teardown, and never touches the infrastructure or the live index.
 
 `.github/workflows/teardown.yml` destroys the platform on demand. You type the environment name to start it; it plans the destroy and summarises what will be removed, then waits for the same approval and applies exactly that destroy plan. The bootstrap is never touched, so the environment can be redeployed.
 

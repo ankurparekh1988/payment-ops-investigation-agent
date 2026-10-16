@@ -13,10 +13,12 @@ public sealed record DeploymentIdentity(string Model, string Version, string Dep
 /// The validated AI release built into this artifact: which model deployments the app uses and the
 /// prompts it may send. Immutable once loaded.
 /// </summary>
+/// <param name="KnowledgeIndex">The search index the knowledge corpus is published to.</param>
 /// <param name="Deployments">Every deployment the manifest declares, by name, including inactive chat slots.</param>
 public sealed record AiRelease(
     string ActiveChatDeployment,
     string EmbeddingDeployment,
     string JudgeDeployment,
+    string KnowledgeIndex,
     IReadOnlyDictionary<string, DeploymentIdentity> Deployments,
     IReadOnlyDictionary<string, Prompt> Prompts);

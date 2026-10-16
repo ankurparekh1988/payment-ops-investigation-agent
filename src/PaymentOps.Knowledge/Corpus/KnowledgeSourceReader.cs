@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
+using PaymentOps.Knowledge.Indexing;
 using PaymentOps.Platform.Text;
 
 namespace PaymentOps.Knowledge.Corpus;
@@ -107,6 +108,12 @@ public static partial class KnowledgeSourceReader
         if (Encoding.UTF8.GetByteCount(content) > CorpusLimits.MaxContentBytes)
         {
             errors.Add($"{path}: the body is larger than {CorpusLimits.MaxContentBytes / 1024} KB; split it into separate documents.");
+        }
+
+        // Without an indexed section, nothing in the index would carry the document's classification.
+        if (!KnowledgeSections.Split(content).Any(s => s.HasText))
+        {
+            errors.Add($"{path}: {KnowledgeSections.NothingToIndex}");
         }
 
         return new KnowledgeSource(

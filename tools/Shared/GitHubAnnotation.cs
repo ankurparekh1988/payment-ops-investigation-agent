@@ -11,4 +11,12 @@ internal static class GitHubAnnotation
             .Replace("\n", "%0A", StringComparison.Ordinal);
         Console.Error.WriteLine($"::error title={title}::{escaped}");
     }
+
+    public static void Errors(string title, IEnumerable<string> messages)
+    {
+        foreach (var message in messages)
+        {
+            Error(title, message);
+        }
+    }
 }

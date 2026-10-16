@@ -21,10 +21,7 @@ try
 }
 catch (KnowledgeCorpusException ex)
 {
-    foreach (var error in ex.Errors)
-    {
-        GitHubAnnotation.Error("Knowledge corpus", error);
-    }
+    GitHubAnnotation.Errors("Knowledge corpus", ex.Errors);
 
     return 1;
 }

@@ -181,4 +181,12 @@ public sealed class KnowledgeSourceReaderTests
 
         Assert.Equal(2, tree.Errors().Count);
     }
+
+    [Fact]
+    public void A_document_with_no_text_to_index_fails_the_build()
+    {
+        using var tree = new SourceTree().Add("general/missing-settlement-batch.md", SourceTree.Source(body: "# Missing settlement batch\n\n## Empty\n"));
+
+        Assert.Contains(tree.Errors(), e => e.Contains("nothing to index", StringComparison.Ordinal));
+    }
 }

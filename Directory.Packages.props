@@ -13,6 +13,7 @@
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
   <ItemGroup Label="Knowledge">
+    <PackageVersion Include="Azure.Search.Documents" Version="12.0.0" />
     <PackageVersion Include="Markdig" Version="1.4.0" />
   </ItemGroup>
   <ItemGroup Label="Security pins">

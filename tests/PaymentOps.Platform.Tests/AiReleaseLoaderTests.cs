@@ -196,4 +196,32 @@ public sealed class AiReleaseLoaderTests
 
         Assert.True(errors.Count >= 3, string.Join(Environment.NewLine, errors));
     }
+
+    [Fact]
+    public void Loads_the_knowledge_index_name()
+    {
+        Assert.Equal("knowledge-v1", AiReleaseLoader.Load(TestRelease.WithOnePrompt()).KnowledgeIndex);
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("Knowledge-v1")]
+    [InlineData("-knowledge")]
+    [InlineData("knowledge-")]
+    [InlineData("knowledge--v1")]
+    [InlineData("knowledge_v1")]
+    public void An_invalid_index_name_fails(string name)
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: {name}")).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("retrieval.index", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_missing_retrieval_section_fails()
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: string.Empty)).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("retrieval", StringComparison.OrdinalIgnoreCase));
+    }
 }
