@@ -29,7 +29,7 @@ public sealed class KnowledgeBodyTests
     [Fact]
     public void The_same_heading_under_different_parents_is_fine()
     {
-        const string Body = "# Missing settlement batch\n\n## Fabrikam Pay\n\n### Timing\n\n## Northwind Acquiring\n\n### Timing\n";
+        const string Body = "# Missing settlement batch\n\n## Fabrikam Pay\n\n### Timing\n\nSame day.\n\n## Northwind Acquiring\n\n### Timing\n\nNext day.\n";
         using var tree = new SourceTree().Add("general/missing-settlement-batch.md", SourceTree.Source(body: Body));
 
         Assert.Equal(5, tree.Read()[0].SectionPaths.Count);

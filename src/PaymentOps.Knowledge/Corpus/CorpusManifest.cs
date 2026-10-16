@@ -81,28 +81,31 @@ public sealed record CorpusManifest(int SchemaVersion, IReadOnlyList<CorpusDocum
         }
     }
 
-    // The files a previous build wrote, according to its corpus.json, or null if that file isn't a
-    // corpus manifest this build understands. Every name is checked to be a plain <docId>.md.
-    private static HashSet<string>? PreviousBuildFiles(string outputDirectory)
+    /// <summary>The corpus.json in <paramref name="directory"/>, or null if it isn't one this build reads.
+    /// Every content path is checked to be a plain <c>&lt;docId&gt;.md</c> beside it.</summary>
+    internal static CorpusManifest? TryRead(string directory)
     {
-        CorpusManifest? previous;
+        CorpusManifest? manifest;
         try
         {
-            previous = JsonSerializer.Deserialize<CorpusManifest>(File.ReadAllText(Path.Combine(outputDirectory, FileName)), Json);
+            manifest = JsonSerializer.Deserialize<CorpusManifest>(File.ReadAllText(Path.Combine(directory, FileName)), Json);
         }
-        catch (Exception ex) when (ex is JsonException or IOException or NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or IOException or NotSupportedException or UnauthorizedAccessException)
         {
             return null;
         }
 
-        if (previous is not { SchemaVersion: CurrentSchemaVersion, Documents: { } documents }
-            || documents.Any(d => d?.DocId is null || !KnowledgeSourceReader.DocIdPattern().IsMatch(d.DocId) || d.ContentPath != $"{d.DocId}.md"))
-        {
-            return null;
-        }
-
-        return new HashSet<string>(documents.Select(d => d.ContentPath).Append(FileName), StringComparer.Ordinal);
+        return manifest is { SchemaVersion: CurrentSchemaVersion, Documents: { } documents }
+            && documents.All(d => d?.DocId is not null && KnowledgeSourceReader.DocIdPattern().IsMatch(d.DocId) && d.ContentPath == $"{d.DocId}.md")
+            ? manifest
+            : null;
     }
+
+    // The files a previous build wrote, according to its corpus.json, or null if there isn't one this build reads.
+    private static HashSet<string>? PreviousBuildFiles(string outputDirectory) =>
+        TryRead(outputDirectory) is { } previous
+            ? new HashSet<string>(previous.Documents.Select(d => d.ContentPath).Append(FileName), StringComparer.Ordinal)
+            : null;
 }
 
 /// <summary>One built document.</summary>
