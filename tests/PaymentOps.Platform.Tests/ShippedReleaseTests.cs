@@ -27,4 +27,10 @@ public sealed class ShippedReleaseTests
             Assert.Equal(repository.Read(prompt), embedded.Read(prompt));
         }
     }
+
+    [Fact]
+    public void The_shipped_release_names_the_knowledge_index()
+    {
+        Assert.Equal("knowledge-v1", AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).KnowledgeIndex);
+    }
 }

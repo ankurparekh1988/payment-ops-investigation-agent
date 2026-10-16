@@ -45,6 +45,11 @@ models:
     capacityK: 50
     contentFilterPolicy: default
 
+# The search index the knowledge corpus is published to. A schema change that Search can't apply
+# in place gets a new name, and the old index is removed by hand once nothing reads it.
+retrieval:
+  index: knowledge-v1
+
 # Prompts embedded in the application, keyed by id. A prompt's body can't change without a higher
 # version: CI compares this section with the base branch. Each prompt is added with the code that
 # first uses it.

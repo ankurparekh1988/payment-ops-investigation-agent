@@ -36,6 +36,11 @@ internal static partial class ReleaseManifestValidator
             errors.Add($"Deployment name '{duplicate.Key}' is used more than once.");
         }
 
+        if (!SearchIndexName().IsMatch(manifest.Retrieval.Index))
+        {
+            errors.Add($"retrieval.index '{manifest.Retrieval.Index}' must be lowercase letters and digits in hyphen-separated words, 2 to 128 characters.");
+        }
+
         foreach (var (id, prompt) in manifest.Prompts)
         {
             if (!PromptId().IsMatch(id))
@@ -97,4 +102,8 @@ internal static partial class ReleaseManifestValidator
 
     [GeneratedRegex("^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)]
     private static partial Regex Sha256();
+
+    // Search allows 2-128 characters and underscores too; hyphen-separated words keep names uniform.
+    [GeneratedRegex("^(?=.{2,128}$)[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.CultureInvariant)]
+    private static partial Regex SearchIndexName();
 }

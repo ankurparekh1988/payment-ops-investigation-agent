@@ -41,8 +41,10 @@ internal sealed class TestRelease : IAiReleaseSource
     public static string PromptFile(string id = "grounded-answer", string version = "0.1.0", string body = Body) =>
         $"---\nid: {id}\nversion: {version}\n---\n{body}";
 
-    public static string Manifest(string prompts = "prompts: {}", string models = Models, string schema = "schemaVersion: 1") =>
-        $"{schema}\n{models}\n{prompts}\n";
+    public const string Retrieval = "retrieval:\n  index: knowledge-v1";
+
+    public static string Manifest(string prompts = "prompts: {}", string models = Models, string schema = "schemaVersion: 1", string retrieval = Retrieval) =>
+        $"{schema}\n{models}\n{retrieval}\n{prompts}\n";
 
     public static string PromptEntry(string id = "grounded-answer", string version = "0.1.0", string body = Body) =>
         $"prompts:\n  {id}:\n    version: {version}\n    sha256: {PromptHasher.Hash(body)}";

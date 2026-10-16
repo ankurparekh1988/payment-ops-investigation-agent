@@ -53,6 +53,7 @@ public static class AiReleaseLoader
             models.Chat.Deployments[models.Chat.Active].Deployment,
             models.Embedding.Deployment,
             models.Judge.Deployment,
+            manifest.Retrieval.Index,
             ReleaseManifestValidator.AllDeployments(manifest).ToFrozenDictionary(
                 d => d.Deployment.Deployment, d => Identity(d.Deployment), StringComparer.Ordinal),
             prompts.ToFrozenDictionary(StringComparer.Ordinal));
