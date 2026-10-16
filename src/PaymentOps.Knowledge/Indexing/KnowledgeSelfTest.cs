@@ -108,13 +108,15 @@ public static class KnowledgeSelfTest
             await publisher.PublishAsync(b, cancellationToken);
             var storedB = await index.ReadAllAsync(cancellationToken);
 
+            // A lookup right after the delete may still find the section, so the publisher can look more than once.
             var policyKeys = string.Join(",", a.Where(d => d.DocId == "selftest-policy").Select(d => d.Id).Order(StringComparer.Ordinal));
+            var lookups = recorder.Calls.Skip(1).TakeWhile(c => c == $"find:{policyKeys}").Count();
             Require(
-                recorder.Calls.Count >= 3 && recorder.Calls[0] == $"delete:{policyKeys}" && recorder.Calls[1] == $"find:{policyKeys}"
-                    && recorder.Calls[2].StartsWith("upload:", StringComparison.Ordinal)
+                recorder.Calls.FirstOrDefault() == $"delete:{policyKeys}" && lookups > 0
+                    && recorder.Calls.ElementAtOrDefault(1 + lookups)?.StartsWith("upload:", StringComparison.Ordinal) == true
                     && storedB.Where(d => d.DocId == "selftest-policy").All(d => d.Classification == KnowledgeClassification.Restricted),
                 "general to restricted deletes and confirms before uploading", storedB);
-            proved.Add($"General to restricted: deleted, confirmed gone, then uploaded as restricted ({string.Join(" → ", recorder.Calls.Select(w => w.Split(':')[0]))}).");
+            proved.Add($"General to restricted: deleted, confirmed gone, then uploaded as restricted ({string.Join(" → ", recorder.Calls.Select(c => c.Split(':')[0]))}).");
 
             Require(
                 Paths(storedB).SequenceEqual(["Self-test policy > Scope", "Self-test runbook", "Self-test runbook > Steps > Split files"]),

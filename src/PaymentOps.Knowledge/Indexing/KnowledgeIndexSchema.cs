@@ -23,7 +23,7 @@ internal static class KnowledgeIndexSchema
             new SearchableField("title"),
             new SimpleField("doc_type", SearchFieldDataType.String) { IsFilterable = true },
 
-            // The security filter in Commit 10; values are "general" and "restricted".
+            // Retrieval filters on this; values are "general" and "restricted".
             new SimpleField("classification", SearchFieldDataType.String) { IsFilterable = true },
             new SearchableField("h2"),
             new SearchableField("h3"),

@@ -15,6 +15,9 @@ internal sealed class FakeKnowledgeIndex : IKnowledgeIndexClient
     /// <summary>Keys a delete leaves in place.</summary>
     public HashSet<string> StuckKeys { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>How many more key lookups still find every key asked about, like a delete not yet visible.</summary>
+    public int LaggingFinds { get; set; }
+
     /// <summary>How many more full reads return the state from before the latest writes.</summary>
     public int LaggingReads { get; set; }
 
@@ -69,6 +72,12 @@ internal sealed class FakeKnowledgeIndex : IKnowledgeIndexClient
     public Task<IReadOnlyList<string>> FindExistingAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken)
     {
         Operations.Add("find:" + Join(keys));
+        if (LaggingFinds > 0)
+        {
+            LaggingFinds--;
+            return Task.FromResult<IReadOnlyList<string>>([.. keys]);
+        }
+
         return Task.FromResult<IReadOnlyList<string>>([.. keys.Where(_stored.ContainsKey)]);
     }
 

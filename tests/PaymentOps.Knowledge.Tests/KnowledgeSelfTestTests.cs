@@ -49,4 +49,14 @@ public sealed class KnowledgeSelfTestTests
 
         await Assert.ThrowsAsync<KnowledgePublishException>(() => Run(index));
     }
+
+    [Fact]
+    public async Task Passes_when_the_first_lookups_after_the_tighten_still_find_the_section()
+    {
+        var index = new FakeKnowledgeIndex { LaggingFinds = 2 };
+
+        var proved = await Run(index);
+
+        Assert.Equal(4, proved.Count);
+    }
 }

@@ -22,7 +22,7 @@ src/
   restricted/   readable by Risk & Compliance only
 ```
 
-Classification comes from the folder, never from the file. Moving a file between the folders changes who can read it and nothing else. The repository is public, so "restricted" decides what the assistant shows to whom, not who can read the source.
+Classification comes from the folder, never from the file. Moving a file between the folders changes who can read it and nothing else. To restrict a document, move its file and keep its doc id: the publisher removes the old general sections before the restricted ones are uploaded only when the doc id is the same. The repository is public, so "restricted" decides what the assistant shows to whom, not who can read the source.
 
 ## File format
 

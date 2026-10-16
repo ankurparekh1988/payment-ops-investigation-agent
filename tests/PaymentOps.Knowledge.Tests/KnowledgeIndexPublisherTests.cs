@@ -90,4 +90,17 @@ public sealed class KnowledgeIndexPublisherTests
     {
         await Assert.ThrowsAsync<KnowledgePublishException>(() => Publisher(new FakeKnowledgeIndex()).PublishAsync([]));
     }
+
+    [Fact]
+    public async Task Waits_for_a_tightened_section_to_disappear_before_uploading()
+    {
+        var general = Section("policy", h2: "Scope");
+        var index = new FakeKnowledgeIndex { LaggingFinds = 2 }.With(general);
+        var restricted = general with { Classification = KnowledgeClassification.Restricted };
+
+        await Publisher(index).PublishAsync([restricted]);
+
+        var calls = index.Operations.Where(o => o.Split(':')[0] is "delete" or "find" or "upload").ToList();
+        Assert.Equal([$"delete:{general.Id}", $"find:{general.Id}", $"find:{general.Id}", $"find:{general.Id}", $"upload:{restricted.Id}"], calls);
+    }
 }
