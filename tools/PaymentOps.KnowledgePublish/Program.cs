@@ -35,8 +35,6 @@ var credential = new AzureCliCredential();
 try
 {
     var indexName = AiReleaseLoader.Load(new DirectoryAiReleaseSource(aiDirectory)).KnowledgeIndex;
-    KnowledgeSelfTest.RequireDistinctFrom(indexName);
-
     if (corpusDirectory is null)
     {
         foreach (var line in await KnowledgeSelfTest.RunAsync(SearchKnowledgeIndexClient.Create(endpoint, KnowledgeSelfTest.IndexName, credential), indexName))
@@ -47,6 +45,7 @@ try
         return 0;
     }
 
+    KnowledgeSelfTest.RequireDistinctFrom(indexName);
     var documents = IndexedCorpus.Load(corpusDirectory);
     var publisher = new KnowledgeIndexPublisher(SearchKnowledgeIndexClient.Create(endpoint, indexName, credential));
     var plan = await publisher.PublishAsync(documents);
@@ -63,19 +62,13 @@ try
 }
 catch (KnowledgeCorpusException ex)
 {
-    foreach (var error in ex.Errors)
-    {
-        GitHubAnnotation.Error("Knowledge corpus", error);
-    }
+    GitHubAnnotation.Errors("Knowledge corpus", ex.Errors);
 
     return 1;
 }
 catch (AiReleaseException ex)
 {
-    foreach (var error in ex.Errors)
-    {
-        GitHubAnnotation.Error("AI release", error);
-    }
+    GitHubAnnotation.Errors("AI release", ex.Errors);
 
     return 1;
 }

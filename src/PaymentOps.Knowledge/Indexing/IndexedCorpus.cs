@@ -93,7 +93,7 @@ public static class IndexedCorpus
         var indexed = sections.Where(s => s.HasText).ToList();
         if (indexed.Count == 0)
         {
-            errors.Add($"{entry.ContentPath}: no section has text of its own, so there's nothing to index.");
+            errors.Add($"{entry.ContentPath}: {KnowledgeSections.NothingToIndex}");
             return [];
         }
 

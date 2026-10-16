@@ -16,6 +16,9 @@ public sealed record KnowledgeSection(SectionPath Path, int Ordinal, string Cont
 
 internal static class KnowledgeSections
 {
+    /// <summary>Why a document with no section text is refused, by the corpus build and again when publishing.</summary>
+    public const string NothingToIndex = "no section has text of its own, so there's nothing to index.";
+
     /// <summary>
     /// Splits validated content with the same parse that validated it, so the sections indexed are
     /// the sections checked. Every heading is returned, with or without text.

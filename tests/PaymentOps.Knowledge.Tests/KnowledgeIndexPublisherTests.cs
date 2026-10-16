@@ -82,7 +82,7 @@ public sealed class KnowledgeIndexPublisherTests
         var plan = await Publisher(index).PublishAsync([Section()]);
 
         Assert.True(plan.IsEmpty);
-        Assert.Equal(["ensure", "read", "read"], index.Operations);
+        Assert.Equal(["ensure", "read"], index.Operations);
     }
 
     [Fact]

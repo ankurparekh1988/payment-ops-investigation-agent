@@ -113,7 +113,7 @@ public static partial class KnowledgeSourceReader
         // Without an indexed section, nothing in the index would carry the document's classification.
         if (!KnowledgeSections.Split(content).Any(s => s.HasText))
         {
-            errors.Add($"{path}: no section has text of its own, so there's nothing to index.");
+            errors.Add($"{path}: {KnowledgeSections.NothingToIndex}");
         }
 
         return new KnowledgeSource(

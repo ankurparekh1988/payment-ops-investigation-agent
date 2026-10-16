@@ -23,6 +23,12 @@ public sealed class KnowledgeIndexPublisher(IKnowledgeIndexClient index, Func<Ti
         await index.EnsureIndexAsync(cancellationToken);
         var plan = PublishPlan.Create(desired, await index.ReadAllAsync(cancellationToken));
 
+        // An empty plan means that read already matched every field, so there's nothing to verify again.
+        if (plan.IsEmpty)
+        {
+            return plan;
+        }
+
         if (plan.Tighten.Count > 0)
         {
             var keys = plan.Tighten.Select(d => d.Id).ToList();
