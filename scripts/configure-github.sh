@@ -50,7 +50,7 @@ fi
 required_settings=(
   TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER
   TF_VAR_location TF_VAR_name_prefix TF_VAR_environment TF_VAR_app_service_sku TF_VAR_dotnet_version
-  TF_VAR_storage_replication_type TF_VAR_log_retention_days TF_VAR_log_daily_quota_gb
+  TF_VAR_storage_replication_type TF_VAR_search_sku TF_VAR_log_retention_days TF_VAR_log_daily_quota_gb
   TF_VAR_monthly_budget TF_VAR_model_retirement_buffer_days
 )
 # Written by scripts/identity.sh, which needs a deployed platform, so empty on a first run.

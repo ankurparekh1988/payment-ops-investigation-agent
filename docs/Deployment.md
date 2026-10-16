@@ -9,7 +9,7 @@ All Azure infrastructure is Terraform, in three layers ([ADR 0001](adr/0001-terr
 ```text
 infra/
 ├─ modules/        building blocks: state-storage, github-oidc-identity, foundry, web-app,
-│                  storage-account, monitoring, cost-guardrail
+│                  storage-account, search-service, monitoring, cost-guardrail
 ├─ stacks/         compositions: bootstrap, platform
 └─ deployments/    where a stack meets a real subscription: backend, providers, values from env
 ```
@@ -48,6 +48,7 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_app_service_sku` | `F1` | App Service plan tier |
 | `TF_VAR_dotnet_version` | `10.0` | .NET runtime |
 | `TF_VAR_storage_replication_type` | `LRS` | Knowledge storage redundancy |
+| `TF_VAR_search_sku` | `free` | Search service tier |
 | `TF_VAR_log_retention_days`, `TF_VAR_log_daily_quota_gb` | `30`, `0.5` | Telemetry retention and daily ingestion cap |
 | `TF_VAR_monthly_budget` | `10` | Budget that triggers alert emails |
 | `TF_VAR_alert_email` | | Where budget and operational alerts go |
@@ -84,9 +85,14 @@ Later runs apply against the remote state directly. To check for drift, run the 
 | `id-<prefix>-gh-plan` | Pipeline identity for read-only plans |
 | `id-<prefix>-gh-deploy` | Pipeline identity for approved deployments |
 | *Model Availability Reader* role | Custom role for the model preflight (below) |
+| `gh-deploy` search roles | Search Service Contributor and Search Index Data Contributor on the environment's resource group, so the pipeline can create the knowledge index and publish to it |
 | Developer role assignments | Optional, for `TF_VAR_developer_object_ids` |
 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
+
+**Why the search roles are granted here, on the resource group.** The pipeline has to manage the index from its first run, and a role granted in the same run as the service it applies to may not be effective yet. The search service doesn't exist when the bootstrap runs, so the grant can't name it; the resource group holds only this environment.
+
+An existing environment picks up a bootstrap change by running `scripts/bootstrap.sh` again: review that its plan adds only what the change describes, then run it once more and confirm it reports no changes. A new setting, such as `TF_VAR_search_sku`, goes into `.env` and then `scripts/configure-github.sh`, before the change is planned or deployed; until then every pipeline plan fails on the missing variable.
 
 **Why two resource groups.** `gh-deploy` is Contributor on the environment's resource group, which would include changing managed identities and their federated credentials. Keeping the pipeline identities and Terraform state in a separate group, where the pipeline has no rights, means a workflow can't widen its own trust or delete its own state. It also lets an environment be torn down and rebuilt without touching what the pipeline depends on.
 
@@ -133,6 +139,7 @@ The platform stack creates everything the application runs on. Each tier is size
 | Model deployments (`ai/manifest.yaml`) | Global Standard | None, billed per token | Pinned versions, no automatic upgrades |
 | App Service plan and web app (Linux, .NET 10) | F1 (free) | None | Enough for a demo workload. B1 and above add always-on and health-check eviction |
 | Knowledge storage | Standard LRS | Cents | Entra ID only |
+| Azure AI Search | Free | None | Will hold the knowledge index. API keys disabled. No SLA, and Microsoft may delete a free service that stays idle; the next deployment recreates it |
 | Log Analytics and Application Insights | Pay per GB, with a daily cap | Within the free allowance | Ingestion requires Entra ID |
 | Budget and action group | | Free | Emails at 50%, 80% and 100% of actual spend, and on a forecast overrun |
 
@@ -194,6 +201,9 @@ flowchart LR
   B -->|no changes| D
   P -->|no changes| D
   D --> S["Smoke test<br/>/health, /health/ready"]
+  AP --> K["Check keyless search<br/>environment dev"]
+  B -->|no changes| K
+  P -->|no changes| K
 ```
 
 | Job | What it does |
@@ -203,6 +213,7 @@ flowchart LR
 | Apply | Runs only if the build also succeeded, so infrastructure never changes without a deployable app. Waits for approval in the `<env>-infra` environment, checks model capacity again (quota can change while approval waits), then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
 | Deploy app | Deploys the built artifact to the web app in the `<env>` environment |
 | Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry with its managed identity) |
+| Check keyless search | As `gh-deploy` in the `<env>` environment: confirms the search service has API keys disabled and refuses anonymous requests, then creates, writes, reads and deletes a throwaway index with an Entra token (`scripts/check-search-keyless.sh`) |
 
 **Model capacity.** Quota is shared by every deployment of the same model and deployment type, so `scripts/check-model-capacity.sh` sums the capacity requested in the plan per model and deployment type and compares it with the subscription's quota. The environment's own existing deployments are added back to the headroom, so a re-apply doesn't count them twice. Quota doesn't guarantee that the region has capacity, so any new capacity is also checked against the region's available capacity.
 
@@ -265,7 +276,7 @@ flowchart LR
 | Identity | Trusted contexts | Permissions |
 |---|---|---|
 | `gh-plan` | Pull requests; the `main` branch | Reader on the subscription; Web App Configuration Reader on the environment's resource group, to refresh the web app; read-only access to state (plans run with `-lock=false`) |
-| `gh-deploy` | GitHub environments `<env>-infra` and `<env>` only | Contributor on the environment's resource group; read/write state; limited role granting (below); Model Availability Reader |
+| `gh-deploy` | GitHub environments `<env>-infra` and `<env>` only | Contributor on the environment's resource group; Search Service Contributor and Search Index Data Contributor there; read/write state; limited role granting (below); Model Availability Reader |
 
 A pull request can show what *would* change, but cannot change anything. Only jobs running in the named GitHub environments can use `gh-deploy`. Protection rules on those environments, including required reviewers, are set up together with the deployment workflows.
 

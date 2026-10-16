@@ -37,3 +37,7 @@ output "knowledge_storage_account" {
 output "application_insights_name" {
   value = module.platform.application_insights_name
 }
+
+output "search_endpoint" {
+  value = module.platform.search_endpoint
+}

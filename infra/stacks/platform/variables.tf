@@ -44,6 +44,11 @@ variable "storage_replication_type" {
   type        = string
 }
 
+variable "search_sku" {
+  description = "Search service tier, for example free or basic."
+  type        = string
+}
+
 variable "log_retention_days" {
   description = "Days telemetry is kept."
   type        = number

@@ -153,6 +153,17 @@ resource "azurerm_role_assignment" "deploy_state_contributor" {
   principal_type       = "ServicePrincipal"
 }
 
+# Index management and section upload for the knowledge publisher. Scoped to the resource group
+# because the search service doesn't exist yet when the bootstrap runs, and it holds only this workload.
+resource "azurerm_role_assignment" "deploy_search" {
+  for_each = toset(["Search Service Contributor", "Search Index Data Contributor"])
+
+  scope              = azurerm_resource_group.workload.id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles[each.value]}"
+  principal_id       = module.deploy_identity.principal_id
+  principal_type     = "ServicePrincipal"
+}
+
 # The platform needs role assignments (keyless access everywhere), so the deploy identity may
 # assign roles, but only the allow-listed roles above and only to service principals such as
 # managed identities. It cannot grant Owner or Contributor, or assign anything to users or groups.
