@@ -215,10 +215,10 @@ jobs:
           APP_NAME: ${{ steps.target.outputs.app-name }}
         run: az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path app.zip --type zip
 
-  check-search:
-    name: Check keyless search
+  publish-knowledge:
+    name: Publish knowledge
     needs: [build, plan, apply]
-    # Same gate as deploy-app: it changes the environment (a throwaway index), so only with a good build.
+    # Same gate as deploy-app. Running alongside it is safe only while the app doesn't read the index.
     if: >-
       always() && needs.build.result == 'success' && needs.plan.result == 'success'
       && (needs.apply.result == 'success' || needs.apply.result == 'skipped')
@@ -236,20 +236,18 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
       - uses: ./.github/actions/terraform-setup
         with:
           terraform-version: ${{ env.TERRAFORM_VERSION }}
           settings: ${{ vars.TERRAFORM_SETTINGS }}
 
-      - name: Find target
+      - name: Find the search endpoint
         id: target
-        # One output call, because each one re-initialises Terraform.
-        run: |
-          outputs="$(scripts/terraform.sh platform output -json)"
-          {
-            echo "resource-group=$(jq -r .resource_group_name.value <<< "$outputs")"
-            echo "search-endpoint=$(jq -r .search_endpoint.value <<< "$outputs")"
-          } >> "$GITHUB_OUTPUT"
+        run: echo "search-endpoint=$(scripts/terraform.sh platform output -raw search_endpoint)" >> "$GITHUB_OUTPUT"
 
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
@@ -257,11 +255,14 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Check
+      - name: Build the knowledge corpus
+        run: dotnet run --project tools/PaymentOps.CorpusBuild --configuration Release -- data/knowledge/src --out "$RUNNER_TEMP/knowledge"
+
+      # Every run, so a recreated free service is refilled. No document changes when the index already matches.
+      - name: Publish
         env:
-          RESOURCE_GROUP: ${{ steps.target.outputs.resource-group }}
           SEARCH_ENDPOINT: ${{ steps.target.outputs.search-endpoint }}
-        run: scripts/check-search-keyless.sh "$RESOURCE_GROUP" "$SEARCH_ENDPOINT"
+        run: dotnet run --project tools/PaymentOps.KnowledgePublish --configuration Release -- "$RUNNER_TEMP/knowledge" --endpoint "$SEARCH_ENDPOINT" --ai ai
 
   smoke:
     name: Smoke test
