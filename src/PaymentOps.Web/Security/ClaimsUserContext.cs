@@ -44,7 +44,9 @@ internal sealed class ClaimsUserContext(CurrentUserAccessor accessor, IOptions<A
         }
     }
 
-    public bool CanAccessRestrictedKnowledge => GroupIds.Contains(access.Value.RestrictedGroupId);
+    // Fails closed: with no group configured, nobody gets Restricted knowledge, even with an empty groups claim.
+    public bool CanAccessRestrictedKnowledge =>
+        !string.IsNullOrEmpty(access.Value.RestrictedGroupId) && GroupIds.Contains(access.Value.RestrictedGroupId);
 
     public bool IsInRole(string role) => Roles.Contains(role);
 
