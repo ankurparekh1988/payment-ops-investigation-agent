@@ -42,4 +42,10 @@ public sealed class ShippedReleaseTests
         Assert.Equal(RetrievalMode.Lexical, release.RetrievalMode);
         Assert.Null(release.SemanticFloor);
     }
+
+    [Fact]
+    public void The_shipped_release_has_the_grounded_answer_prompt()
+    {
+        Assert.Contains("grounded-answer", AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).Prompts.Keys);
+    }
 }
