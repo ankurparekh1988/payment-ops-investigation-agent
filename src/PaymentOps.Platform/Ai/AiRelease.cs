@@ -14,11 +14,15 @@ public sealed record DeploymentIdentity(string Model, string Version, string Dep
 /// prompts it may send. Immutable once loaded.
 /// </summary>
 /// <param name="KnowledgeIndex">The search index the knowledge corpus is published to.</param>
+/// <param name="RetrievalMode">How the knowledge index is queried.</param>
+/// <param name="SemanticFloor">Minimum reranker score a semantic hit needs to count as evidence; null for none.</param>
 /// <param name="Deployments">Every deployment the manifest declares, by name, including inactive chat slots.</param>
 public sealed record AiRelease(
     string ActiveChatDeployment,
     string EmbeddingDeployment,
     string JudgeDeployment,
     string KnowledgeIndex,
+    RetrievalMode RetrievalMode,
+    double? SemanticFloor,
     IReadOnlyDictionary<string, DeploymentIdentity> Deployments,
     IReadOnlyDictionary<string, Prompt> Prompts);

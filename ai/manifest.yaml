@@ -45,10 +45,12 @@ models:
     capacityK: 50
     contentFilterPolicy: default
 
-# The search index the knowledge corpus is published to. A schema change that Search can't apply
-# in place gets a new name, and the old index is removed by hand once nothing reads it.
+# The search index the knowledge corpus is published to, and how the app queries it. A schema change
+# that Search can't apply in place gets a new name, and the old index is removed by hand once nothing
+# reads it. mode is lexical or semantic; semanticFloor (semantic only, 0-4) drops weaker hits.
 retrieval:
   index: knowledge-v1
+  mode: lexical
 
 # Prompts embedded in the application, keyed by id. A prompt's body can't change without a higher
 # version: CI compares this section with the base branch. Each prompt is added with the code that
