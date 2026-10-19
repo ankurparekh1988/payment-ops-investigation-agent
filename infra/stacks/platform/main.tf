@@ -100,6 +100,7 @@ module "search" {
   resource_group_id = data.azurerm_resource_group.this.id
   location          = var.location
   sku               = var.search_sku
+  semantic_search   = var.search_semantic_ranker
   tags              = local.tags
 }
 
@@ -128,8 +129,7 @@ module "web_app" {
   app_settings = merge({
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.monitoring.connection_string
     PaymentOps__Foundry__Endpoint         = module.foundry.openai_endpoint
-    PaymentOps__Knowledge__BlobEndpoint   = module.knowledge_storage.blob_endpoint
-    PaymentOps__Knowledge__Container      = local.knowledge_container
+    PaymentOps__Search__Endpoint          = module.search.endpoint
 
     # App Service terminates TLS, so sign-in redirects must come from the forwarded scheme.
     ASPNETCORE_FORWARDEDHEADERS_ENABLED = "true"
@@ -187,9 +187,10 @@ resource "azurerm_role_assignment" "app_foundry" {
   principal_type       = "ServicePrincipal"
 }
 
-resource "azurerm_role_assignment" "app_knowledge_reader" {
-  scope                = module.knowledge_storage.container_ids[local.knowledge_container]
-  role_definition_name = "Storage Blob Data Reader"
+# Queries and source lookups; the app reads the index and nothing else in Search.
+resource "azurerm_role_assignment" "app_search_reader" {
+  scope                = module.search.id
+  role_definition_name = "Search Index Data Reader"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
   principal_type       = "ServicePrincipal"
 }
