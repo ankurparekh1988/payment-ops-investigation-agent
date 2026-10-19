@@ -61,6 +61,10 @@ public sealed class KnowledgeRetriever
         {
             throw new KnowledgeUnavailableException(ex);
         }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
     }
 
     /// <summary>Readiness: one query that returns no documents, proving endpoint, index, token and role.</summary>
@@ -71,6 +75,10 @@ public sealed class KnowledgeRetriever
             await _client.SearchAsync<SearchHitDocument>("*", new SearchOptions { Size = 0 }, cancellationToken);
         }
         catch (RequestFailedException ex)
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
         {
             throw new KnowledgeUnavailableException(ex);
         }

@@ -100,11 +100,11 @@ internal sealed class GroundedAnswerService(
             }
 
             // Expected service failures only; anything else is a bug and stays an exception.
-            catch (Exception ex) when (ex is ClientResultException or HttpRequestException)
+            catch (Exception ex) when (ModelFailure.IsServiceFailure(ex))
             {
-                var blocked = ModelFailure.IsContentFilterRejection(ex);
+                var client = ModelFailure.LastAttempt(ex);
+                var blocked = client is not null && ModelFailure.IsContentFilterRejection(client);
                 var reason = blocked ? NotAnsweredReason.AnswerBlocked : NotAnsweredReason.AnswerUnavailable;
-                var client = ex as ClientResultException;
                 GroundedAnswerLog.DependencyFailed(logger, reason, "Model", blocked ? "content filter" : FailureClass(client?.Status),
                     client?.Status, client is null ? null : ModelFailure.ErrorCode(client), client is null ? null : ModelFailure.RequestId(client), ex);
                 return new NotAnswered(reason);

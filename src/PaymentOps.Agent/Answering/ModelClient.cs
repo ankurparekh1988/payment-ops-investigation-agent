@@ -20,9 +20,9 @@ internal static class ModelClient
         var options = new OpenAIClientOptions { Endpoint = new Uri(foundryEndpoint, "openai/v1/") };
         if (handler is not null)
         {
-            // Tests only: answer from a stub and fail fast instead of retrying.
+            // Tests only: answer from a stub, with one retry so retry behaviour stays exercised.
             options.Transport = new HttpClientPipelineTransport(new HttpClient(handler));
-            options.RetryPolicy = new ClientRetryPolicy(maxRetries: 0);
+            options.RetryPolicy = new ClientRetryPolicy(maxRetries: 1);
         }
 
         // The SDK marks its token-based constructor experimental, but it's the only keyless way in.

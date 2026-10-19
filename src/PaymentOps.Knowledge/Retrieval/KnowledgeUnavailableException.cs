@@ -19,12 +19,19 @@ public sealed class KnowledgeUnavailableException : Exception
     {
     }
 
+    // Status 0 means no response at all: the service couldn't be reached.
     internal KnowledgeUnavailableException(RequestFailedException inner)
-        : base($"Search returned {inner.Status} ({inner.ErrorCode ?? "no error code"}).", inner)
+        : base(inner.Status == 0 ? $"Search couldn't be reached: {inner.Message}" : $"Search returned {inner.Status} ({inner.ErrorCode ?? "no error code"}).", inner)
     {
-        Status = inner.Status;
+        Status = inner.Status == 0 ? null : inner.Status;
         ErrorCode = inner.ErrorCode;
         RequestId = inner.GetRawResponse()?.ClientRequestId;
+    }
+
+    // The SDK reports a request that failed on every retry as an aggregate; the last attempt is the one to report.
+    internal KnowledgeUnavailableException(AggregateException retries)
+        : this(retries.InnerExceptions.OfType<RequestFailedException>().Last())
+    {
     }
 
     public int? Status { get; }

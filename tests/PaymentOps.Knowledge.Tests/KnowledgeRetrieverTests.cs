@@ -107,6 +107,28 @@ public sealed class KnowledgeRetrieverTests
     }
 
     [Fact]
+    public async Task An_unreachable_service_is_reported_as_unavailable_after_retries()
+    {
+        var handler = new StubSearchHandler(_ => throw new HttpRequestException("No such host is known."));
+        var retriever = KnowledgeRetriever.Create(new Uri("https://search.example"), "knowledge-test", new StaticTokenCredential(), handler);
+
+        var ex = await Assert.ThrowsAsync<KnowledgeUnavailableException>(() =>
+            retriever.RetrieveAsync("q", KnowledgeAccess.From(TestUser.General), RetrievalMode.Lexical, null, CancellationToken.None));
+        Assert.True(handler.Requests.Count > 1);
+        Assert.Null(ex.Status);
+        Assert.Contains("couldn't be reached", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_unreachable_service_fails_the_readiness_probe_as_unavailable()
+    {
+        var handler = new StubSearchHandler(_ => throw new HttpRequestException("No such host is known."));
+        var retriever = KnowledgeRetriever.Create(new Uri("https://search.example"), "knowledge-test", new StaticTokenCredential(), handler);
+
+        await Assert.ThrowsAsync<KnowledgeUnavailableException>(() => retriever.CheckReachableAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Caller_cancellation_propagates()
     {
         var (retriever, _) = Create(SearchResponses.Hits());

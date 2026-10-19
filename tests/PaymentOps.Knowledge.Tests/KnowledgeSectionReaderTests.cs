@@ -35,6 +35,15 @@ public sealed class KnowledgeSectionReaderTests
         Assert.Null(await reader.FindAsync(Key, KnowledgeAccess.From(TestUser.General), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task An_unreachable_service_is_reported_as_unavailable()
+    {
+        var handler = new StubSearchHandler(_ => throw new HttpRequestException("No such host is known."));
+        var reader = KnowledgeSectionReader.Create(new Uri("https://search.example"), "knowledge-test", new StaticTokenCredential(), handler);
+
+        await Assert.ThrowsAsync<KnowledgeUnavailableException>(() => reader.FindAsync(Key, KnowledgeAccess.From(TestUser.General), CancellationToken.None));
+    }
+
     [Theory]
     [InlineData("a'b--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")]
     [InlineData("doc--short")]

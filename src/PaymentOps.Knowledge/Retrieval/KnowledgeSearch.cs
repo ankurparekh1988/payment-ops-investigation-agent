@@ -18,9 +18,10 @@ internal static class KnowledgeSearch
         var options = new SearchClientOptions { Serializer = new JsonObjectSerializer(KnowledgeIndexSchema.Json) };
         if (handler is not null)
         {
-            // Tests only: answer from a stub and fail fast instead of retrying.
+            // Tests only: answer from a stub, with one quick retry so retry behaviour stays exercised.
             options.Transport = new HttpClientTransport(new HttpClient(handler));
-            options.Retry.MaxRetries = 0;
+            options.Retry.MaxRetries = 1;
+            options.Retry.Delay = TimeSpan.FromMilliseconds(1);
         }
 
         return new SearchClient(endpoint, indexName, credential, options);

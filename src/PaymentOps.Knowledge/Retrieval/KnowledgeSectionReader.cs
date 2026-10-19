@@ -46,5 +46,9 @@ public sealed class KnowledgeSectionReader
         {
             throw new KnowledgeUnavailableException(ex);
         }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
     }
 }

@@ -21,7 +21,7 @@ internal sealed class SearchReadinessCheck(Func<CancellationToken, Task> probe) 
         }
         catch (KnowledgeUnavailableException ex)
         {
-            return HealthCheckResult.Unhealthy($"Search returned {ex.Status}.", ex);
+            return HealthCheckResult.Unhealthy(ex.Status is { } status ? $"Search returned {status}." : "Search is unreachable.", ex);
         }
         catch (Exception ex) when (ex is HttpRequestException or AuthenticationFailedException or TaskCanceledException)
         {
