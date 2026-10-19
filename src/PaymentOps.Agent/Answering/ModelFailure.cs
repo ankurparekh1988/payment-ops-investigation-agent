@@ -21,8 +21,8 @@ internal static class ModelFailure
         exception as ClientResultException ?? (exception as AggregateException)?.InnerExceptions.OfType<ClientResultException>().LastOrDefault();
 
     /// <summary>Azure can reject the request itself, before any completion, when content filtering trips.</summary>
-    public static bool IsContentFilterRejection(Exception exception) =>
-        exception is ClientResultException { Status: 400 } client && ErrorCode(client) == "content_filter";
+    public static bool IsContentFilterRejection(ClientResultException? exception) =>
+        exception is { Status: 400 } && ErrorCode(exception) == "content_filter";
 
     public static string? ErrorCode(ClientResultException exception)
     {

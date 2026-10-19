@@ -24,7 +24,7 @@ else if (_result is InvestigationResult.Answered answered)
 {
     <section aria-labelledby="answer-heading">
         <h2 id="answer-heading">Answer</h2>
-        @((MarkupString)AnswerRenderer.RenderAnswer(answered.Markdown, answered.Citations))
+        @_answerHtml
         <h3>Sources</h3>
         <ul>
             @foreach (var citation in answered.Citations)
@@ -54,6 +54,9 @@ else if (_result is InvestigationResult.NotAnswered notAnswered)
     private bool _busy;
     private InvestigationResult? _result;
 
+    // Rendered once per answer: the page re-renders on every keystroke in the question box.
+    private MarkupString _answerHtml;
+
     // The service applies its own timeouts, so the page doesn't add another.
     private async Task AskAsync()
     {
@@ -62,6 +65,10 @@ else if (_result is InvestigationResult.NotAnswered notAnswered)
         try
         {
             _result = await Investigation.AskAsync(_question, CancellationToken.None);
+            if (_result is InvestigationResult.Answered answered)
+            {
+                _answerHtml = (MarkupString)AnswerRenderer.RenderAnswer(answered.Markdown, answered.Citations);
+            }
         }
         finally
         {

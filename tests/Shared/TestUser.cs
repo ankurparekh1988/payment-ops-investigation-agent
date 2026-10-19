@@ -1,7 +1,8 @@
 using PaymentOps.Domain.Security;
 
-namespace PaymentOps.Knowledge.Tests;
+namespace PaymentOps.Tests.Shared;
 
+/// <summary>A signed-in (or anonymous) user with General or Restricted knowledge access.</summary>
 internal sealed record TestUser(bool IsAuthenticated, bool CanAccessRestrictedKnowledge) : IUserContext
 {
     public static TestUser General { get; } = new(true, false);

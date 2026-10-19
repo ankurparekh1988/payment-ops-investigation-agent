@@ -1,4 +1,3 @@
-using System.ClientModel;
 using System.Diagnostics;
 
 using Microsoft.Extensions.AI;
@@ -44,24 +43,10 @@ internal sealed class GroundedAnswerService(
         }
 
         var retrievalTimer = Stopwatch.StartNew();
-        IReadOnlyList<RetrievedSection> sections;
-        using (var searchTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        var (searched, sections) = await SearchAsync(token => knowledge.RetrieveAsync(question, access, token), cancellationToken);
+        if (!searched)
         {
-            searchTimeout.CancelAfter(_options.SearchTimeout);
-            try
-            {
-                sections = await knowledge.RetrieveAsync(question, access, searchTimeout.Token);
-            }
-            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", "timeout", null, null, null, ex);
-                return new NotAnswered(NotAnsweredReason.KnowledgeUnavailable);
-            }
-            catch (KnowledgeUnavailableException ex)
-            {
-                GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", ex.IsAuthenticationFailure ? "authentication" : FailureClass(ex.Status), ex.Status, ex.ErrorCode, ex.RequestId, ex);
-                return new NotAnswered(NotAnsweredReason.KnowledgeUnavailable);
-            }
+            return new NotAnswered(NotAnsweredReason.KnowledgeUnavailable);
         }
 
         retrievalTimer.Stop();
@@ -103,7 +88,7 @@ internal sealed class GroundedAnswerService(
             catch (Exception ex) when (ModelFailure.IsServiceFailure(ex))
             {
                 var client = ModelFailure.LastAttempt(ex);
-                var blocked = client is not null && ModelFailure.IsContentFilterRejection(client);
+                var blocked = ModelFailure.IsContentFilterRejection(client);
                 var reason = blocked ? NotAnsweredReason.AnswerBlocked : NotAnsweredReason.AnswerUnavailable;
                 GroundedAnswerLog.DependencyFailed(logger, reason, "Model", blocked ? "content filter" : ex is Azure.Identity.AuthenticationFailedException ? "authentication" : FailureClass(client?.Status),
                     client?.Status, client is null ? null : ModelFailure.ErrorCode(client), client is null ? null : ModelFailure.RequestId(client), ex);
@@ -125,24 +110,31 @@ internal sealed class GroundedAnswerService(
             return new SourceResult.NotFound();
         }
 
+        var (searched, section) = await SearchAsync(token => knowledge.FindAsync(sectionKey, access, token), cancellationToken);
+        return !searched ? new SourceResult.Unavailable()
+            : section is not null ? new SourceResult.Found(section.Title, section.SectionPath, section.Content)
+            : new SourceResult.NotFound();
+    }
+
+    // One Search call under our timeout. Search failing to answer is logged here and reported as not searched.
+    private async Task<(bool Searched, T Value)> SearchAsync<T>(Func<CancellationToken, Task<T>> call, CancellationToken cancellationToken)
+    {
         using var searchTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         searchTimeout.CancelAfter(_options.SearchTimeout);
         try
         {
-            return await knowledge.FindAsync(sectionKey, access, searchTimeout.Token) is { } section
-                ? new SourceResult.Found(section.Title, section.SectionPath, section.Content)
-                : new SourceResult.NotFound();
+            return (true, await call(searchTimeout.Token));
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
             GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", "timeout", null, null, null, ex);
-            return new SourceResult.Unavailable();
         }
         catch (KnowledgeUnavailableException ex)
         {
             GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", ex.IsAuthenticationFailure ? "authentication" : FailureClass(ex.Status), ex.Status, ex.ErrorCode, ex.RequestId, ex);
-            return new SourceResult.Unavailable();
         }
+
+        return (false, default!);
     }
 
     private static string FailureClass(int? status) => status switch

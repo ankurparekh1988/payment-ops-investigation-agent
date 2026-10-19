@@ -14,6 +14,7 @@ internal static class RetrievalCompare
         ArgumentNullException.ThrowIfNull(dataset);
         ArgumentNullException.ThrowIfNull(retrieve);
 
+        // In series: a few dozen queries, and the free search plan throttles bursts.
         var runs = new List<CaseRun>();
         foreach (var testCase in dataset.Cases)
         {

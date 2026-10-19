@@ -38,7 +38,10 @@ internal sealed record CalibrationDataset(int SchemaVersion, IReadOnlyList<Calib
 
 internal sealed record CalibrationCase(string Id, CaseKind Kind, string Access, string Question, IReadOnlyList<ExpectedSection> Expected)
 {
-    public bool IsAnswerable => Kind is CaseKind.Critical or CaseKind.Paraphrase;
+    public bool IsAnswerable => Answerable(Kind);
+
+    /// <summary>The kinds that have expected sections and count towards ranking.</summary>
+    public static bool Answerable(CaseKind kind) => kind is CaseKind.Critical or CaseKind.Paraphrase;
 }
 
 internal sealed record ExpectedSection(string DocId, string SectionPath);

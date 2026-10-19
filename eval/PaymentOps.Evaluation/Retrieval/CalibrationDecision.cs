@@ -56,7 +56,7 @@ internal static class CalibrationDecision
         var inMode = runs.Where(run => run.Mode == mode).ToList();
         var critical = inMode.Where(run => run.Kind == CaseKind.Critical).ToList();
         var misses = critical.Where(run => run.ExpectedRank is null).Select(run => run.CaseId).ToList();
-        var answerable = inMode.Where(run => run.Kind is CaseKind.Critical or CaseKind.Paraphrase).ToList();
+        var answerable = inMode.Where(run => CalibrationCase.Answerable(run.Kind)).ToList();
         var mrr = answerable.Count == 0 ? 0 : answerable.Average(run => run.ReciprocalRank);
         return new ModeSummary(mode, critical.Count > 0 && misses.Count == 0, misses, mrr);
     }
@@ -65,7 +65,7 @@ internal static class CalibrationDecision
     // expected section it found; a case that found none has nothing for the floor to take.
     private static List<FloorCandidate> FloorCandidates(IReadOnlyList<CaseRun> semantic)
     {
-        var answerable = semantic.Where(run => run.Kind is CaseKind.Critical or CaseKind.Paraphrase && run.ExpectedScores.Count > 0).ToList();
+        var answerable = semantic.Where(run => CalibrationCase.Answerable(run.Kind) && run.ExpectedScores.Count > 0).ToList();
         var unrelated = semantic.Where(run => run.Kind == CaseKind.Unrelated).ToList();
         return [.. Enumerable.Range(1, 16).Select(step => step * 0.25).Select(floor =>
         {

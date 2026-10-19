@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using Azure.Core.Serialization;
+using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes.Models;
 
 namespace PaymentOps.Knowledge.Indexing;
@@ -12,6 +14,9 @@ internal static class KnowledgeIndexSchema
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+
+    /// <summary>Client options for reading and writing this index's documents.</summary>
+    public static SearchClientOptions ClientOptions() => new() { Serializer = new JsonObjectSerializer(Json) };
 
     public static SearchIndex Build(string indexName) => new(indexName)
     {

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 using Markdig;
@@ -15,12 +16,9 @@ public static partial class CitationScanner
     /// <summary>CommonMark with no extensions; raw HTML still parses into nodes so it can be shown as text.</summary>
     public static MarkdownPipeline Pipeline { get; } = new MarkdownPipelineBuilder().Build();
 
-    public static CitationScan Scan(string markdown) => Scan(Markdown.Parse(markdown, Pipeline));
-
-    public static CitationScan Scan(MarkdownDocument document)
+    public static CitationScan Scan(string markdown)
     {
-        ArgumentNullException.ThrowIfNull(document);
-
+        var document = Markdown.Parse(markdown, Pipeline);
         var citations = new List<CitationToken>();
         var malformed = false;
         foreach (var container in Containers(document).Where(IsOrdinaryText))
@@ -41,7 +39,7 @@ public static partial class CitationScanner
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        return [.. Exact().Matches(run.Text).Select(m => new CitationToken(m.Groups[1].Value, run, m.Index, m.Length))];
+        return [.. Exact().Matches(run.Text).Select(m => new CitationToken(m.Groups[1].Value, m.Index, m.Length))];
     }
 
     /// <summary>
@@ -53,41 +51,42 @@ public static partial class CitationScanner
     {
         ArgumentNullException.ThrowIfNull(container);
 
-        var pieces = new List<(Inline Source, string Text)>();
-        foreach (var inline in Flatten(container))
+        var text = new StringBuilder();
+        foreach (var (other, piece) in Flatten(container))
         {
-            if (inline.Text is not null)
+            if (piece is not null)
             {
-                pieces.Add((inline.Source, inline.Text));
+                text.Append(piece);
                 continue;
             }
 
-            if (pieces.Count > 0)
+            if (text.Length > 0)
             {
-                yield return new InlineSegment(TextRun.Of(pieces), null);
-                pieces = [];
+                yield return new InlineSegment(new TextRun(text.ToString()), null);
+                text.Clear();
             }
 
-            yield return new InlineSegment(null, inline.Source);
+            yield return new InlineSegment(null, other);
         }
 
-        if (pieces.Count > 0)
+        if (text.Length > 0)
         {
-            yield return new InlineSegment(TextRun.Of(pieces), null);
+            yield return new InlineSegment(new TextRun(text.ToString()), null);
         }
     }
 
-    private static IEnumerable<(Inline Source, string? Text)> Flatten(ContainerInline container)
+    // Each child as either its text (literals and unresolved brackets) or itself.
+    private static IEnumerable<(Inline? Other, string? Text)> Flatten(ContainerInline container)
     {
         for (var inline = container.FirstChild; inline is not null; inline = inline.NextSibling)
         {
             switch (inline)
             {
                 case LiteralInline literal:
-                    yield return (literal, literal.Content.ToString());
+                    yield return (null, literal.Content.ToString());
                     break;
                 case LinkDelimiterInline delimiter:
-                    yield return (delimiter, delimiter.ToLiteral());
+                    yield return (null, delimiter.ToLiteral());
                     foreach (var child in Flatten(delimiter))
                     {
                         yield return child;
@@ -137,16 +136,10 @@ public static partial class CitationScanner
 public sealed record CitationScan(IReadOnlyList<CitationToken> Citations, bool HasMalformedMarker);
 
 /// <summary>A citation inside a run: <paramref name="Start"/> and <paramref name="Length"/> are offsets in the run's text.</summary>
-public sealed record CitationToken(string Id, TextRun Run, int Start, int Length);
+public sealed record CitationToken(string Id, int Start, int Length);
 
 /// <summary>Either a run of text or another inline, in document order.</summary>
 public sealed record InlineSegment(TextRun? Run, Inline? Other);
 
 /// <summary>Text from adjacent literals and unresolved brackets, joined.</summary>
-public sealed record TextRun(IReadOnlyList<Inline> Sources, string Text)
-{
-    public Inline First => Sources[0];
-
-    internal static TextRun Of(List<(Inline Source, string Text)> pieces) =>
-        new([.. pieces.Select(p => p.Source)], string.Concat(pieces.Select(p => p.Text)));
-}
+public sealed record TextRun(string Text);

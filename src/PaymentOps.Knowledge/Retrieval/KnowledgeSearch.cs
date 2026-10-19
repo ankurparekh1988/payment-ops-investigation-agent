@@ -1,7 +1,6 @@
 using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
-using Azure.Core.Serialization;
 using Azure.Identity;
 using Azure.Search.Documents;
 
@@ -13,11 +12,11 @@ namespace PaymentOps.Knowledge.Retrieval;
 internal static class KnowledgeSearch
 {
     /// <summary>The fields a query selects, so queries never depend on the indexing record's full shape.</summary>
-    public static readonly string[] Fields = ["id", "doc_id", "title", "section_path", "content", "classification"];
+    private static readonly string[] Fields = ["id", "doc_id", "title", "section_path", "content", "classification"];
 
     public static SearchClient Client(Uri endpoint, string indexName, TokenCredential credential, HttpMessageHandler? handler = null)
     {
-        var options = new SearchClientOptions { Serializer = new JsonObjectSerializer(KnowledgeIndexSchema.Json) };
+        var options = KnowledgeIndexSchema.ClientOptions();
         if (handler is not null)
         {
             // Tests only: answer from a stub, with one quick retry so retry behaviour stays exercised.
