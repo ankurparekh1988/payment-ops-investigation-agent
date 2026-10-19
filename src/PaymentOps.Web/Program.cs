@@ -14,6 +14,7 @@ using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
 using PaymentOps.Web.Security;
+using PaymentOps.Web.Sources;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -111,6 +112,9 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check 
 
 app.MapAccountEndpoints();
 app.MapStaticAssets().AllowAnonymous();
+// A cited section, checked against the current user's access on every request.
+app.MapGet("/sources/{sectionKey}", SourceEndpoint.HandleAsync);
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

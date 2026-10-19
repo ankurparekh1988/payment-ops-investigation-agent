@@ -1,0 +1,27 @@
+@using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Rendering
+@layout PaymentOps.Web.Components.Layout.MainLayout
+
+<PageTitle>Source</PageTitle>
+
+@switch (Source)
+{
+    case SourceResult.Found found:
+        <h1>@found.Title</h1>
+        <p>@found.SectionPath</p>
+        @((MarkupString)AnswerRenderer.RenderSection(found.Content))
+        break;
+    case SourceResult.Unavailable:
+        <h1>Source unavailable</h1>
+        <p>The knowledge service isn't responding right now. Please try again shortly.</p>
+        break;
+    default:
+        <h1>Source not found</h1>
+        <p>This section isn't available.</p>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public SourceResult Source { get; set; } = default!;
+}

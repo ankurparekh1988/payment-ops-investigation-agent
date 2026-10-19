@@ -35,9 +35,14 @@ public sealed class PaymentOpsWebApplicationFactory : WebApplicationFactory<Prog
     }
 
     /// <summary>A client whose requests are signed in as the given user.</summary>
-    public HttpClient CreateClientFor(string name, string[] roles, params string[] groups)
+    public HttpClient CreateClientFor(string name, string[] roles, params string[] groups) => SignedIn(this, name, roles, groups);
+
+    /// <summary>The same, for a factory customised with <c>WithWebHostBuilder</c>.</summary>
+    public static HttpClient SignedIn(WebApplicationFactory<Program> app, string name, string[] roles, params string[] groups)
     {
-        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        ArgumentNullException.ThrowIfNull(app);
+
+        var client = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         client.DefaultRequestHeaders.Add(TestAuthenticationHandler.NameHeader, name);
         client.DefaultRequestHeaders.Add(TestAuthenticationHandler.RolesHeader, string.Join(',', roles));
         client.DefaultRequestHeaders.Add(TestAuthenticationHandler.GroupsHeader, string.Join(',', groups));
