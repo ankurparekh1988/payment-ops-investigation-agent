@@ -116,6 +116,22 @@ public sealed class CalibrationDecisionTests
     }
 
     [Fact]
+    public void A_case_semantic_already_misses_doesnt_stop_a_floor_that_costs_no_one_their_hit()
+    {
+        var result = CalibrationDecision.Decide(
+        [
+            Run("c1", CaseKind.Critical, CalibrationDecision.Lexical, null),
+            Run("c1", CaseKind.Critical, CalibrationDecision.Semantic, 1, [2.6]),
+            Run("p1", CaseKind.Paraphrase, CalibrationDecision.Semantic, null, [0.4]),
+            Run("u1", CaseKind.Unrelated, CalibrationDecision.Semantic, null, [1.1]),
+            Run("u2", CaseKind.Unrelated, CalibrationDecision.Semantic, null, [2.9]),
+        ]);
+
+        Assert.Equal(CalibrationDecision.Semantic, result.RecommendedMode);
+        Assert.Equal(2.5, result.RecommendedFloor);
+    }
+
+    [Fact]
     public void No_qualifying_floor_means_none()
     {
         var result = CalibrationDecision.Decide(

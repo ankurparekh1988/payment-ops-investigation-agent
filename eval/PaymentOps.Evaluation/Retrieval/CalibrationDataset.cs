@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using PaymentOps.Knowledge.Corpus;
 using PaymentOps.Knowledge.Indexing;
 
 namespace PaymentOps.Evaluation.Retrieval;
@@ -61,7 +62,7 @@ internal static class CalibrationReferences
         var errors = new List<string>();
         foreach (var testCase in dataset.Cases)
         {
-            if (testCase.Access is not ("general" or "restricted"))
+            if (testCase.Access is not (KnowledgeClassification.General or KnowledgeClassification.Restricted))
             {
                 errors.Add($"{testCase.Id}: access must be general or restricted.");
             }

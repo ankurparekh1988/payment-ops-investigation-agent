@@ -1,4 +1,5 @@
 using PaymentOps.Domain.Security;
+using PaymentOps.Knowledge.Corpus;
 
 namespace PaymentOps.Evaluation.Retrieval;
 
@@ -18,7 +19,7 @@ internal sealed record CalibrationUser(bool CanAccessRestrictedKnowledge) : IUse
 
     public IReadOnlySet<string> GroupIds { get; } = new HashSet<string>();
 
-    public static CalibrationUser For(string access) => new(access == "restricted");
+    public static CalibrationUser For(string access) => new(access == KnowledgeClassification.Restricted);
 
     public bool IsInRole(string role) => false;
 }
