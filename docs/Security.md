@@ -104,7 +104,7 @@ The model sees only sections the user may see, and the user sees only what the s
 - **Rendering is an allowlist.** Model output and corpus text are rendered from a short list of Markdown elements, with all text encoded. Links, images, raw HTML and entities become plain text, so the model can't choose a URL, an image, markup or a link target.
 - **Prompt guidance isn't a control.** The prompt tells the model to treat section text as evidence, never instructions, and the question and sections are delimited. That helps the model; it doesn't protect anything. The controls are the filter, the citation checks and the renderer.
 - **No evidence, no model call.** With no sections the user may see, the server answers without calling the model, so the model can't fill the gap from its own knowledge.
-- **Logs hold no content.** Answer logs record reason codes, counts, section keys, timings and token usage, and on failure the dependency, status, error code and request id. They never record the question, section text, the prompt or the model's output.
+- **Logs hold no content.** Answer logs record reason codes, counts, section keys, timings and token usage, and on failure the dependency, the exception type, status, error code and request id. They never record the question, section text, the prompt or the model's output, nor an exception's message, which can echo the request.
 - **Calibration probes.** The retrieval comparison asks Restricted-only questions as a General user, in both modes, and fails if any Restricted section comes back ([Evaluation](Evaluation.md)).
 
 ## Content safety

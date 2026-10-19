@@ -1,5 +1,6 @@
 using Azure;
 using Azure.Core;
+using Azure.Identity;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Models;
 
@@ -35,7 +36,12 @@ public sealed class KnowledgeRetriever
         if (mode == RetrievalMode.Semantic)
         {
             options.QueryType = SearchQueryType.Semantic;
-            options.SemanticSearch = new SemanticSearchOptions { SemanticConfigurationName = KnowledgeIndexSchema.SemanticConfigurationName };
+            // Fail rather than fall back: Search otherwise returns plain lexical results, unlabelled, when semantic ranking can't run.
+            options.SemanticSearch = new SemanticSearchOptions
+            {
+                SemanticConfigurationName = KnowledgeIndexSchema.SemanticConfigurationName,
+                ErrorMode = SemanticErrorMode.Fail,
+            };
         }
 
         try
@@ -65,6 +71,10 @@ public sealed class KnowledgeRetriever
         {
             throw new KnowledgeUnavailableException(ex);
         }
+        catch (AuthenticationFailedException ex)
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
     }
 
     /// <summary>Readiness: one query that returns no documents, proving endpoint, index, token and role.</summary>
@@ -79,6 +89,10 @@ public sealed class KnowledgeRetriever
             throw new KnowledgeUnavailableException(ex);
         }
         catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
+        catch (AuthenticationFailedException ex)
         {
             throw new KnowledgeUnavailableException(ex);
         }

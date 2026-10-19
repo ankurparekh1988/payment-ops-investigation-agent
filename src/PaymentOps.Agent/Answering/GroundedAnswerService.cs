@@ -59,7 +59,7 @@ internal sealed class GroundedAnswerService(
             }
             catch (KnowledgeUnavailableException ex)
             {
-                GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", FailureClass(ex.Status), ex.Status, ex.ErrorCode, ex.RequestId, ex);
+                GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", ex.IsAuthenticationFailure ? "authentication" : FailureClass(ex.Status), ex.Status, ex.ErrorCode, ex.RequestId, ex);
                 return new NotAnswered(NotAnsweredReason.KnowledgeUnavailable);
             }
         }
@@ -105,7 +105,7 @@ internal sealed class GroundedAnswerService(
                 var client = ModelFailure.LastAttempt(ex);
                 var blocked = client is not null && ModelFailure.IsContentFilterRejection(client);
                 var reason = blocked ? NotAnsweredReason.AnswerBlocked : NotAnsweredReason.AnswerUnavailable;
-                GroundedAnswerLog.DependencyFailed(logger, reason, "Model", blocked ? "content filter" : FailureClass(client?.Status),
+                GroundedAnswerLog.DependencyFailed(logger, reason, "Model", blocked ? "content filter" : ex is Azure.Identity.AuthenticationFailedException ? "authentication" : FailureClass(client?.Status),
                     client?.Status, client is null ? null : ModelFailure.ErrorCode(client), client is null ? null : ModelFailure.RequestId(client), ex);
                 return new NotAnswered(reason);
             }
@@ -133,7 +133,7 @@ internal sealed class GroundedAnswerService(
         }
         catch (KnowledgeUnavailableException ex)
         {
-            GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", FailureClass(ex.Status), ex.Status, ex.ErrorCode, ex.RequestId, ex);
+            GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", ex.IsAuthenticationFailure ? "authentication" : FailureClass(ex.Status), ex.Status, ex.ErrorCode, ex.RequestId, ex);
             return new SourceResult.Unavailable();
         }
     }

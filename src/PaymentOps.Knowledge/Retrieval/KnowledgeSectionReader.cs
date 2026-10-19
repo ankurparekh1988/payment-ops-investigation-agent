@@ -1,5 +1,6 @@
 using Azure;
 using Azure.Core;
+using Azure.Identity;
 using Azure.Search.Documents;
 
 using PaymentOps.Knowledge.Indexing;
@@ -47,6 +48,10 @@ public sealed class KnowledgeSectionReader
             throw new KnowledgeUnavailableException(ex);
         }
         catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
+        catch (AuthenticationFailedException ex)
         {
             throw new KnowledgeUnavailableException(ex);
         }

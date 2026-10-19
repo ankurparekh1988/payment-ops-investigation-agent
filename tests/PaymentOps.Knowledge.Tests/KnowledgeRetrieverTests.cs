@@ -42,6 +42,9 @@ public sealed class KnowledgeRetrieverTests
         Assert.Equal("classification eq 'general'", body.GetProperty("filter").GetString());
         Assert.Equal("semantic", body.GetProperty("queryType").GetString());
         Assert.Equal("knowledge-semantic", body.GetProperty("semanticConfiguration").GetString());
+
+        // Without this, an exhausted semantic quota silently returns lexical results labelled semantic.
+        Assert.Equal("fail", body.GetProperty("semanticErrorHandling").GetString());
     }
 
     [Fact]
@@ -125,6 +128,17 @@ public sealed class KnowledgeRetrieverTests
         var handler = new StubSearchHandler(_ => throw new HttpRequestException("No such host is known."));
         var retriever = KnowledgeRetriever.Create(new Uri("https://search.example"), "knowledge-test", new StaticTokenCredential(), handler);
 
+        await Assert.ThrowsAsync<KnowledgeUnavailableException>(() => retriever.CheckReachableAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_failed_token_request_is_reported_as_unavailable()
+    {
+        var retriever = KnowledgeRetriever.Create(new Uri("https://search.example"), "knowledge-test", new FailingTokenCredential(), StubSearchHandler.Returning(SearchResponses.Hits()));
+
+        var ex = await Assert.ThrowsAsync<KnowledgeUnavailableException>(() =>
+            retriever.RetrieveAsync("q", KnowledgeAccess.From(TestUser.General), RetrievalMode.Lexical, null, CancellationToken.None));
+        Assert.True(ex.IsAuthenticationFailure);
         await Assert.ThrowsAsync<KnowledgeUnavailableException>(() => retriever.CheckReachableAsync(CancellationToken.None));
     }
 

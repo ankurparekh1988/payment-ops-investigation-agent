@@ -1,4 +1,5 @@
 using Azure;
+using Azure.Identity;
 
 namespace PaymentOps.Knowledge.Retrieval;
 
@@ -33,6 +34,15 @@ public sealed class KnowledgeUnavailableException : Exception
         : this(retries.InnerExceptions.OfType<RequestFailedException>().Last())
     {
     }
+
+    // The token request failed before anything reached Search, such as a managed-identity endpoint hiccup.
+    internal KnowledgeUnavailableException(AuthenticationFailedException inner)
+        : base($"Couldn't get a token for Search: {inner.Message}", inner)
+    {
+        IsAuthenticationFailure = true;
+    }
+
+    public bool IsAuthenticationFailure { get; }
 
     public int? Status { get; }
 

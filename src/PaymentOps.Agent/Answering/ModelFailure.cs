@@ -1,17 +1,19 @@
 using System.ClientModel;
 using System.Text.Json;
 
+using Azure.Identity;
+
 namespace PaymentOps.Agent.Answering;
 
 /// <summary>Classifies model-call failures for the result and for safe diagnostics.</summary>
 internal static class ModelFailure
 {
     /// <summary>
-    /// A failure of the model service rather than of our code. The SDK reports a request that failed
-    /// on every retry as an aggregate of the attempts.
+    /// A failure of the model service or of getting its token, rather than of our code. The SDK reports
+    /// a request that failed on every retry as an aggregate of the attempts.
     /// </summary>
     public static bool IsServiceFailure(Exception exception) =>
-        exception is ClientResultException or HttpRequestException
+        exception is ClientResultException or HttpRequestException or AuthenticationFailedException
         || (exception is AggregateException retries && retries.InnerExceptions.All(inner => inner is ClientResultException));
 
     /// <summary>The failed attempt to report: the exception itself, or the last attempt of a retried request.</summary>

@@ -25,6 +25,16 @@ internal static partial class GroundedAnswerLog
     [LoggerMessage(Level = LogLevel.Information, Message = "Grounded answer: {Outcome}. Mode {Mode}; {HitCount} hits; sections {SectionKeys}; retrieval {RetrievalMs} ms; model {ModelMs} ms; tokens in {InputTokens}, out {OutputTokens}.")]
     private static partial void Completed(ILogger logger, string outcome, RetrievalMode mode, int hitCount, string sectionKeys, long retrievalMs, long? modelMs, long? inputTokens, long? outputTokens);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Grounded answer not given: {Reason}. Dependency {Dependency} failed: {FailureClass}, status {Status}, code {ErrorCode}, request {RequestId}.")]
-    public static partial void DependencyFailed(ILogger logger, NotAnsweredReason reason, string dependency, string failureClass, int? status, string? errorCode, string? requestId, Exception exception);
+    // Only the exception's type: service messages can echo the request body, and so the question.
+    public static void DependencyFailed(ILogger logger, NotAnsweredReason reason, string dependency, string failureClass, int? status, string? errorCode, string? requestId, Exception exception)
+    {
+        if (logger.IsEnabled(LogLevel.Warning))
+        {
+            var exceptionType = exception.GetType().Name;
+            DependencyFailed(logger, reason, dependency, failureClass, status, errorCode, requestId, exceptionType);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Grounded answer not given: {Reason}. Dependency {Dependency} failed: {FailureClass} ({ExceptionType}), status {Status}, code {ErrorCode}, request {RequestId}.")]
+    private static partial void DependencyFailed(ILogger logger, NotAnsweredReason reason, string dependency, string failureClass, int? status, string? errorCode, string? requestId, string exceptionType);
 }

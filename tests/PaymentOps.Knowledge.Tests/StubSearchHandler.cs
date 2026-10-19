@@ -37,3 +37,13 @@ internal static class SearchResponses
             "{\"@search.score\":1.0" + (h.Reranker is { } r ? ",\"@search.rerankerScore\":" + r.ToString(CultureInfo.InvariantCulture) : string.Empty) +
             $",\"id\":\"{h.Key}\",\"doc_id\":\"doc\",\"title\":\"Title\",\"section_path\":\"Title > Section\",\"content\":\"Text\",\"classification\":\"{h.Classification}\"}}")) + "]}";
 }
+
+/// <summary>A credential whose token request fails, as a managed-identity endpoint can transiently.</summary>
+internal sealed class FailingTokenCredential : TokenCredential
+{
+    public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
+        throw new Azure.Identity.AuthenticationFailedException("The managed identity endpoint didn't respond.");
+
+    public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
+        throw new Azure.Identity.AuthenticationFailedException("The managed identity endpoint didn't respond.");
+}

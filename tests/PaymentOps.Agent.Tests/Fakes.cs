@@ -129,3 +129,27 @@ internal sealed class FakePipelineResponse(int status, string body) : PipelineRe
 
     public override void Dispose() => _stream?.Dispose();
 }
+
+/// <summary>A credential whose token request fails, as a managed-identity endpoint can transiently.</summary>
+internal sealed class FailingTokenCredential : TokenCredential
+{
+    public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
+        throw new Azure.Identity.AuthenticationFailedException("The managed identity endpoint didn't respond.");
+
+    public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
+        throw new Azure.Identity.AuthenticationFailedException("The managed identity endpoint didn't respond.");
+}
+
+/// <summary>Keeps every log entry, with its exception, so tests can check what would be written.</summary>
+internal sealed class RecordingLogger<T> : Microsoft.Extensions.Logging.ILogger<T>
+{
+    public List<(string Message, Exception? Exception)> Entries { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull => null;
+
+    public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+    public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+        Entries.Add((formatter(state, exception), exception));
+}

@@ -223,6 +223,30 @@ public sealed class GroundedAnswerServiceTests
     }
 
     [Fact]
+    public async Task A_failed_token_request_for_the_model_is_unavailable()
+    {
+        var chat = ModelClient.Create(new Uri("https://foundry.example/"), "https://cognitiveservices.azure.com/.default", new FailingTokenCredential(), "chat-blue", new ThrowingHandler());
+
+        Assert.Equal(NotAnsweredReason.AnswerUnavailable, Reason(await Service(FakeKnowledgeLookup.Returning(SectionA), chat).AskAsync("q", CancellationToken.None)));
+    }
+
+    [Fact]
+    public async Task Failure_logs_never_carry_the_exception_or_the_question()
+    {
+        const string Question = "Where is the batch for merchant M-1042?";
+        var logger = new RecordingLogger<GroundedAnswerService>();
+        var knowledge = new FakeKnowledgeLookup((_, _) => throw new KnowledgeUnavailableException($"Search echoed the query: {Question}"));
+        var service = new GroundedAnswerService(knowledge, Answering(), new PromptProvider(Release), Release, TestUser.General, Options.Create(new AnsweringOptions()), logger);
+
+        await service.AskAsync(Question, CancellationToken.None);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Null(entry.Exception);
+        Assert.DoesNotContain(Question, entry.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(KnowledgeUnavailableException), entry.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_source_the_user_may_see_is_found()
     {
         var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])) { Find = (key, _) => key == "key-a" ? SectionA : null };

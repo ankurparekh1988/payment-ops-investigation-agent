@@ -44,6 +44,14 @@ public sealed class KnowledgeSectionReaderTests
         await Assert.ThrowsAsync<KnowledgeUnavailableException>(() => reader.FindAsync(Key, KnowledgeAccess.From(TestUser.General), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task A_failed_token_request_is_reported_as_unavailable()
+    {
+        var reader = KnowledgeSectionReader.Create(new Uri("https://search.example"), "knowledge-test", new FailingTokenCredential(), StubSearchHandler.Returning(SearchResponses.Hits()));
+
+        await Assert.ThrowsAsync<KnowledgeUnavailableException>(() => reader.FindAsync(Key, KnowledgeAccess.From(TestUser.General), CancellationToken.None));
+    }
+
     [Theory]
     [InlineData("a'b--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")]
     [InlineData("doc--short")]
