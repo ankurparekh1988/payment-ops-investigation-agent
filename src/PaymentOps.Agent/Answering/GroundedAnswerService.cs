@@ -125,11 +125,18 @@ internal sealed class GroundedAnswerService(
             return new SourceResult.NotFound();
         }
 
+        using var searchTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        searchTimeout.CancelAfter(_options.SearchTimeout);
         try
         {
-            return await knowledge.FindAsync(sectionKey, access, cancellationToken) is { } section
+            return await knowledge.FindAsync(sectionKey, access, searchTimeout.Token) is { } section
                 ? new SourceResult.Found(section.Title, section.SectionPath, section.Content)
                 : new SourceResult.NotFound();
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            GroundedAnswerLog.DependencyFailed(logger, NotAnsweredReason.KnowledgeUnavailable, "Search", "timeout", null, null, null, ex);
+            return new SourceResult.Unavailable();
         }
         catch (KnowledgeUnavailableException ex)
         {

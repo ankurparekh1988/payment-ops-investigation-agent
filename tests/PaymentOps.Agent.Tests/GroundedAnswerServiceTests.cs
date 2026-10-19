@@ -249,7 +249,7 @@ public sealed class GroundedAnswerServiceTests
     [Fact]
     public async Task A_source_the_user_may_see_is_found()
     {
-        var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])) { Find = (key, _) => key == "key-a" ? SectionA : null };
+        var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])) { Find = (key, _, _) => Task.FromResult(key == "key-a" ? SectionA : null) };
 
         var found = Assert.IsType<SourceResult.Found>(await Service(knowledge, Answering()).GetSourceAsync("key-a", CancellationToken.None));
 
@@ -259,7 +259,7 @@ public sealed class GroundedAnswerServiceTests
     [Fact]
     public async Task An_unauthenticated_source_request_is_not_found()
     {
-        var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])) { Find = (_, _) => SectionA };
+        var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])) { Find = (_, _, _) => Task.FromResult<RetrievedSection?>(SectionA) };
 
         Assert.IsType<SourceResult.NotFound>(await Service(knowledge, Answering(), TestUser.Anonymous).GetSourceAsync("key-a", CancellationToken.None));
     }
@@ -267,9 +267,26 @@ public sealed class GroundedAnswerServiceTests
     [Fact]
     public async Task Search_unavailable_for_a_source_is_unavailable()
     {
-        var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])) { Find = (_, _) => throw new KnowledgeUnavailableException("down") };
+        var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])) { Find = (_, _, _) => throw new KnowledgeUnavailableException("down") };
 
         Assert.IsType<SourceResult.Unavailable>(await Service(knowledge, Answering()).GetSourceAsync("key-a", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_source_lookup_that_outlasts_our_search_timeout_is_unavailable()
+    {
+        var knowledge = new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([]))
+        {
+            Find = async (_, _, ct) =>
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return null;
+            },
+        };
+
+        var result = await Service(knowledge, Answering(), options: new AnsweringOptions { SearchTimeout = TimeSpan.FromMilliseconds(50) }).GetSourceAsync("key-a", CancellationToken.None);
+
+        Assert.IsType<SourceResult.Unavailable>(result);
     }
 
     private static GroundedAnswerService Service(FakeKnowledgeLookup knowledge, Microsoft.Extensions.AI.IChatClient chat, TestUser? user = null, AnsweringOptions? options = null) =>

@@ -43,7 +43,7 @@ internal sealed class FakeKnowledgeLookup(Func<KnowledgeAccess, CancellationToke
 
     public KnowledgeAccess? LastAccess { get; private set; }
 
-    public Func<string, KnowledgeAccess, RetrievedSection?> Find { get; init; } = (_, _) => null;
+    public Func<string, KnowledgeAccess, CancellationToken, Task<RetrievedSection?>> Find { get; init; } = (_, _, _) => Task.FromResult<RetrievedSection?>(null);
 
     public static FakeKnowledgeLookup Returning(params RetrievedSection[] sections) =>
         new((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>(sections));
@@ -56,7 +56,7 @@ internal sealed class FakeKnowledgeLookup(Func<KnowledgeAccess, CancellationToke
     }
 
     public Task<RetrievedSection?> FindAsync(string sectionKey, KnowledgeAccess access, CancellationToken cancellationToken) =>
-        Task.FromResult(Find(sectionKey, access));
+        Find(sectionKey, access, cancellationToken);
 }
 
 internal sealed record TestUser(bool IsAuthenticated, bool CanAccessRestrictedKnowledge) : IUserContext
