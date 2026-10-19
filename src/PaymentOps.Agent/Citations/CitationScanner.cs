@@ -27,16 +27,21 @@ public static partial class CitationScanner
         {
             foreach (var run in Segments(container).Select(segment => segment.Run).OfType<TextRun>())
             {
-                foreach (Match match in Exact().Matches(run.Text))
-                {
-                    citations.Add(new CitationToken(match.Groups[1].Value, run, match.Index, match.Length));
-                }
+                citations.AddRange(CitationsIn(run));
 
                 malformed |= NearMiss().Matches(run.Text).Any(m => !ExactWhole().IsMatch(m.Value));
             }
         }
 
         return new CitationScan(citations, malformed);
+    }
+
+    /// <summary>The citations in one run of ordinary text.</summary>
+    public static IReadOnlyList<CitationToken> CitationsIn(TextRun run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        return [.. Exact().Matches(run.Text).Select(m => new CitationToken(m.Groups[1].Value, run, m.Index, m.Length))];
     }
 
     /// <summary>
