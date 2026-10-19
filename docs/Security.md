@@ -1,6 +1,6 @@
 # Security
 
-How access is controlled, as built so far. Retrieval-time authorization, tool authorization and prompt-injection defences are added with the features they protect, and documented here when they land.
+How access is controlled, as built so far. Tool authorization and prompt-injection defences are added with the features they protect, and documented here when they land.
 
 ## Principles
 
@@ -17,7 +17,7 @@ Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.
 - **Authorization code flow with PKCE.** The browser carries only a one-time code. The server redeems it, keeps the tokens on the server, and gives the browser an encrypted session cookie. The user is held in a scoped `IUserContext`, built from the token's claims, which every authorization decision reads.
 - **No stored sign-in credential in Azure.** The deployed app redeems codes as its managed identity, which the app registration trusts through a federated credential: no client secret, certificate or credential in the app settings. Local development uses a separate, short-lived secret kept in .NET user-secrets, which exists only while local addresses are configured.
 - **Demo users are opt-in.** They're ordinary tenant accounts, created only when `TF_VAR_create_demo_users=true` and assigned roles only on this application. Their passwords don't expire because they're shared for demonstrations, so remove them when not in use.
-- **Everything requires a role** unless it's explicitly public: `/health`, `/health/ready`, sign-out and the signed-out and access-denied pages. A signed-in user without a role sees the access-denied page.
+- **Everything requires a role** unless it's explicitly public: `/health`, `/health/ready`, sign-out and the signed-out and access-denied pages. That includes the source pages behind citations. A signed-in user without a role sees the access-denied page.
 - **Sign-ins last a fixed time.** Roles and groups come from the token, so a sign-in ends after `PaymentOps:Authorization:SessionLifetime` (8 hours by default) without sliding, and changes made in Entra apply at the next one. Open pages are signed out at the same moment.
 
 | App role | Can |
@@ -26,7 +26,7 @@ Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.
 | `Ops.Engineer` | Everything a Reader can, plus approve proposed actions |
 | `Ops.Admin` | Everything an Engineer can, plus administration |
 
-Higher roles include lower ones. Membership of the **Risk and Compliance** security group grants access to Restricted knowledge. The token carries only groups assigned to the app, which keeps unrelated group IDs out of it and avoids overage for users in many groups.
+Higher roles include lower ones. Membership of the **Risk and Compliance** security group grants access to Restricted knowledge, and only when the group is configured: with no group id set, nobody gets Restricted knowledge. The token carries only groups assigned to the app, which keeps unrelated group IDs out of it and avoids overage for users in many groups.
 
 ## Identities
 
@@ -44,7 +44,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Principal | Scope | Role | Why |
 |---|---|---|---|
 | Web app | Foundry resource | Cognitive Services OpenAI User | Call the chat and embedding deployments |
-| Web app | Knowledge container | Storage Blob Data Reader | Serve source documents behind authorization checks |
+| Web app | Search service | Search Index Data Reader | Retrieve sections for questions and show cited sections |
 | Web app | Application Insights | Monitoring Metrics Publisher | Send telemetry with an Entra token |
 | Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
 | Foundry project | Application Insights | Log Analytics Reader | Show traces in the Foundry portal |
@@ -57,7 +57,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | `gh-deploy` | Environment resource group | Search Service Contributor, Search Index Data Contributor | Create the knowledge index and publish its sections |
 | Bootstrap operator | Operator-only state container | Storage Blob Data Contributor | The identity deployment's state, which holds demo user passwords and the local sign-in secret. No pipeline identity has any role on this container |
 | `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog, quota and regional capacity for the preflight and the pre-apply capacity check; nothing else |
-| Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader, Storage Blob Data Reader | Run the app locally |
+| Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader | Run the app locally |
 
 ## Keyless controls
 
@@ -86,13 +86,26 @@ Model choices, content filters and prompts are part of the build ([ADR 0004](adr
 
 ## Knowledge classification
 
-Knowledge documents are `general` (every signed-in user) or `restricted` (the Risk and Compliance group as well). The classification comes from the folder a source file is in, so it's visible in review and can't be set from inside a document. In the search index, each section carries its document's classification, and retrieval will filter on it before anything reaches the model.
+Knowledge documents are `general` (every signed-in user) or `restricted` (the Risk and Compliance group as well). The classification comes from the folder a source file is in, so it's visible in review and can't be set from inside a document. In the search index, each section carries its document's classification, and every query filters on it before anything reaches the model.
 
-When a document becomes restricted, the publisher deletes its sections and confirms they're gone before uploading them again as restricted, so none of them is readable as general, even briefly. This follows the doc id: content moved into a restricted document with a different doc id leaves the old general sections in place until the end of the run, so a document is restricted by moving its file and keeping its doc id. The index holds restricted text, so it's readable only by identities with a Search data role: developers (Search Index Data Reader) and, from retrieval onwards, the web app. Only `gh-deploy` can write to it. The publish log names doc ids and section paths, never section text.
+When a document becomes restricted, the publisher deletes its sections and confirms they're gone before uploading them again as restricted, so none of them is readable as general, even briefly. This follows the doc id: content moved into a restricted document with a different doc id leaves the old general sections in place until the end of the run, so a document is restricted by moving its file and keeping its doc id. The index holds restricted text, so it's readable only by identities with a Search data role: developers and the web app (Search Index Data Reader) and `gh-deploy`. Only `gh-deploy` can write to it. The publish log names doc ids and section paths, never section text.
 
 The repository is public, so restricted sources are readable by anyone there. "Restricted" controls what the assistant shows to whom; it doesn't make the text secret, and nothing in the corpus may be real or sensitive. The build rejects numbers that pass the card checksum, and email addresses and `http`, `https` or `ftp` URLs outside reserved example domains. A bare host name in prose isn't checked, so review still matters.
 
 Facts that decide outcomes, such as risk-rule thresholds, aren't in any document: they belong to the system that applies them.
+
+## Retrieval and answers
+
+The model sees only sections the user may see, and the user sees only what the server has checked.
+
+- **Retrieval-time authorization.** The classification filter is built from the signed-in user's identity inside the Knowledge module and added to every query. The question is search text only: it can't add to or change the filter. A user who isn't signed in gets no access at all.
+- **Citations come from the server.** Each retrieved section gets an id for this question only. The model returns ids, never links, keys or titles; the server checks that the ids in the answer and the ids it declared are exactly the same set, and that each was retrieved for this question. One unknown or missing citation fails the whole answer.
+- **Source pages re-check access.** `/sources/{key}` looks the section up with the user's current access in the same query, so a section they may not see returns the same 404 as one that doesn't exist. A key that isn't well formed is never sent to Search.
+- **Rendering is an allowlist.** Model output and corpus text are rendered from a short list of Markdown elements, with all text encoded. Links, images, raw HTML and entities become plain text, so the model can't choose a URL, an image, markup or a link target.
+- **Prompt guidance isn't a control.** The prompt tells the model to treat section text as evidence, never instructions, and the question and sections are delimited. That helps the model; it doesn't protect anything. The controls are the filter, the citation checks and the renderer.
+- **No evidence, no model call.** With no sections the user may see, the server answers without calling the model, so the model can't fill the gap from its own knowledge.
+- **Logs hold no content.** Answer logs record reason codes, counts, section keys, timings and token usage, and on failure the dependency, status, error code and request id. They never record the question, section text, the prompt or the model's output.
+- **Calibration probes.** The retrieval comparison asks Restricted-only questions as a General user, in both modes, and fails if any Restricted section comes back ([Evaluation](Evaluation.md)).
 
 ## Content safety
 

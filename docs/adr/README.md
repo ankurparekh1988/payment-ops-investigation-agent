@@ -9,3 +9,5 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0003](0003-server-rendered-ui-and-sign-in.md) | Server-rendered UI as its own backend, with credential-free sign-in | Accepted |
 | [0004](0004-ai-release-manifest.md) | One AI release manifest, built into the application | Accepted |
 | [0005](0005-indexing-by-pushing-from-the-pipeline.md) | Indexing by pushing from the pipeline | Accepted |
+| [0006](0006-grounded-answers-with-a-server-owned-evidence-registry.md) | Grounded answers with a server-owned evidence registry | Accepted |
+| [0007](0007-retrieval-strategy-by-frozen-calibration.md) | Choosing the retrieval strategy by measurement, with vectors deferred | Accepted |
