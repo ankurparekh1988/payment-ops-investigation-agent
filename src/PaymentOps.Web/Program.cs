@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent;
 using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Web;
 using PaymentOps.Web.Components;
@@ -59,6 +60,11 @@ var search = builder.Configuration.GetSection(SearchOptions.SectionName).Get<Sea
 if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answeringEndpoint)
 {
     builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));
+    healthChecks.Add(new HealthCheckRegistration(
+        "search",
+        services => new SearchReadinessCheck(services.GetRequiredService<KnowledgeRetriever>().CheckReachableAsync),
+        failureStatus: null,
+        tags: ["ready"]));
 }
 else if (!builder.Environment.IsDevelopment())
 {

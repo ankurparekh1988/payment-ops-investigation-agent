@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="PaymentOps.Knowledge.Tests" />
+    <InternalsVisibleTo Include="PaymentOps.Web.SmokeTests" />
   </ItemGroup>
 
 </Project>
