@@ -1,0 +1,71 @@
+@page "/"
+@rendermode InteractiveServer
+@using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Rendering
+@inject IInvestigationService Investigation
+@inject IUserContext CurrentUser
+@inject AnsweringLimits Limits
+
+<PageTitle>Payment Ops Investigation Agent</PageTitle>
+
+<h1>Ask the knowledge base</h1>
+
+<form @onsubmit="AskAsync">
+    <label for="question">Question</label>
+    <textarea id="question" @bind="_question" @bind:event="oninput" rows="3" maxlength="@Limits.MaxQuestionLength" disabled="@_busy"></textarea>
+    <button type="submit" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">Ask</button>
+</form>
+
+@if (_busy)
+{
+    <p role="status">Searching the knowledge base…</p>
+}
+else if (_result is InvestigationResult.Answered answered)
+{
+    <section aria-labelledby="answer-heading">
+        <h2 id="answer-heading">Answer</h2>
+        @((MarkupString)AnswerRenderer.RenderAnswer(answered.Markdown, answered.Citations))
+        <h3>Sources</h3>
+        <ul>
+            @foreach (var citation in answered.Citations)
+            {
+                <li><a href="@AnswerRenderer.SourceUrl(citation.SectionKey)">[@citation.Id] @citation.Title › @citation.SectionPath</a></li>
+            }
+        </ul>
+    </section>
+}
+else if (_result is InvestigationResult.NotAnswered notAnswered)
+{
+    <p role="status">@NotAnsweredText.For(notAnswered.Reason, Limits.MaxQuestionLength)</p>
+}
+
+<section aria-labelledby="access-heading">
+    <h2 id="access-heading">Your access</h2>
+    <dl>
+        <dt>Roles</dt>
+        <dd>@string.Join(", ", CurrentUser.Roles.Order(StringComparer.Ordinal))</dd>
+        <dt>Restricted knowledge</dt>
+        <dd>@(CurrentUser.CanAccessRestrictedKnowledge ? "Yes, through Risk and Compliance" : "No")</dd>
+    </dl>
+</section>
+
+@code {
+    private string _question = string.Empty;
+    private bool _busy;
+    private InvestigationResult? _result;
+
+    // The service applies its own timeouts, so the page doesn't add another.
+    private async Task AskAsync()
+    {
+        _busy = true;
+        _result = null;
+        try
+        {
+            _result = await Investigation.AskAsync(_question, CancellationToken.None);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
