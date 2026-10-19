@@ -1,6 +1,4 @@
-using Azure;
 using Azure.Core;
-using Azure.Identity;
 using Azure.Search.Documents;
 
 using PaymentOps.Knowledge.Indexing;
@@ -33,7 +31,7 @@ public sealed class KnowledgeSectionReader
             return null;
         }
 
-        try
+        return await KnowledgeSearch.CallAsync(async () =>
         {
             var response = await _client.SearchAsync<SearchHitDocument>("*", KnowledgeSearch.Options(1, $"id eq '{sectionKey}' and {access.Predicate}"), cancellationToken);
             await foreach (var hit in response.Value.GetResultsAsync().WithCancellation(cancellationToken))
@@ -41,19 +39,7 @@ public sealed class KnowledgeSectionReader
                 return hit.Document.ToSection(null);
             }
 
-            return null;
-        }
-        catch (RequestFailedException ex)
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
-        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
-        catch (AuthenticationFailedException ex)
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
+            return (RetrievedSection?)null;
+        });
     }
 }

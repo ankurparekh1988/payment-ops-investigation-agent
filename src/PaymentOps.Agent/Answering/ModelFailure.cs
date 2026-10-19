@@ -10,11 +10,11 @@ internal static class ModelFailure
 {
     /// <summary>
     /// A failure of the model service or of getting its token, rather than of our code. The SDK reports
-    /// a request that failed on every retry as an aggregate of the attempts.
+    /// a request that failed on every retry as an aggregate of the attempts, however each one failed.
     /// </summary>
     public static bool IsServiceFailure(Exception exception) =>
         exception is ClientResultException or HttpRequestException or AuthenticationFailedException
-        || (exception is AggregateException retries && retries.InnerExceptions.All(inner => inner is ClientResultException));
+        || (exception is AggregateException retries && retries.InnerExceptions.All(inner => inner is ClientResultException or HttpRequestException or AuthenticationFailedException or OperationCanceledException or IOException));
 
     /// <summary>The failed attempt to report: the exception itself, or the last attempt of a retried request.</summary>
     public static ClientResultException? LastAttempt(Exception exception) =>

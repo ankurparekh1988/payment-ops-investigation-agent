@@ -123,6 +123,46 @@ public sealed class KnowledgeRetrieverTests
     }
 
     [Fact]
+    public async Task A_retry_that_ends_in_a_timeout_is_reported_as_unavailable()
+    {
+        var attempts = 0;
+        var handler = new StubSearchHandler(_ => ++attempts == 1
+            ? throw new HttpRequestException("Connection reset.")
+            : throw new TaskCanceledException("The attempt timed out."));
+        var retriever = KnowledgeRetriever.Create(new Uri("https://search.example"), "knowledge-test", new StaticTokenCredential(), handler);
+
+        var ex = await Assert.ThrowsAsync<KnowledgeUnavailableException>(() =>
+            retriever.RetrieveAsync("q", KnowledgeAccess.From(TestUser.General), RetrievalMode.Lexical, null, CancellationToken.None));
+        Assert.Null(ex.Status);
+    }
+
+    [Fact]
+    public async Task Every_attempt_timing_out_is_reported_as_unavailable()
+    {
+        var handler = new StubSearchHandler(_ => throw new TaskCanceledException("The attempt timed out."));
+        var retriever = KnowledgeRetriever.Create(new Uri("https://search.example"), "knowledge-test", new StaticTokenCredential(), handler);
+
+        var ex = await Assert.ThrowsAsync<KnowledgeUnavailableException>(() =>
+            retriever.RetrieveAsync("q", KnowledgeAccess.From(TestUser.General), RetrievalMode.Lexical, null, CancellationToken.None));
+        Assert.Null(ex.Status);
+        await Assert.ThrowsAsync<KnowledgeUnavailableException>(() => retriever.CheckReachableAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task The_request_id_reported_is_the_one_Search_returned()
+    {
+        var handler = new StubSearchHandler(_ => (HttpStatusCode.Forbidden, "{\"error\":{\"code\":\"Forbidden\",\"message\":\"no\"}}"))
+        {
+            ResponseHeaders = { ["request-id"] = "search-side-id" },
+        };
+        var retriever = KnowledgeRetriever.Create(new Uri("https://search.example"), "knowledge-test", new StaticTokenCredential(), handler);
+
+        var ex = await Assert.ThrowsAsync<KnowledgeUnavailableException>(() =>
+            retriever.RetrieveAsync("q", KnowledgeAccess.From(TestUser.General), RetrievalMode.Lexical, null, CancellationToken.None));
+        Assert.Equal("search-side-id", ex.RequestId);
+    }
+
+    [Fact]
     public async Task An_unreachable_service_fails_the_readiness_probe_as_unavailable()
     {
         var handler = new StubSearchHandler(_ => throw new HttpRequestException("No such host is known."));

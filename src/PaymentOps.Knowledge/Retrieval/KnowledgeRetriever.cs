@@ -1,6 +1,4 @@
-using Azure;
 using Azure.Core;
-using Azure.Identity;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Models;
 
@@ -44,7 +42,7 @@ public sealed class KnowledgeRetriever
             };
         }
 
-        try
+        return await KnowledgeSearch.CallAsync<IReadOnlyList<RetrievedSection>>(async () =>
         {
             var response = await _client.SearchAsync<SearchHitDocument>(question, options, cancellationToken);
             var sections = new List<RetrievedSection>();
@@ -62,39 +60,12 @@ public sealed class KnowledgeRetriever
             }
 
             return sections;
-        }
-        catch (RequestFailedException ex)
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
-        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
-        catch (AuthenticationFailedException ex)
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
+        });
     }
 
     /// <summary>Readiness: one query that returns no documents, proving endpoint, index, token and role.</summary>
     public async Task CheckReachableAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await _client.SearchAsync<SearchHitDocument>("*", new SearchOptions { Size = 0 }, cancellationToken);
-        }
-        catch (RequestFailedException ex)
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
-        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException))
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
-        catch (AuthenticationFailedException ex)
-        {
-            throw new KnowledgeUnavailableException(ex);
-        }
+        await KnowledgeSearch.CallAsync(() => _client.SearchAsync<SearchHitDocument>("*", new SearchOptions { Size = 0 }, cancellationToken));
     }
 }

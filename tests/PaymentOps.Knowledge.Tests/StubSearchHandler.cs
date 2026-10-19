@@ -11,6 +11,8 @@ internal sealed class StubSearchHandler(Func<string, (HttpStatusCode Status, str
 {
     public List<(Uri Uri, string Body)> Requests { get; } = [];
 
+    public Dictionary<string, string> ResponseHeaders { get; init; } = [];
+
     public static StubSearchHandler Returning(string json) => new(_ => (HttpStatusCode.OK, json));
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -18,7 +20,13 @@ internal sealed class StubSearchHandler(Func<string, (HttpStatusCode Status, str
         var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
         Requests.Add((request.RequestUri!, body));
         var (status, json) = respond(body);
-        return new HttpResponseMessage(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+        var response = new HttpResponseMessage(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+        foreach (var (name, value) in ResponseHeaders)
+        {
+            response.Headers.Add(name, value);
+        }
+
+        return response;
     }
 }
 

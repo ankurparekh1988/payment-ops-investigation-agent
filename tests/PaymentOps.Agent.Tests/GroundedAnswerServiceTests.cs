@@ -223,6 +223,17 @@ public sealed class GroundedAnswerServiceTests
     }
 
     [Fact]
+    public async Task A_model_retry_that_ends_in_a_timeout_is_unavailable()
+    {
+        var attempts = 0;
+        var chat = ModelClient.Create(new Uri("https://foundry.example/"), "https://cognitiveservices.azure.com/.default", new StaticTokenCredential(), "chat-blue", new ThrowingHandler(() => ++attempts == 1
+            ? new HttpRequestException("Connection reset.")
+            : new TaskCanceledException("The attempt timed out.")));
+
+        Assert.Equal(NotAnsweredReason.AnswerUnavailable, Reason(await Service(FakeKnowledgeLookup.Returning(SectionA), chat).AskAsync("q", CancellationToken.None)));
+    }
+
+    [Fact]
     public async Task A_failed_token_request_for_the_model_is_unavailable()
     {
         var chat = ModelClient.Create(new Uri("https://foundry.example/"), "https://cognitiveservices.azure.com/.default", new FailingTokenCredential(), "chat-blue", new ThrowingHandler());
@@ -295,10 +306,10 @@ public sealed class GroundedAnswerServiceTests
     private static FakeChatClient Answering() =>
         FakeChatClient.Returning(GroundedAnswerValidatorTests.Response(GroundedAnswerValidatorTests.Json("answered", "Text [S1].", ["S1"], string.Empty)));
 
-    private sealed class ThrowingHandler : HttpMessageHandler
+    private sealed class ThrowingHandler(Func<Exception>? failure = null) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            throw new HttpRequestException("No such host is known.");
+            throw (failure?.Invoke() ?? new HttpRequestException("No such host is known."));
     }
 
     private static NotAnsweredReason Reason(InvestigationResult result) => Assert.IsType<InvestigationResult.NotAnswered>(result).Reason;

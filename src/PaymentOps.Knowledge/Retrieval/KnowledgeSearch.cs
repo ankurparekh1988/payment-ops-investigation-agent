@@ -1,6 +1,8 @@
+using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
 using Azure.Core.Serialization;
+using Azure.Identity;
 using Azure.Search.Documents;
 
 using PaymentOps.Knowledge.Indexing;
@@ -37,10 +39,33 @@ internal static class KnowledgeSearch
 
         return options;
     }
+    /// <summary>Runs a Search call, reporting every way Search can fail to answer as one exception.</summary>
+    public static async Task<T> CallAsync<T>(Func<Task<T>> call)
+    {
+        try
+        {
+            return await call();
+        }
+        catch (RequestFailedException ex)
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
+
+        // A request that failed on every retry, whichever way each attempt failed.
+        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is RequestFailedException or OperationCanceledException or AuthenticationFailedException or IOException))
+        {
+            throw KnowledgeUnavailableException.FromRetries(ex);
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            throw new KnowledgeUnavailableException(ex);
+        }
+    }
 }
 
 /// <summary>A search hit with only the selected fields.</summary>
 internal sealed record SearchHitDocument(string Id, string DocId, string Title, string SectionPath, string Content, string Classification)
 {
     public RetrievedSection ToSection(double? rerankerScore) => new(Id, DocId, Title, SectionPath, Content, Classification, rerankerScore);
+
 }

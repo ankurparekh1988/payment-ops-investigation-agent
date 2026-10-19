@@ -26,14 +26,25 @@ public sealed class KnowledgeUnavailableException : Exception
     {
         Status = inner.Status == 0 ? null : inner.Status;
         ErrorCode = inner.ErrorCode;
-        RequestId = inner.GetRawResponse()?.ClientRequestId;
+
+        // Search's own id for the request, which is what its support asks for; ours only if it sent none.
+        var response = inner.GetRawResponse();
+        RequestId = response is not null && response.Headers.TryGetValue("request-id", out var searchId) ? searchId : response?.ClientRequestId;
     }
 
-    // The SDK reports a request that failed on every retry as an aggregate; the last attempt is the one to report.
-    internal KnowledgeUnavailableException(AggregateException retries)
-        : this(retries.InnerExceptions.OfType<RequestFailedException>().Last())
+    // Every attempt failed without a response, so there is no status to report.
+    private KnowledgeUnavailableException(string message, AggregateException retries)
+        : base(message, retries)
     {
     }
+
+    /// <summary>The SDK reports a request that failed on every retry as an aggregate; the last attempt is the one to report.</summary>
+    internal static KnowledgeUnavailableException FromRetries(AggregateException retries) => retries.InnerExceptions[^1] switch
+    {
+        RequestFailedException failed => new KnowledgeUnavailableException(failed),
+        AuthenticationFailedException token => new KnowledgeUnavailableException(token),
+        _ => new KnowledgeUnavailableException("Search didn't respond on any attempt.", retries),
+    };
 
     // The token request failed before anything reached Search, such as a managed-identity endpoint hiccup.
     internal KnowledgeUnavailableException(AuthenticationFailedException inner)
