@@ -47,9 +47,9 @@ internal static class GroundedAnswerValidator
 
         return payload.Status switch
         {
-            "refused" when payload.AnswerMarkdown.Length == 0 && payload.CitationIds.Count == 0 && !string.IsNullOrWhiteSpace(payload.RefusalReason)
+            "refused" when string.IsNullOrWhiteSpace(payload.AnswerMarkdown) && payload.CitationIds.Count == 0 && !string.IsNullOrWhiteSpace(payload.RefusalReason)
                 => new NotAnswered(NotAnsweredReason.InsufficientEvidence),
-            "answered" when !string.IsNullOrWhiteSpace(payload.AnswerMarkdown) && payload.CitationIds.Count > 0 && payload.RefusalReason.Length == 0
+            "answered" when !string.IsNullOrWhiteSpace(payload.AnswerMarkdown) && payload.CitationIds.Count > 0 && string.IsNullOrWhiteSpace(payload.RefusalReason)
                 => CheckProvenance(payload, registry),
             _ => new NotAnswered(NotAnsweredReason.AnswerUnverifiable),
         };

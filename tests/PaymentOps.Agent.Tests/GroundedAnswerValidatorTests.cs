@@ -60,6 +60,13 @@ public sealed class GroundedAnswerValidatorTests
     public void A_valid_refusal_is_insufficient_evidence() =>
         AssertNotAnswered(NotAnsweredReason.InsufficientEvidence, Validate(Response(Json("refused", string.Empty, [], "Not covered."))));
 
+    [Fact]
+    public void Whitespace_in_the_field_a_status_leaves_empty_is_still_empty()
+    {
+        Assert.IsType<InvestigationResult.Answered>(Validate(Response(Json("answered", "Late files roll forward [S1].", ["S1"], " "))));
+        AssertNotAnswered(NotAnsweredReason.InsufficientEvidence, Validate(Response(Json("refused", "\t", [], "Not covered."))));
+    }
+
     [Theory]
     [InlineData("length", NotAnsweredReason.AnswerIncomplete)]
     [InlineData("content_filter", NotAnsweredReason.AnswerBlocked)]
