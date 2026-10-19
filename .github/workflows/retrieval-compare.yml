@@ -1,0 +1,82 @@
+name: Retrieval comparison
+
+# Measures lexical and semantic retrieval against the calibration cases on the live index. Manual,
+# from main only. Query only: no index writes, no model calls, no changes to the AI release.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never alongside a deployment, teardown or self-test, which may be changing the service or index.
+# The key must match the one in cd.yml and teardown.yml.
+concurrency:
+  group: deploy-${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  TERRAFORM_VERSION: 1.16.4
+
+jobs:
+  compare:
+    name: Compare
+    runs-on: ubuntu-latest
+    environment: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      # The environment's branch rules already limit this; failing here makes the intent explicit.
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run the retrieval comparison from main."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - uses: ./.github/actions/terraform-setup
+        with:
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          settings: ${{ vars.TERRAFORM_SETTINGS }}
+
+      - name: Find the search endpoint
+        id: target
+        # Assigned first: a failed command substitution inside echo wouldn't fail the step.
+        run: |
+          endpoint="$(scripts/terraform.sh platform output -raw search_endpoint)"
+          echo "search-endpoint=$endpoint" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Compare
+        env:
+          SEARCH_ENDPOINT: ${{ steps.target.outputs.search-endpoint }}
+        run: >-
+          dotnet run --project eval/PaymentOps.Evaluation --configuration Release --
+          retrieval-compare --endpoint "$SEARCH_ENDPOINT" --ai ai
+          --dataset eval/datasets/retrieval-comparison.json --sources data/knowledge/src
+          --out "$RUNNER_TEMP/retrieval-comparison.json" --summary "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: retrieval-comparison
+          path: ${{ runner.temp }}/retrieval-comparison.json
+          if-no-files-found: ignore
