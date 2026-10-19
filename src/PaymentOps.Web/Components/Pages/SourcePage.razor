@@ -1,11 +1,15 @@
+@page "/sources/{SectionKey}"
 @using PaymentOps.Agent.Contracts
 @using PaymentOps.Web.Rendering
-@layout PaymentOps.Web.Components.Layout.MainLayout
+@inject IInvestigationService Investigation
 
+@* Static rendering, inside App, so the page gets the document head and can set its status code. *@
 <PageTitle>Source</PageTitle>
 
-@switch (Source)
+@switch (_source)
 {
+    case null:
+        break;
     case SourceResult.Found found:
         <h1>@found.Title</h1>
         <p>@found.SectionPath</p>
@@ -16,12 +20,29 @@
         <p>The knowledge service isn't responding right now. Please try again shortly.</p>
         break;
     default:
-        <h1>Source not found</h1>
-        <p>This section isn't available.</p>
+        @* A 404 is rendered by the app's not-found page, like any other missing address. *@
         break;
 }
 
 @code {
-    [Parameter, EditorRequired]
-    public SourceResult Source { get; set; } = default!;
+    private SourceResult? _source;
+
+    [Parameter]
+    public string SectionKey { get; set; } = string.Empty;
+
+    [CascadingParameter]
+    public HttpContext HttpContext { get; set; } = default!;
+
+    // Re-authorized on every request. Missing and not permitted are the same 404 as any unknown
+    // address, so the page never reveals that a Restricted section exists.
+    protected override async Task OnInitializedAsync()
+    {
+        _source = await Investigation.GetSourceAsync(SectionKey, HttpContext.RequestAborted);
+        HttpContext.Response.StatusCode = _source switch
+        {
+            SourceResult.Found => StatusCodes.Status200OK,
+            SourceResult.Unavailable => StatusCodes.Status503ServiceUnavailable,
+            _ => StatusCodes.Status404NotFound,
+        };
+    }
 }

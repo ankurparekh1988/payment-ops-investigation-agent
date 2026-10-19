@@ -9,7 +9,7 @@ using PaymentOps.Domain.Security;
 
 namespace PaymentOps.Web.SmokeTests;
 
-public sealed class SourceEndpointTests(PaymentOpsWebApplicationFactory factory) : IClassFixture<PaymentOpsWebApplicationFactory>
+public sealed class SourcePageTests(PaymentOpsWebApplicationFactory factory) : IClassFixture<PaymentOpsWebApplicationFactory>
 {
     private const string Key = "doc-a--aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -27,7 +27,19 @@ public sealed class SourceEndpointTests(PaymentOpsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task Missing_and_unauthorized_sections_get_the_source_pages_own_404()
+    public async Task The_source_page_is_a_whole_document_so_relative_links_and_styles_resolve()
+    {
+        using var client = ClientWith(_ => new SourceResult.Found("Doc A", "Doc A > One", "Text."));
+
+        using var response = await client.GetAsync(new Uri($"/sources/{Key}", UriKind.Relative));
+
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("<base href=\"/\"", html, StringComparison.Ordinal);
+        Assert.Contains("<title>Source</title>", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Missing_and_unauthorized_sections_get_the_apps_ordinary_404()
     {
         using var client = ClientWith(_ => new SourceResult.NotFound());
 
@@ -35,7 +47,7 @@ public sealed class SourceEndpointTests(PaymentOpsWebApplicationFactory factory)
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
-        Assert.Contains("This section isn't available.", html, StringComparison.Ordinal);
+        Assert.Contains("the content you are looking for does not exist", html, StringComparison.Ordinal);
         Assert.DoesNotContain("Restricted", html, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -47,6 +59,7 @@ public sealed class SourceEndpointTests(PaymentOpsWebApplicationFactory factory)
         using var response = await client.GetAsync(new Uri($"/sources/{Key}", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("isn't responding right now", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     [Fact]
