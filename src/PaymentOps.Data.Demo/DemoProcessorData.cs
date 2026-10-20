@@ -5,12 +5,13 @@ namespace PaymentOps.Data.Demo;
 
 internal sealed class DemoProcessorData(DemoDataset dataset) : IProcessorData
 {
+    // Ids are unique: the loader checked them.
     public Task<Processor?> FindAsync(string processorId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(processorId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(dataset.Processors.SingleOrDefault(p => p.Id == processorId));
+        return Task.FromResult(dataset.Processors.FirstOrDefault(p => p.Id == processorId));
     }
 
     // An incident overlaps the window if it started before the window ends and wasn't resolved by its start.

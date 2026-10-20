@@ -50,4 +50,8 @@ internal static class DatasetJson
 
     public static IReadOnlyList<string> Errors(JsonObject dataset) =>
         Assert.Throws<InvalidDemoDatasetException>(() => Load(dataset)).Errors;
+
+    /// <summary>The dataset is refused, and one of the errors names every given fragment.</summary>
+    public static void AssertRejected(JsonObject dataset, params string[] fragments) =>
+        Assert.Contains(Errors(dataset), e => fragments.All(f => e.Contains(f, StringComparison.Ordinal)));
 }

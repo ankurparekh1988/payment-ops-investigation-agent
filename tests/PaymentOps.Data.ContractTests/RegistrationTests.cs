@@ -54,6 +54,9 @@ public sealed class RegistrationTests
     [InlineData("DemoData:Faults:Payments:Mode", "Empty")]
     [InlineData("DemoData:Faults:Settlement:Mode", "Sometimes")]
     [InlineData("DemoData:Faults:Settlement:Delay", "soon")]
+    [InlineData("DemoData:Faults:Settlement:Mode", "3")]
+    [InlineData("DemoData:Faults:Settlement:Mode", "Delay, Hang")]
+    [InlineData("DemoData:Faults:Settlement:Mode", "empty")]
     public void A_fault_setting_that_isnt_understood_fails_registration(string key, string value) =>
         Assert.Throws<InvalidOperationException>(() => Provider(new() { [key] = value }, allowFaultInjection: true));
 

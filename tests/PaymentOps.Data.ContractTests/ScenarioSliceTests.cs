@@ -16,19 +16,14 @@ public sealed class ScenarioSliceTests
     private const string Northwind = "northwind-acquiring";
     private static readonly CancellationToken None = CancellationToken.None;
 
-    private readonly DemoDataset _dataset = DemoDatasetLoader.LoadDefault();
-    private readonly DemoMerchantData _merchants;
-    private readonly DemoSettlementData _settlement;
-    private readonly DemoProcessorData _processors;
-    private readonly DemoErrorEventData _events;
+    // Loaded once: the records are immutable, and xUnit makes a new instance for every test.
+    private static readonly DemoDataset Dataset = DemoDatasetLoader.LoadDefault();
 
-    public ScenarioSliceTests()
-    {
-        _merchants = new(_dataset);
-        _settlement = new(_dataset);
-        _processors = new(_dataset);
-        _events = new(_dataset);
-    }
+    private readonly DemoDataset _dataset = Dataset;
+    private readonly DemoMerchantData _merchants = new(Dataset);
+    private readonly DemoSettlementData _settlement = new(Dataset);
+    private readonly DemoProcessorData _processors = new(Dataset);
+    private readonly DemoErrorEventData _events = new(Dataset);
 
     [Fact]
     public void The_shipped_dataset_loads_as_of_a_tuesday_evening()

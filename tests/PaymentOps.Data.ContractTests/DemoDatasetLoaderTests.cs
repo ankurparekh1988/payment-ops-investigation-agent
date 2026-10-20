@@ -48,6 +48,36 @@ public sealed class DemoDatasetLoaderTests
         Assert.Throws<InvalidDemoDatasetException>(() => DatasetJson.Load(json));
     }
 
+    [Theory]
+    [InlineData("files", "lines")]
+    [InlineData("payouts", "sourceFileIds")]
+    [InlineData("merchants", "processorIds")]
+    public void A_null_inside_a_list_is_rejected_not_a_crash(string section, string list)
+    {
+        var json = DatasetJson.Valid();
+        json.First(section)[list]!.AsArray().Add(null);
+
+        Assert.Throws<InvalidDemoDatasetException>(() => DatasetJson.Load(json));
+    }
+
+    [Fact]
+    public void A_null_inside_a_nested_list_is_rejected_not_a_crash()
+    {
+        var json = DatasetJson.Valid();
+        json.First("files")["lines"]![0]!["paymentIds"]!.AsArray().Add(null);
+
+        Assert.Throws<InvalidDemoDatasetException>(() => DatasetJson.Load(json));
+    }
+
+    [Fact]
+    public void A_card_like_number_anywhere_in_the_dataset_is_rejected()
+    {
+        var json = DatasetJson.Valid();
+        json.First("incidents")["summary"] = "Card 4242 4242 4242 4242 declined";
+
+        DatasetJson.AssertRejected(json, "card-number checksum");
+    }
+
     [Fact]
     public void A_missing_section_is_rejected()
     {
@@ -63,7 +93,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json["incidents"]!.AsArray().Add(json.First("incidents").DeepClone());
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("INC-1", StringComparison.Ordinal) && e.Contains("more than once", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "INC-1", "more than once");
     }
 
     [Fact]
@@ -72,7 +102,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First("merchants")["processorIds"]!.AsArray().Add("p9");
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("M-1", StringComparison.Ordinal) && e.Contains("p9", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "M-1", "p9");
     }
 
     [Fact]
@@ -82,7 +112,7 @@ public sealed class DemoDatasetLoaderTests
         json["processors"]!.AsArray().Add(ProcessorTwo());
         json.First("payments")["processorId"] = "p2";
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("PAY-1", StringComparison.Ordinal) && e.Contains("p2", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "PAY-1", "p2");
     }
 
     [Fact]
@@ -91,7 +121,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First("files")["lines"]![0]!["paymentIds"]!.AsArray().Add("PAY-404");
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("SF-1", StringComparison.Ordinal) && e.Contains("PAY-404", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "SF-1", "PAY-404");
     }
 
     [Fact]
@@ -100,7 +130,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First("payments")["batchDate"] = "2026-10-30";
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("PAY-1", StringComparison.Ordinal) && e.Contains("SF-1", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "PAY-1", "SF-1");
     }
 
     [Fact]
@@ -109,7 +139,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First("files")["lines"]![0]!["paymentIds"] = new JsonArray();
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("PAY-1", StringComparison.Ordinal) && e.Contains("no file", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "PAY-1", "no file");
     }
 
     [Theory]
@@ -131,7 +161,7 @@ public sealed class DemoDatasetLoaderTests
                 break;
         }
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("PO-1", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "PO-1");
     }
 
     [Fact]
@@ -140,7 +170,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First("payouts")["sourceFileIds"] = new JsonArray();
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("PO-1", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "PO-1");
     }
 
     [Theory]
@@ -152,7 +182,7 @@ public sealed class DemoDatasetLoaderTests
         json.First("payouts")["status"] = status;
         json.First("payouts")["paidAt"] = paidAt;
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("PO-1", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "PO-1");
     }
 
     [Fact]
@@ -161,7 +191,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First("processors")["configuration"]!["timeZoneId"] = "Mars/Olympus";
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("p1", StringComparison.Ordinal) && e.Contains("Mars/Olympus", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "p1", "Mars/Olympus");
     }
 
     [Theory]
@@ -172,7 +202,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First(section)["currency"] = currency;
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains(currency, StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, currency);
     }
 
     [Theory]
@@ -183,7 +213,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First(section)["amount"] = 0;
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("amount", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "amount");
     }
 
     [Theory]
@@ -194,7 +224,7 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json["closureDays"]!.AsArray().Add(new JsonObject { ["date"] = date, ["reason"] = "Another" });
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains(date, StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, date);
     }
 
     [Theory]
@@ -215,7 +245,7 @@ public sealed class DemoDatasetLoaderTests
             json.First(section)[field] = "2026-11-02T14:05:00-05:00";
         }
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("UTC", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "UTC");
     }
 
     [Theory]
@@ -229,28 +259,20 @@ public sealed class DemoDatasetLoaderTests
         var json = DatasetJson.Valid();
         json.First(section)[field] = "2026-11-04T09:00:00Z";
 
-        Assert.Contains(DatasetJson.Errors(json), e => e.Contains("after", StringComparison.Ordinal) && e.Contains("as-of", StringComparison.Ordinal));
+        DatasetJson.AssertRejected(json, "after", "as-of");
     }
 
-    [Theory]
-    [InlineData("Scheduled", false)]
-    [InlineData("Held", true)]
-    public void Only_scheduled_payouts_may_be_due_after_as_of(string status, bool rejected)
+    [Fact]
+    public void A_scheduled_payout_may_be_due_after_as_of()
     {
-        var json = DatasetJson.Valid();
-        json.First("payouts")["status"] = status;
-        json.First("payouts")["paidAt"] = null;
-        json.First("payouts")["scheduledFor"] = "2026-11-05";
+        var json = DueAfterAsOf("Scheduled");
 
-        if (rejected)
-        {
-            Assert.Contains(DatasetJson.Errors(json), e => e.Contains("PO-1", StringComparison.Ordinal));
-        }
-        else
-        {
-            Assert.Equal(new DateOnly(2026, 11, 5), DatasetJson.Load(json).Payouts[0].ScheduledFor);
-        }
+        Assert.Equal(new DateOnly(2026, 11, 5), DatasetJson.Load(json).Payouts[0].ScheduledFor);
     }
+
+    [Fact]
+    public void A_held_payout_may_not_be_due_after_as_of() =>
+        DatasetJson.AssertRejected(DueAfterAsOf("Held"), "PO-1");
 
     [Fact]
     public void Every_problem_is_reported_at_once()
@@ -260,6 +282,15 @@ public sealed class DemoDatasetLoaderTests
         json.First("processors")["configuration"]!["timeZoneId"] = "Mars/Olympus";
 
         Assert.Equal(2, DatasetJson.Errors(json).Count);
+    }
+
+    private static JsonObject DueAfterAsOf(string status)
+    {
+        var json = DatasetJson.Valid();
+        json.First("payouts")["status"] = status;
+        json.First("payouts")["paidAt"] = null;
+        json.First("payouts")["scheduledFor"] = "2026-11-05";
+        return json;
     }
 
     private static JsonObject ProcessorTwo() => new()

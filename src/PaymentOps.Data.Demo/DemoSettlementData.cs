@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 using PaymentOps.Data.Demo.Dataset;
 using PaymentOps.Domain.Settlement;
 
@@ -5,6 +7,8 @@ namespace PaymentOps.Data.Demo;
 
 internal sealed class DemoSettlementData(DemoDataset dataset) : ISettlementData
 {
+    private readonly FrozenDictionary<DateOnly, string> _closures = dataset.ClosureDays.ToFrozenDictionary(c => c.Date, c => c.Reason);
+
     public Task<IReadOnlyList<Payment>> GetPaymentsAsync(string merchantId, DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(merchantId);
@@ -44,12 +48,11 @@ internal sealed class DemoSettlementData(DemoDataset dataset) : ISettlementData
         HalfOpenRange.Require(fromInclusive, toExclusive);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var closures = dataset.ClosureDays.ToDictionary(c => c.Date, c => c.Reason);
         var days = Enumerable.Range(0, toExclusive.DayNumber - fromInclusive.DayNumber)
             .Select(fromInclusive.AddDays)
-            .Select(date => closures.TryGetValue(date, out var reason)
+            .Select(date => _closures.TryGetValue(date, out var reason)
                 ? new SettlementDay(date, false, reason)
-                : new SettlementDay(date, date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday), null));
+                : new SettlementDay(date, !SettlementCalendar.IsWeekend(date), null));
         return Result(days);
     }
 

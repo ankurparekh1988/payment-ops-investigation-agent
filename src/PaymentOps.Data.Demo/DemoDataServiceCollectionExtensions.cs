@@ -26,6 +26,7 @@ internal static class DemoDataPorts
 public static class DemoDataServiceCollectionExtensions
 {
     private const string FaultsSection = "DemoData:Faults";
+    private static readonly TimeSpan DefaultFaultDelay = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Registers the data ports over the built-in demo dataset, which is loaded and checked now so a bad
@@ -40,15 +41,15 @@ public static class DemoDataServiceCollectionExtensions
         var faults = ReadFaults(configuration.GetSection(FaultsSection), allowFaultInjection);
         var dataset = DemoDatasetLoader.LoadDefault();
 
-        services.AddSingleton<IMerchantData>(Decorated<IMerchantData>(new DemoMerchantData(dataset), faults, DemoDataPorts.Merchants, (port, o) => new FaultInjectingMerchantData(port, o)));
-        services.AddSingleton<ISettlementData>(Decorated<ISettlementData>(new DemoSettlementData(dataset), faults, DemoDataPorts.Settlement, (port, o) => new FaultInjectingSettlementData(port, o)));
-        services.AddSingleton<IProcessorData>(Decorated<IProcessorData>(new DemoProcessorData(dataset), faults, DemoDataPorts.Processors, (port, o) => new FaultInjectingProcessorData(port, o)));
-        services.AddSingleton<IErrorEventData>(Decorated<IErrorEventData>(new DemoErrorEventData(dataset), faults, DemoDataPorts.ErrorEvents, (port, o) => new FaultInjectingErrorEventData(port, o)));
+        services.AddSingleton<IMerchantData>(Decorated<IMerchantData>(new DemoMerchantData(dataset), faults, DemoDataPorts.Merchants, (port, f) => new FaultInjectingMerchantData(port, f)));
+        services.AddSingleton<ISettlementData>(Decorated<ISettlementData>(new DemoSettlementData(dataset), faults, DemoDataPorts.Settlement, (port, f) => new FaultInjectingSettlementData(port, f)));
+        services.AddSingleton<IProcessorData>(Decorated<IProcessorData>(new DemoProcessorData(dataset), faults, DemoDataPorts.Processors, (port, f) => new FaultInjectingProcessorData(port, f)));
+        services.AddSingleton<IErrorEventData>(Decorated<IErrorEventData>(new DemoErrorEventData(dataset), faults, DemoDataPorts.ErrorEvents, (port, f) => new FaultInjectingErrorEventData(port, f)));
         return services;
     }
 
-    private static T Decorated<T>(T port, Dictionary<string, FaultOptions> faults, string name, Func<T, FaultOptions, T> decorate) =>
-        faults.TryGetValue(name, out var options) && options.Mode != FaultMode.None ? decorate(port, options) : port;
+    private static T Decorated<T>(T port, Dictionary<string, FaultOptions> faults, string name, Func<T, FaultInjector, T> decorate) =>
+        faults.TryGetValue(name, out var options) ? decorate(port, new FaultInjector(options, name)) : port;
 
     // Strict, like the dataset: a typo in a port, mode or delay fails rather than silently injecting nothing.
     private static Dictionary<string, FaultOptions> ReadFaults(IConfigurationSection section, bool allowFaultInjection)
@@ -68,13 +69,16 @@ public static class DemoDataServiceCollectionExtensions
                 throw new InvalidOperationException($"{key} has unknown settings: {string.Join(", ", unknown)}.");
             }
 
-            var mode = FaultMode.None;
-            if ((port["Mode"] is { } modeText && !Enum.TryParse(modeText, ignoreCase: false, out mode)) || !Enum.IsDefined(mode))
+            // Exact names only: Enum.TryParse would also take "3" or "Delay, Hang" and quietly pick another mode.
+            var modeText = port["Mode"] ?? nameof(FaultMode.None);
+            if (!Enum.GetNames<FaultMode>().Contains(modeText, StringComparer.Ordinal))
             {
-                throw new InvalidOperationException($"{key}:Mode '{port["Mode"]}' isn't one of {string.Join(", ", Enum.GetNames<FaultMode>())}.");
+                throw new InvalidOperationException($"{key}:Mode '{modeText}' isn't one of {string.Join(", ", Enum.GetNames<FaultMode>())}.");
             }
 
-            var delay = TimeSpan.FromSeconds(2);
+            var mode = Enum.Parse<FaultMode>(modeText);
+
+            var delay = DefaultFaultDelay;
             if (port["Delay"] is { } delayText && (!TimeSpan.TryParse(delayText, CultureInfo.InvariantCulture, out delay) || delay < TimeSpan.Zero))
             {
                 throw new InvalidOperationException($"{key}:Delay '{delayText}' isn't a non-negative time span such as 00:00:02.");
@@ -86,7 +90,10 @@ public static class DemoDataServiceCollectionExtensions
                     $"{key}:Mode is {mode}, but fault injection is only for test hosts, which enable it in code. Remove the setting.");
             }
 
-            faults[port.Key] = new FaultOptions { Mode = mode, Delay = delay };
+            if (mode != FaultMode.None)
+            {
+                faults[port.Key] = new FaultOptions(mode, delay);
+            }
         }
 
         return faults;

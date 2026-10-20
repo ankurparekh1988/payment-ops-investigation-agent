@@ -14,14 +14,6 @@ public sealed class FaultInjectionTests
     private static readonly DateOnly Nov4 = new(2026, 11, 4);
 
     [Fact]
-    public async Task None_passes_through()
-    {
-        var files = await Settlement(FaultMode.None).GetFilesAsync("p-a", Nov2, Nov4, CancellationToken.None);
-
-        Assert.Equal(2, files.Count);
-    }
-
-    [Fact]
     public async Task Delay_returns_the_real_result_after_the_delay()
     {
         var watch = Stopwatch.StartNew();
@@ -43,7 +35,7 @@ public sealed class FaultInjectionTests
     [Fact]
     public async Task Empty_returns_no_items_or_nothing_found()
     {
-        var merchants = new FaultInjectingMerchantData(new DemoMerchantData(DemoFixture.Dataset(new ContractData())), Options(FaultMode.Empty));
+        var merchants = new FaultInjectingMerchantData(new DemoMerchantData(DemoFixture.Dataset(new ContractData())), Faults(FaultMode.Empty));
 
         Assert.Empty(await Settlement(FaultMode.Empty).GetFilesAsync("p-a", Nov2, Nov4, CancellationToken.None));
         Assert.Null(await merchants.FindAsync("M-1", CancellationToken.None));
@@ -67,8 +59,8 @@ public sealed class FaultInjectionTests
     }
 
     private static FaultInjectingSettlementData Settlement(FaultMode mode, TimeSpan? delay = null) =>
-        new(new DemoSettlementData(DemoFixture.Dataset(new ContractData())), Options(mode, delay));
+        new(new DemoSettlementData(DemoFixture.Dataset(new ContractData())), Faults(mode, delay));
 
-    private static FaultOptions Options(FaultMode mode, TimeSpan? delay = null) =>
-        new() { Mode = mode, Delay = delay ?? TimeSpan.FromMilliseconds(10) };
+    private static FaultInjector Faults(FaultMode mode, TimeSpan? delay = null) =>
+        new(new FaultOptions(mode, delay ?? TimeSpan.FromMilliseconds(10)), "Settlement");
 }
