@@ -34,4 +34,4 @@ The rule and cases are described in [Evaluation](../Evaluation.md).
 
 ## Outcome
 
-Recorded after the first run from `main`.
+2026-10-20: both modes passed the critical bar, and semantic ranking's gain in mean reciprocal rank (0.0725) was below the 0.10 threshold, so lexical retrieval stays, with no floor. Vector and hybrid search weren't triggered. Details are in [Evaluation](../Evaluation.md#results).

@@ -94,6 +94,12 @@ The repository is public, so restricted sources are readable by anyone there. "R
 
 Facts that decide outcomes, such as risk-rule thresholds, aren't in any document: they belong to the system that applies them.
 
+## Structured data
+
+The merchant, settlement, processor and error-event data is synthetic, and it isn't classified: everyone who can use the agent may see internal routing, processor responses and risk state, as the [product notes](PRD.md) set out. A risk hold therefore shows its rule id to every role; what the rule means, and how a hold is reviewed, is in a Restricted policy. Risk rule thresholds aren't in the data at all.
+
+The dataset is in the public repository under the same checks as the knowledge sources: nothing that passes the card checksum, and only reserved example domains. Fault injection can't be switched on by configuration: only a test host enables it, in code, and a fault setting on its own stops the app from starting.
+
 ## Retrieval and answers
 
 The model sees only sections the user may see, and the user sees only what the server has checked.

@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> In place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, the knowledge corpus and its search index, and grounded answers over that index with server-checked citations. The investigation agent and its data tools come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> In place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, the knowledge corpus and its search index, grounded answers over that index with server-checked citations, and the structured data the investigation agent will query, behind domain ports. The agent and its tools come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -18,6 +18,7 @@
 | Knowledge corpus | ✅ Reviewed Markdown sources, validated and built into the files that are indexed ([below](#knowledge-corpus)) |
 | Knowledge index | ✅ Every deployment publishes the corpus to `knowledge-v1` on a keyless Free-tier search service, one document per section, and verifies every stored field ([below](#knowledge-index)) |
 | Retrieval and answers | ✅ One question, one answer: the server retrieves only what the user may see, the model answers from that evidence or refuses, and every citation is checked before it's shown ([below](#retrieval-and-answers)) |
+| Structured data | ✅ Merchants, payments, settlement files, payouts, the settlement calendar, processor configuration and incidents, and error events behind four domain ports, served from a validated synthetic dataset built into the app. Only tests and the startup check use it so far ([below](#structured-data)) |
 | Investigation agent | Not started |
 
 ## Azure platform
@@ -153,6 +154,39 @@ flowchart LR
 | The model call failed, timed out, was filtered or cut short, or the answer failed validation | Yes |
 | The model found the evidence insufficient and refused | Yes |
 
+## Structured data
+
+Facts a system of record holds come from data ports, never from knowledge documents ([what belongs in the corpus](../data/knowledge/README.md)). The ports are domain interfaces; this repository implements them over a curated synthetic dataset, and a real implementation would replace that with no change above the port ([ADR 0008](adr/0008-data-ports-with-demo-adapters.md)).
+
+```mermaid
+flowchart LR
+  T["Investigation tools<br/>(next)"] --> P["Data ports<br/>PaymentOps.Domain"]
+  P --> D["Demo adapters<br/>PaymentOps.Data.Demo"]
+  D --> J[("dataset.json<br/>built in, checked at startup")]
+  P -.-> R["A real system of record<br/>(not built)"]
+```
+
+| Port | Answers | A real implementation would read |
+|---|---|---|
+| `IMerchantData` | A merchant, the processors its payments are routed to, and any risk hold with the rule that placed it | The merchant and risk systems |
+| `ISettlementData` | Payments by capture time, settlement files by batch date, payouts with the files they were paid from, and the settlement calendar | The payments ledger, file intake and payout system |
+| `IProcessorData` | A processor's configured cut-off, time zone, delivery times and holding period, and the incidents it reported | Processor configuration and status feeds |
+| `IErrorEventData` | Our errors exchanging payments and files with processors, for a processor, a merchant or both | Platform logs or an error store |
+
+- **One contract for every implementation.** Ranges are half-open and must not be empty; nothing found is an empty result, not an error; ids match exactly; results come in time order, then id. There's no maximum span: a limit on what the agent may ask belongs to its tools, not to what a data source can answer. A data source that can't answer throws `DataSourceUnavailableException`, whatever it is. Contract tests in `PaymentOps.Data.ContractTests` state all of this, and a real implementation's tests would inherit them.
+- **The dataset.** `data/datasets/default/dataset.json` is embedded in `PaymentOps.Data.Demo`. At startup it's read strictly and checked: every reference resolves, a payout's source files exist, were accepted and match its processor, batch and merchant, every time is UTC, and nothing has happened after the dataset's as-of time. Any problem stops startup with all of them listed.
+- **A fixed as-of time.** The data is a snapshot taken at Tuesday 10 November 2026, 22:00 UTC, so investigations reason about the same "yesterday" whenever they run. Sign-in and sessions use real time.
+- **Fault injection.** Each port can be made slow, unresponsive, empty or unavailable, every call alike so runs repeat. Only a test host can enable it, in code; a fault setting in configuration without that stops startup.
+
+The dataset has a slice for each investigation scenario, plus nearby records that look related but aren't ([dataset notes](../data/datasets/default/README.md)):
+
+| Scenario | What the data shows |
+|---|---|
+| Payouts delayed by a processor outage | A settlement incident that covered the processor's cut-off, file transfer timeouts from that processor only, and no settlement file for the day; the other processor's file arrived |
+| A missed cut-off before a closure day | A capture minutes after the cut-off, a closure day and a weekend, and a payout due later than the merchant expects but on time |
+| A risk hold | Payments and files as normal, every payout held, and the rule id on the hold |
+| A duplicate settlement batch | Two files for one batch with the same payments, a failed acknowledgement between them, and a second payout from the resend |
+
 ## Project references
 
 The system is a single deployable with modular boundaries. The boundaries are enforced by project references, and architecture tests check them on every build. This diagram shows the actual reference graph from the `.csproj` files.
@@ -183,13 +217,14 @@ flowchart TB
   Demo --> Domain
 ```
 
-*As of 2026-10-16.* `Web` references every module because it's the composition root, where dependency injection wires the system together. `Data.Demo` implements the data ports defined in `Domain`.
+*As of 2026-10-20.* `Web` references every module because it's the composition root, where dependency injection wires the system together. `Data.Demo` implements the data ports defined in `Domain`.
 
 | Rule | Enforced by |
 |---|---|
 | `Domain` has no project references and no Azure, AI or web packages | `DependencyRulesTests` |
 | `Tools` never references the demo adapters or the web host | `DependencyRulesTests` |
 | Only the composition root (`Web`) references `Data.Demo` | `DependencyRulesTests` |
+| The data ports live in `Domain`, and nothing there knows how a record is serialized | `DomainSourceRulesTests` |
 | Only `Knowledge` uses the Azure AI Search SDK | `DependencyRulesTests` |
 | Nothing references the web host | `DependencyRulesTests` |
 | UI components use only the investigation contract (`PaymentOps.Agent.Contracts`), never Knowledge, Tools, the demo adapters or Agent internals. A source-level check, because `Web` references every module as the composition root | `WebComponentRulesTests` |

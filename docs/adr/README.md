@@ -11,3 +11,4 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0005](0005-indexing-by-pushing-from-the-pipeline.md) | Indexing by pushing from the pipeline | Accepted |
 | [0006](0006-grounded-answers-with-a-server-owned-evidence-registry.md) | Grounded answers with a server-owned evidence registry | Accepted |
 | [0007](0007-retrieval-strategy-by-frozen-calibration.md) | Choosing the retrieval strategy by measurement, with vectors deferred | Accepted |
+| [0008](0008-data-ports-with-demo-adapters.md) | Data ports with demo adapters, proven by contract tests | Accepted |
