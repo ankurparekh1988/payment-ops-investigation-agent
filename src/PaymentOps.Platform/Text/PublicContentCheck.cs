@@ -1,12 +1,12 @@
 using System.Text.RegularExpressions;
 
-namespace PaymentOps.Knowledge.Corpus;
+namespace PaymentOps.Platform.Text;
 
 /// <summary>
-/// The sources live in a public repository, so nothing in them may look like real payment or contact
-/// data: no number that passes the card-number checksum, and only reserved example domains.
+/// Everything the build ships lives in a public repository, so nothing in it may look like real payment or
+/// contact data: no number that passes the card-number checksum, and only reserved example domains.
 /// </summary>
-internal static partial class PublicContentCheck
+public static partial class PublicContentCheck
 {
     // RFC 2606 names: example.com, .net and .org, and the .example top-level domain.
     private static readonly string[] ExampleDomains = ["example.com", "example.net", "example.org"];

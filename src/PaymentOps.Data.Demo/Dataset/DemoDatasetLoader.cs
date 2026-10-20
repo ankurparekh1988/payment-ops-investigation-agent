@@ -16,6 +16,16 @@ internal static class DemoDatasetLoader
         Converters = { new JsonStringEnumConverter(allowIntegerValues: false) },
     };
 
+    /// <summary>The curated dataset, built into the assembly so the deployed app needs no data files.</summary>
+    public const string DefaultResource = "data/datasets/default/dataset.json";
+
+    public static DemoDataset LoadDefault()
+    {
+        using var json = typeof(DemoDatasetLoader).Assembly.GetManifestResourceStream(DefaultResource)
+            ?? throw new InvalidOperationException($"The embedded dataset '{DefaultResource}' is missing from the build.");
+        return Load(json);
+    }
+
     public static DemoDataset Load(Stream json)
     {
         ArgumentNullException.ThrowIfNull(json);

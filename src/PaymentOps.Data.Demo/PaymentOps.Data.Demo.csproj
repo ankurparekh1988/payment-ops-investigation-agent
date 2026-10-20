@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\data\datasets\default\dataset.json" LogicalName="data/datasets/default/dataset.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="PaymentOps.Data.ContractTests" />
   </ItemGroup>
 

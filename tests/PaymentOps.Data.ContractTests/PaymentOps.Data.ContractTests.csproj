@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PaymentOps.Domain\PaymentOps.Domain.csproj" />
     <ProjectReference Include="..\..\src\PaymentOps.Data.Demo\PaymentOps.Data.Demo.csproj" />
+    <ProjectReference Include="..\..\src\PaymentOps.Platform\PaymentOps.Platform.csproj" />
   </ItemGroup>
 
 </Project>
