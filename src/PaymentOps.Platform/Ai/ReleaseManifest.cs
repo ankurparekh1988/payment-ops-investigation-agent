@@ -1,6 +1,6 @@
 namespace PaymentOps.Platform.Ai;
 
-// The YAML shape of ai/manifest.yaml. Every member is required and non-null, and unknown keys are
+// The YAML shape of ai/manifest.yaml. Every member is required and non-null unless marked optional, and unknown keys are
 // rejected, so a typo or an empty value fails loading instead of silently taking a default. A key is
 // only accepted where something reads it: contentFilterPolicy exists on chat deployments and the judge.
 
@@ -54,6 +54,11 @@ internal sealed class ManifestRetrieval
 {
     // A breaking schema change gets a new name, so a live index is never changed incompatibly.
     public required string Index { get; init; }
+
+    public required string Mode { get; init; }
+
+    // Optional: absent means no reranker-score floor. Only meaningful with semantic mode.
+    public double? SemanticFloor { get; init; }
 }
 
 internal sealed class ManifestPrompt

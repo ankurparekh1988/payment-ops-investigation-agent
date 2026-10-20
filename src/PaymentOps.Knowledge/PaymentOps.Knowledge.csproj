@@ -6,12 +6,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Azure.Search.Documents" />
     <PackageReference Include="Markdig" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="PaymentOps.Knowledge.Tests" />
+    <InternalsVisibleTo Include="PaymentOps.Web.SmokeTests" />
   </ItemGroup>
 
 </Project>

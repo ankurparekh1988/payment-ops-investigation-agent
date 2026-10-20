@@ -23,6 +23,7 @@ locals {
 
   # Built-in role definition IDs are the same in every tenant. IDs rather than names, because
   # Microsoft renames roles (Azure AI User became Foundry User) while the IDs stay fixed.
+  # Storage Blob Data Reader stays delegable so the platform can remove the app's old Blob grant.
   delegable_roles = {
     "Cognitive Services OpenAI User" = "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
     "Cognitive Services User"        = "a97b65f3-24c7-4388-baec-2e87135dc908"
@@ -42,7 +43,6 @@ locals {
     "Cognitive Services OpenAI User",
     "Foundry User",
     "Search Index Data Reader",
-    "Storage Blob Data Reader",
   ]
   developer_assignments = {
     for pair in setproduct(var.developer_object_ids, local.developer_roles) :

@@ -54,6 +54,8 @@ public static class AiReleaseLoader
             models.Embedding.Deployment,
             models.Judge.Deployment,
             manifest.Retrieval.Index,
+            ReleaseManifestValidator.ParseRetrievalMode(manifest.Retrieval.Mode)!.Value,
+            manifest.Retrieval.SemanticFloor,
             ReleaseManifestValidator.AllDeployments(manifest).ToFrozenDictionary(
                 d => d.Deployment.Deployment, d => Identity(d.Deployment), StringComparer.Ordinal),
             prompts.ToFrozenDictionary(StringComparer.Ordinal));

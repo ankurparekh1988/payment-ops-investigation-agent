@@ -6,6 +6,9 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\RepositoryRoot.cs" Link="Shared\RepositoryRoot.cs" />
+    <Compile Include="..\Shared\TestUser.cs" Link="Shared\TestUser.cs" />
+    <Compile Include="..\Shared\TestCredentials.cs" Link="Shared\TestCredentials.cs" />
+    <Using Include="PaymentOps.Tests.Shared" />
   </ItemGroup>
 
 </Project>

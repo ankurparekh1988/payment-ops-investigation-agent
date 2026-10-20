@@ -4,7 +4,12 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
+using PaymentOps.Agent;
+using PaymentOps.Agent.Answering;
+using PaymentOps.Agent.Contracts;
+using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Web;
 using PaymentOps.Web.Components;
@@ -23,6 +28,16 @@ builder.Services.AddSingleton<IPromptProvider, PromptProvider>();
 TokenCredential azureCredential = new DefaultAzureCredential();
 builder.Services.AddSingleton(azureCredential);
 
+builder.Services.AddOptions<AnsweringOptions>()
+    .Bind(builder.Configuration.GetSection(AnsweringOptions.SectionName))
+    .Validate(
+        o => o.MaxQuestionLength > 0 && o.MaxOutputTokens > 0
+            && o.SearchTimeout > TimeSpan.Zero && o.SearchTimeout <= TimeSpan.FromMinutes(5)
+            && o.ModelTimeout > TimeSpan.Zero && o.ModelTimeout <= TimeSpan.FromMinutes(5),
+        $"{AnsweringOptions.SectionName} needs positive limits and timeouts of at most 5 minutes.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => new AnsweringLimits(sp.GetRequiredService<IOptions<AnsweringOptions>>().Value.MaxQuestionLength));
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -36,9 +51,30 @@ if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_
 }
 
 var healthChecks = builder.Services.AddHealthChecks();
+var foundry = builder.Configuration.GetSection(FoundryOptions.SectionName).Get<FoundryOptions>();
+var search = builder.Configuration.GetSection(SearchOptions.SectionName).Get<SearchOptions>();
+
+// Both endpoints come from Terraform in Azure. Without them (locally, in tests) questions can't be
+// answered; outside Development that's a deployment mistake, so startup fails.
+if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answeringEndpoint)
+{
+    builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));
+    healthChecks.Add(new HealthCheckRegistration(
+        "search",
+        services => new SearchReadinessCheck(services.GetRequiredService<KnowledgeRetriever>().CheckReachableAsync),
+        failureStatus: null,
+        tags: ["ready"]));
+}
+else if (!builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException($"{SearchOptions.SectionName}:Endpoint and {FoundryOptions.SectionName}:Endpoint are required outside Development.");
+}
+else
+{
+    builder.Services.AddScoped<IInvestigationService, UnconfiguredInvestigationService>();
+}
 
 // Readiness depends on Foundry once an endpoint is configured; locally and in tests it isn't.
-var foundry = builder.Configuration.GetSection(FoundryOptions.SectionName).Get<FoundryOptions>();
 if (foundry?.Endpoint is { } foundryEndpoint)
 {
     builder.Services.AddHttpClient(nameof(FoundryReadinessCheck), client => client.Timeout = TimeSpan.FromSeconds(10));

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PaymentOps.Agent\PaymentOps.Agent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\TestUser.cs" Link="Shared\TestUser.cs" />
+    <Compile Include="..\Shared\TestCredentials.cs" Link="Shared\TestCredentials.cs" />
+    <Using Include="PaymentOps.Tests.Shared" />
+  </ItemGroup>
+
+</Project>

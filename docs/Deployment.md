@@ -86,13 +86,13 @@ Later runs apply against the remote state directly. To check for drift, run the 
 | `id-<prefix>-gh-deploy` | Pipeline identity for approved deployments |
 | *Model Availability Reader* role | Custom role for the model preflight (below) |
 | `gh-deploy` search roles | Search Service Contributor and Search Index Data Contributor on the environment's resource group, so the pipeline can create the knowledge index and publish to it |
-| Developer role assignments | Optional, for `TF_VAR_developer_object_ids` |
+| Developer role assignments | Optional, for `TF_VAR_developer_object_ids`: OpenAI User, Foundry User and Search Index Data Reader |
 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
 
 **Why the search roles are granted here, on the resource group.** The pipeline has to manage the index from its first run, and a role granted in the same run as the service it applies to may not be effective yet. The search service doesn't exist when the bootstrap runs, so the grant can't name it; the resource group holds only this environment.
 
-An existing environment picks up a bootstrap change by running `scripts/bootstrap.sh` again: review that its plan adds only what the change describes, then run it once more and confirm it reports no changes. A new setting, such as `TF_VAR_search_sku`, goes into `.env` and then `scripts/configure-github.sh`, before the change is planned or deployed; until then every pipeline plan fails on the missing variable.
+The app no longer reads Blob storage, so developers no longer get Storage Blob Data Reader; an existing environment loses that grant the next time the bootstrap is run. An existing environment picks up a bootstrap change by running `scripts/bootstrap.sh` again: review that its plan adds only what the change describes, then run it once more and confirm it reports no changes. A new setting, such as `TF_VAR_search_sku`, goes into `.env` and then `scripts/configure-github.sh`, before the change is planned or deployed; until then every pipeline plan fails on the missing variable.
 
 **Why two resource groups.** `gh-deploy` is Contributor on the environment's resource group, which would include changing managed identities and their federated credentials. Keeping the pipeline identities and Terraform state in a separate group, where the pipeline has no rights, means a workflow can't widen its own trust or delete its own state. It also lets an environment be torn down and rebuilt without touching what the pipeline depends on.
 
@@ -197,13 +197,11 @@ flowchart LR
   B["Build<br/>publish the app once"] --> A
   P["Plan<br/>gh-plan, preflight,<br/>capacity check"] --> A{"Approve<br/>dev-infra"}
   A --> AP["Apply<br/>capacity re-check,<br/>exact saved plan"]
-  AP --> D["Deploy app<br/>environment dev"]
-  B -->|no changes| D
-  P -->|no changes| D
-  D --> S["Smoke test<br/>/health, /health/ready"]
   AP --> K["Publish knowledge<br/>environment dev"]
   B -->|no changes| K
   P -->|no changes| K
+  K --> D["Deploy app<br/>environment dev"]
+  D --> S["Smoke test<br/>/health, /health/ready"]
 ```
 
 | Job | What it does |
@@ -211,13 +209,15 @@ flowchart LR
 | Build | Publishes the web app once; the same artifact is what gets deployed |
 | Plan | Plans the platform as `gh-plan` with the model preflight. If anything would change, it checks model capacity as early feedback and uploads the plan **encrypted**: saved plans hold sensitive values in plain text, and artifacts in a public repository can be downloaded |
 | Apply | Runs only if the build also succeeded, so infrastructure never changes without a deployable app. Waits for approval in the `<env>-infra` environment, checks model capacity again (quota can change while approval waits), then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
-| Deploy app | Deploys the built artifact to the web app in the `<env>` environment |
-| Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry with its managed identity) |
 | Publish knowledge | As `gh-deploy` in the `<env>` environment: builds the corpus, publishes it to the index the AI release names, and verifies every stored field. Runs on every deployment, so a recreated free service is filled again; when the index already matches, no section is uploaded or deleted |
+| Deploy app | Deploys the built artifact to the web app in the `<env>` environment, only after Publish knowledge succeeded: the app reads the index, so it never goes live against one that failed verification |
+| Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry and queries the knowledge index with its managed identity). Readiness is retried for up to 10 minutes, because a Search role assigned in the same deployment can take that long to take effect; it fails if the app still isn't ready after that |
 
 **Model capacity.** Quota is shared by every deployment of the same model and deployment type, so `scripts/check-model-capacity.sh` sums the capacity requested in the plan per model and deployment type and compares it with the subscription's quota. The environment's own existing deployments are added back to the headroom, so a re-apply doesn't count them twice. Quota doesn't guarantee that the region has capacity, so any new capacity is also checked against the region's available capacity.
 
 `.github/workflows/knowledge-selftest.yml` is started by hand. It runs the publisher's self-test against a throwaway index in the `<env>` environment: two small corpora, the second renaming and removing a heading and moving a document to restricted. It checks the sections, their metadata, the tighten order and that no stale section remains, then deletes its index. It refuses to run if `retrieval.index` is `knowledge-selftest`, the self-test's own index. It runs one at a time with CD and teardown, and never touches the infrastructure or the live index.
+
+`.github/workflows/retrieval-compare.yml` is started by hand, from `main` only. As `gh-deploy` in the `<env>` environment, it runs the retrieval calibration cases against the live index in both lexical and semantic mode and applies the decision rule in [Evaluation](Evaluation.md). It only queries: it writes nothing to Search, calls no model and doesn't change the AI release. The results go to the job summary and a `retrieval-comparison.json` artifact, and the run fails if a General user's query returns a Restricted section. It runs one at a time with CD, the self-test and teardown. Starting it while a CD run is waiting replaces that run, so start it when nothing else is running for the environment.
 
 `.github/workflows/teardown.yml` destroys the platform on demand. You type the environment name to start it; it plans the destroy and summarises what will be removed, then waits for the same approval and applies exactly that destroy plan. The bootstrap is never touched, so the environment can be redeployed.
 
@@ -295,7 +295,7 @@ A pull request can show what *would* change, but cannot change anything. Only jo
 - Log Analytics Reader
 - Monitoring Metrics Publisher
 
-It cannot grant Owner or Contributor, and cannot assign roles to users or groups. Developer access is granted by the bootstrap for the same reason.
+Storage Blob Data Reader stays on the list so the platform can remove grants it made before. It cannot grant Owner or Contributor, and cannot assign roles to users or groups. Developer access is granted by the bootstrap for the same reason.
 
 ## Environments
 

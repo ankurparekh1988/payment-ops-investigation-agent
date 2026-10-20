@@ -3,7 +3,6 @@ using System.Text.Json;
 
 using Azure;
 using Azure.Core;
-using Azure.Core.Serialization;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Models;
@@ -36,7 +35,7 @@ public sealed class SearchKnowledgeIndexClient : IKnowledgeIndexClient
     }
 
     public static SearchKnowledgeIndexClient Create(Uri endpoint, string indexName, TokenCredential credential) =>
-        new(new SearchIndexClient(endpoint, credential, new SearchClientOptions { Serializer = new JsonObjectSerializer(KnowledgeIndexSchema.Json) }), indexName);
+        new(new SearchIndexClient(endpoint, credential, KnowledgeIndexSchema.ClientOptions()), indexName);
 
     public async Task EnsureIndexAsync(CancellationToken cancellationToken)
     {

@@ -45,6 +45,7 @@ module "platform" {
   dotnet_version           = var.dotnet_version
   storage_replication_type = var.storage_replication_type
   search_sku               = var.search_sku
+  search_semantic_ranker   = "free" # A monthly allowance of semantic queries at no cost.
   log_retention_days       = var.log_retention_days
   log_daily_quota_gb       = var.log_daily_quota_gb
   monthly_budget           = var.monthly_budget

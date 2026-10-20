@@ -133,4 +133,12 @@ public sealed class IndexedCorpusTests : IDisposable
         Assert.Contains(documents, d => d.Classification == KnowledgeClassification.Restricted);
         Assert.Equal(documents.Count, documents.Select(d => d.Id).Distinct(StringComparer.Ordinal).Count());
     }
+
+    [Fact]
+    public void The_shipped_sources_produce_the_indexed_sections()
+    {
+        var documents = IndexedCorpus.FromSourceDirectory(Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src"));
+
+        Assert.Contains(documents, d => d.DocId == "risk-hold-review-policy" && d.SectionPath == "Risk hold review policy > Risk rules > RF-51 expired verification");
+    }
 }

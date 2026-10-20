@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace PaymentOps.Platform.Ai;
@@ -41,6 +42,26 @@ internal static partial class ReleaseManifestValidator
             errors.Add($"retrieval.index '{manifest.Retrieval.Index}' must be lowercase letters and digits in hyphen-separated words, 2 to 128 characters.");
         }
 
+        var mode = ParseRetrievalMode(manifest.Retrieval.Mode);
+        if (mode is null)
+        {
+            errors.Add($"retrieval.mode is '{manifest.Retrieval.Mode}'; use lexical or semantic.");
+        }
+
+        if (manifest.Retrieval.SemanticFloor is { } floor)
+        {
+            if (mode == RetrievalMode.Lexical)
+            {
+                errors.Add("retrieval.semanticFloor is set with mode lexical, where it would never apply; remove it or use semantic.");
+            }
+
+            // The semantic reranker scores from 0 to 4. NaN fails every comparison, so it's checked first.
+            if (!double.IsFinite(floor) || floor is < 0 or > 4)
+            {
+                errors.Add($"retrieval.semanticFloor is {floor.ToString(CultureInfo.InvariantCulture)}; it must be between 0 and 4.");
+            }
+        }
+
         foreach (var (id, prompt) in manifest.Prompts)
         {
             if (!PromptId().IsMatch(id))
@@ -61,6 +82,13 @@ internal static partial class ReleaseManifestValidator
     }
 
     public static string PromptPath(string id) => $"prompts/{id}.md";
+
+    public static RetrievalMode? ParseRetrievalMode(string value) => value switch
+    {
+        "lexical" => RetrievalMode.Lexical,
+        "semantic" => RetrievalMode.Semantic,
+        _ => null,
+    };
 
     /// <summary>Every model deployment the manifest declares, with its path for error messages.</summary>
     public static IReadOnlyList<(string Path, ModelDeployment Deployment)> AllDeployments(ReleaseManifest manifest) =>

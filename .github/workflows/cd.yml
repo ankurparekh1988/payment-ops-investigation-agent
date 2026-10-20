@@ -163,10 +163,12 @@ jobs:
 
   deploy-app:
     name: Deploy app
-    needs: [build, plan, apply]
+    # Deployed only after the index it reads was published and verified.
+    needs: [build, plan, apply, publish-knowledge]
     if: >-
       always() && needs.build.result == 'success' && needs.plan.result == 'success'
       && (needs.apply.result == 'success' || needs.apply.result == 'skipped')
+      && needs.publish-knowledge.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
@@ -218,7 +220,7 @@ jobs:
   publish-knowledge:
     name: Publish knowledge
     needs: [build, plan, apply]
-    # Same gate as deploy-app. Running alongside it is safe only while the app doesn't read the index.
+    # Runs before deploy-app: the app reads this index, so it goes live only after the index is verified.
     if: >-
       always() && needs.build.result == 'success' && needs.plan.result == 'success'
       && (needs.apply.result == 'success' || needs.apply.result == 'skipped')
@@ -274,24 +276,40 @@ jobs:
     if: always() && needs.deploy-app.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Check liveness and readiness
+      - name: Check liveness
         env:
           APP_URL: ${{ needs.deploy-app.outputs.url }}
         run: |
           # The free tier sleeps when idle, so allow a few minutes for the first response.
-          for endpoint in health health/ready; do
-            for attempt in $(seq 1 18); do
-              status="$(curl --silent --output body.txt --write-out '%{http_code}' --max-time 30 "$APP_URL/$endpoint" || true)"
-              if [[ "$status" == "200" ]]; then
-                echo "/$endpoint: $(cat body.txt)"
-                continue 2
-              fi
-              echo "/$endpoint returned $status (attempt $attempt of 18); retrying in 10 seconds."
-              sleep 10
-            done
-            echo "::error::/$endpoint never became healthy."
-            exit 1
+          for attempt in $(seq 1 18); do
+            status="$(curl --silent --output body.txt --write-out '%{http_code}' --max-time 30 "$APP_URL/health" || true)"
+            if [[ "$status" == "200" ]]; then
+              echo "/health: $(cat body.txt)"
+              exit 0
+            fi
+            echo "/health returned $status (attempt $attempt of 18); retrying in 10 seconds."
+            sleep 10
           done
+          echo "::error::/health never became healthy."
+          exit 1
+
+      - name: Check readiness
+        env:
+          APP_URL: ${{ needs.deploy-app.outputs.url }}
+        run: |
+          # A role assignment created by this deployment can take up to 10 minutes to reach Search. The
+          # app stays unready until then; a real permissions mistake still fails once the window ends.
+          for attempt in $(seq 1 40); do
+            status="$(curl --silent --output body.txt --write-out '%{http_code}' --max-time 30 "$APP_URL/health/ready" || true)"
+            if [[ "$status" == "200" ]]; then
+              echo "/health/ready: $(cat body.txt)"
+              exit 0
+            fi
+            echo "/health/ready returned $status (attempt $attempt of 40); retrying in 15 seconds."
+            sleep 15
+          done
+          echo "::error::/health/ready never became healthy."
+          exit 1
 
       - name: Check that sign-in is enforced
         env:

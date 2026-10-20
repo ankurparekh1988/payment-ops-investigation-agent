@@ -28,7 +28,7 @@ public sealed class KnowledgeIndexSchemaTests
     }
 
     [Fact]
-    public void Fields_have_the_behaviour_commit_10_queries_rely_on()
+    public void Fields_have_the_behaviour_retrieval_relies_on()
     {
         Assert.True(Field("id") is { IsKey: true, IsFilterable: true, IsSortable: true });
         Assert.All(["doc_id", "doc_type", "classification"], name => Assert.True(Field(name).IsFilterable));
@@ -36,5 +36,17 @@ public sealed class KnowledgeIndexSchemaTests
         Assert.Equal(LexicalAnalyzerName.EnMicrosoft, Field("content").AnalyzerName);
         Assert.Equal(SearchFieldDataType.Int32, Field("ordinal").Type);
         Assert.True(Field("ordinal").IsSortable);
+    }
+
+    [Fact]
+    public void The_semantic_configuration_ranks_on_readable_fields_only()
+    {
+        var semantic = KnowledgeIndexSchema.Build("knowledge-test").SemanticSearch;
+
+        var configuration = Assert.Single(semantic.Configurations);
+        Assert.Equal(KnowledgeIndexSchema.SemanticConfigurationName, configuration.Name);
+        Assert.Equal("title", configuration.PrioritizedFields.TitleField.FieldName);
+        Assert.Equal(["content"], configuration.PrioritizedFields.ContentFields.Select(f => f.FieldName));
+        Assert.Equal(["h2", "h3"], configuration.PrioritizedFields.KeywordsFields.Select(f => f.FieldName));
     }
 }

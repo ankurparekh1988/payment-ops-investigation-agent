@@ -49,6 +49,11 @@ variable "search_sku" {
   type        = string
 }
 
+variable "search_semantic_ranker" {
+  description = "Semantic ranker plan for the search service: disabled, free or standard."
+  type        = string
+}
+
 variable "log_retention_days" {
   description = "Days telemetry is kept."
   type        = number

@@ -33,4 +33,19 @@ public sealed class ShippedReleaseTests
     {
         Assert.Equal("knowledge-v1", AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).KnowledgeIndex);
     }
+
+    [Fact]
+    public void The_shipped_release_retrieves_lexically_without_a_floor()
+    {
+        var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+
+        Assert.Equal(RetrievalMode.Lexical, release.RetrievalMode);
+        Assert.Null(release.SemanticFloor);
+    }
+
+    [Fact]
+    public void The_shipped_release_has_the_grounded_answer_prompt()
+    {
+        Assert.Contains("grounded-answer", AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).Prompts.Keys);
+    }
 }

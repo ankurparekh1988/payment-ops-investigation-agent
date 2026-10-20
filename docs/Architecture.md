@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> Only the foundation is in place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, and the knowledge corpus and its search index. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> In place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, the knowledge corpus and its search index, and grounded answers over that index with server-checked citations. The investigation agent and its data tools come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -8,16 +8,17 @@
 |---|---|
 | Solution structure | ✅ Projects and allowed dependency directions in place |
 | Architecture tests | ✅ Dependency rules enforced in `PaymentOps.ArchitectureTests` |
-| Web host | ✅ Placeholder Blazor host with a `/health` endpoint |
+| Web host | ✅ Blazor host with the Ask page, source pages and health endpoints |
 | Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
 | Azure platform | ✅ Defined in Terraform, with a model preflight. Deployed only by the deployment pipeline, after approval |
-| Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry with its managed identity) |
+| Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry and queries the knowledge index with its managed identity) |
 | Sign-in and roles | ✅ Entra ID sign-in, app roles and the Risk and Compliance group; the server-side `IUserContext` and authorization policies ([Security](Security.md)) |
 | Telemetry | ✅ OpenTelemetry to Application Insights, sent with the app's managed identity |
 | AI release | ✅ `ai/manifest.yaml` drives the model deployments and is built into the app, which verifies it and its prompts at startup ([below](#ai-release)) |
 | Knowledge corpus | ✅ Reviewed Markdown sources, validated and built into the files that are indexed ([below](#knowledge-corpus)) |
-| Knowledge index | ✅ Every deployment publishes the corpus to `knowledge-v1` on a keyless Free-tier search service, one document per section, and verifies every stored field; nothing reads it yet ([below](#knowledge-index)) |
-| Retrieval and the investigation agent | Not started |
+| Knowledge index | ✅ Every deployment publishes the corpus to `knowledge-v1` on a keyless Free-tier search service, one document per section, and verifies every stored field ([below](#knowledge-index)) |
+| Retrieval and answers | ✅ One question, one answer: the server retrieves only what the user may see, the model answers from that evidence or refuses, and every citation is checked before it's shown ([below](#retrieval-and-answers)) |
+| Investigation agent | Not started |
 
 ## Azure platform
 
@@ -29,14 +30,14 @@ flowchart LR
   U -->|sign in| E["Microsoft Entra ID<br/>app roles, groups"]
   E -->|"authorization code,<br/>redeemed as the app's managed identity"| APP
   APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>embedding: no filter<br/>judge: default filter"]
-  APP -->|"Entra token<br/>Blob Data Reader"| ST[("Knowledge storage")]
+  APP -->|"Entra token<br/>Search Index Data Reader"| S
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
   F -.->|"project identity<br/>Metrics Publisher, Log Analytics Reader"| AI
   CD["Deployment pipeline<br/>gh-deploy"] -->|"Entra token, publish sections<br/>Search Service Contributor,<br/>Index Data Contributor"| S[("Azure AI Search<br/>Free, API keys disabled")]
 ```
 
-*As of 2026-10-14.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
+*As of 2026-10-16.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
 
 ## AI release
 
@@ -44,7 +45,7 @@ Models, content filters and prompts are configuration that changes behaviour, so
 
 ```mermaid
 flowchart LR
-  M["ai/manifest.yaml<br/>models, filters, prompt versions and hashes"]
+  M["ai/manifest.yaml<br/>models, filters, retrieval settings,<br/>prompt versions and hashes"]
   P["ai/prompts/*.md"]
   TF["Terraform<br/>model deployments, filters"]
   B["Build<br/>embedded in PaymentOps.Platform"]
@@ -65,7 +66,7 @@ flowchart LR
 - **Access.** Code reads prompts through `IPromptProvider`. Placeholders are `{{name}}`, filled in one pass.
 - **Visibility.** At startup the app logs its schema version, deployment names and each prompt's id, version and hash, never prompt text.
 
-*As of 2026-10-14.* The manifest has no prompts yet: each prompt is added with the feature that first uses it, starting with grounded answers.
+*As of 2026-10-19.* The manifest holds one prompt, `grounded-answer`, and the retrieval settings: the index, the mode and an optional semantic floor. Each further prompt is added with the feature that first uses it.
 
 ## Knowledge corpus
 
@@ -111,13 +112,46 @@ CD builds the corpus and pushes it into the search index the AI release names in
 | `doc_id` | string | filterable | The document a section belongs to |
 | `title` | string | searchable | Document title |
 | `doc_type` | string | filterable | `runbook`, `processor-doc`, `policy` or `incident-report` |
-| `classification` | string | filterable | `general` or `restricted`; the field retrieval will filter on |
+| `classification` | string | filterable | `general` or `restricted`; every query filters on it |
 | `h2`, `h3` | string | searchable | The section's headings below the title |
 | `section_path` | string | retrievable | Heading path for citations |
 | `ordinal` | int | sortable | The heading's position in the document |
 | `content` | string | searchable, `en.microsoft` | The section's Markdown, without headings |
 
-Every field is retrievable, so the publisher can compare it.
+Every field is retrievable, so the publisher can compare it. A semantic ranking configuration ranks on `title`, `content` and the `h2`/`h3` headings, never on `doc_id` or `classification`.
+
+## Retrieval and answers
+
+A signed-in user asks one question on the home page. The page talks only to `IInvestigationService`; retrieval mode, prompts and models stay behind it ([ADR 0006](adr/0006-grounded-answers-with-a-server-owned-evidence-registry.md)).
+
+```mermaid
+flowchart LR
+  Q["Ask page"] --> I["IInvestigationService<br/>one question at a time"]
+  I --> A["KnowledgeAccess<br/>from the signed-in user"]
+  A --> R["Search: top 5,<br/>classification filter"]
+  R -->|no hits| N["Not answered"]
+  R --> E["Evidence S1…S5"]
+  E --> M["Model: strict JSON,<br/>answer or refuse"]
+  M --> V["Validate status,<br/>markers and ids"]
+  V --> OK["Answer with<br/>citations"]
+  V --> N
+  OK -.->|"/sources/{key}"| SRC["Section, re-checked<br/>against the user's access"]
+```
+
+- **Access.** `KnowledgeAccess` is built from `IUserContext`: General only, or General and Restricted for the Risk and Compliance group. The Search filter is written from it inside `PaymentOps.Knowledge`, so nothing a user types reaches it.
+- **Retrieval.** The top five sections the user may see, lexically or with semantic reranking. The AI release chooses the mode (`retrieval.mode`); the page and the request can't. Which mode ships is decided by measurement ([ADR 0007](adr/0007-retrieval-strategy-by-frozen-calibration.md)).
+- **Evidence.** Each retrieved section gets an id for this question only, `S1` to `S5`. Section keys belong to the corpus; these ids belong to one model call and its validation.
+- **Answer.** The model returns a strict JSON object: an answer with `[Sn]` markers and the ids it cited, or a refusal. The server checks the status rules, that the markers and the cited ids are exactly the same set, and that every id was retrieved for this question. Any failure turns the whole answer into a fixed message; a bad citation is never dropped to show the rest.
+- **Not answered.** No hits, an unreachable service, a filtered or incomplete response and an answer that fails validation each have their own reason, for diagnosis. The page shows a fixed message for each, never model or provider text.
+- **Rendering.** Answers and sections are rendered from an allowlist of Markdown (paragraphs, headings, lists, emphasis, code). Text is encoded, links and images become plain text, and the only links are citations the server builds from validated ids.
+- **Sources.** `/sources/{key}` shows the exact section the model saw, looked up with the user's access in the same query.
+
+| Not answered because | Model called |
+|---|---|
+| Blank or overlong question, not signed in, another question running on the same page | No |
+| Search failed or timed out; no section the user may see matched | No |
+| The model call failed, timed out, was filtered or cut short, or the answer failed validation | Yes |
+| The model found the evidence insufficient and refused | Yes |
 
 ## Project references
 
@@ -139,6 +173,7 @@ flowchart TB
   Web --> Demo
   Web --> Platform
   Agent --> Tools
+  Agent --> Knowledge
   Agent --> Platform
   Tools --> Domain
   Tools --> Knowledge
@@ -148,7 +183,7 @@ flowchart TB
   Demo --> Domain
 ```
 
-*As of 2026-10-05.* `Web` references every module because it's the composition root, where dependency injection wires the system together. `Data.Demo` implements the data ports defined in `Domain`.
+*As of 2026-10-16.* `Web` references every module because it's the composition root, where dependency injection wires the system together. `Data.Demo` implements the data ports defined in `Domain`.
 
 | Rule | Enforced by |
 |---|---|
@@ -157,3 +192,4 @@ flowchart TB
 | Only the composition root (`Web`) references `Data.Demo` | `DependencyRulesTests` |
 | Only `Knowledge` uses the Azure AI Search SDK | `DependencyRulesTests` |
 | Nothing references the web host | `DependencyRulesTests` |
+| UI components use only the investigation contract (`PaymentOps.Agent.Contracts`), never Knowledge, Tools, the demo adapters or Agent internals. A source-level check, because `Web` references every module as the composition root | `WebComponentRulesTests` |

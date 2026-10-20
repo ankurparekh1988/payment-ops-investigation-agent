@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\eval\PaymentOps.Evaluation\PaymentOps.Evaluation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\RepositoryRoot.cs" Link="Shared\RepositoryRoot.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using Azure.Core.Serialization;
+using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes.Models;
 
 namespace PaymentOps.Knowledge.Indexing;
@@ -12,6 +14,9 @@ internal static class KnowledgeIndexSchema
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+
+    /// <summary>Client options for reading and writing this index's documents.</summary>
+    public static SearchClientOptions ClientOptions() => new() { Serializer = new JsonObjectSerializer(Json) };
 
     public static SearchIndex Build(string indexName) => new(indexName)
     {
@@ -31,5 +36,22 @@ internal static class KnowledgeIndexSchema
             new SimpleField("ordinal", SearchFieldDataType.Int32) { IsSortable = true },
             new SearchableField("content") { AnalyzerName = LexicalAnalyzerName.EnMicrosoft },
         },
+
+        // Headings and text only: classification and doc_id are for filtering, not relevance.
+        SemanticSearch = new SemanticSearch
+        {
+            Configurations =
+            {
+                new SemanticConfiguration(SemanticConfigurationName, new SemanticPrioritizedFields
+                {
+                    TitleField = new SemanticField("title"),
+                    ContentFields = { new SemanticField("content") },
+                    KeywordsFields = { new SemanticField("h2"), new SemanticField("h3") },
+                }),
+            },
+        },
     };
+
+    /// <summary>The semantic ranking configuration semantic queries name.</summary>
+    internal const string SemanticConfigurationName = "knowledge-semantic";
 }

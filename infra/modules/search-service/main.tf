@@ -25,6 +25,9 @@ resource "azapi_resource" "this" {
     properties = {
       # Entra ID only: requests with an API key are rejected.
       disableLocalAuth = true
+
+      # Set explicitly so the ranker the app may use is reviewed state, not a platform default.
+      semanticSearch = var.semantic_search
     }
   }
 

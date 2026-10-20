@@ -6,6 +6,19 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PaymentOps.Agent\PaymentOps.Agent.csproj" />
+    <ProjectReference Include="..\..\src\PaymentOps.Knowledge\PaymentOps.Knowledge.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\tools\Shared\GitHubAnnotation.cs" Link="Shared\GitHubAnnotation.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaymentOps.Evaluation.Tests" />
   </ItemGroup>
 
 </Project>

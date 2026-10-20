@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "critical-duplicate-stop-payout",
+      "kind": "critical",
+      "access": "general",
+      "question": "A duplicate settlement batch was found before its payouts went out. What should happen to the payouts from the second batch?",
+      "expected": [
+        { "docId": "duplicate-settlement-batch", "sectionPath": "Duplicate settlement batch > If it is a duplicate > Stop the second payout" }
+      ]
+    },
+    {
+      "id": "critical-duplicate-vs-split",
+      "kind": "critical",
+      "access": "general",
+      "question": "How can I tell whether two settlement files with the same settlement date are a split batch rather than a duplicate?",
+      "expected": [
+        { "docId": "duplicate-settlement-batch", "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Signs of a split batch" },
+        { "docId": "duplicate-settlement-batch", "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Compare the batches" }
+      ]
+    },
+    {
+      "id": "critical-fabrikam-partial-file",
+      "kind": "critical",
+      "access": "general",
+      "question": "Fabrikam Pay sent a settlement file that covers only part of the batch. What should we do?",
+      "expected": [
+        { "docId": "fabrikam-pay-operating-guide", "sectionPath": "Fabrikam Pay operating guide > Settlement files > A partial file" }
+      ]
+    },
+    {
+      "id": "critical-fabrikam-late-capture",
+      "kind": "critical",
+      "access": "general",
+      "question": "Why did a payment we captured just before the cut-off end up in Fabrikam Pay's next batch?",
+      "expected": [
+        { "docId": "fabrikam-pay-operating-guide", "sectionPath": "Fabrikam Pay operating guide > Late captures > What rolls forward" }
+      ]
+    },
+    {
+      "id": "critical-postmortem-missed",
+      "kind": "critical",
+      "access": "general",
+      "question": "In the Fabrikam Pay settlement outage, what did our error events show that we missed?",
+      "expected": [
+        { "docId": "fabrikam-settlement-outage-postmortem", "sectionPath": "Fabrikam Pay settlement outage postmortem > What happened > What we missed" }
+      ]
+    },
+    {
+      "id": "critical-escalation-when",
+      "kind": "critical",
+      "access": "general",
+      "question": "When should a payments problem be raised as an incident?",
+      "expected": [
+        { "docId": "incident-escalation-procedure", "sectionPath": "Incident escalation procedure > Raising an incident > When to raise one" }
+      ]
+    },
+    {
+      "id": "critical-escalation-contents",
+      "kind": "critical",
+      "access": "general",
+      "question": "What information must an incident include?",
+      "expected": [
+        { "docId": "incident-escalation-procedure", "sectionPath": "Incident escalation procedure > Raising an incident > What it must contain" }
+      ]
+    },
+    {
+      "id": "critical-missing-closure-day",
+      "kind": "critical",
+      "access": "general",
+      "question": "A settlement batch looks missing. How do I rule out a closure day?",
+      "expected": [
+        { "docId": "missing-settlement-batch", "sectionPath": "Missing settlement batch > Confirm the batch is missing > Rule out a closure day" }
+      ]
+    },
+    {
+      "id": "critical-northwind-clock",
+      "kind": "critical",
+      "access": "general",
+      "question": "Which time does Northwind Acquiring use to assign a payment to a batch?",
+      "expected": [
+        { "docId": "northwind-acquiring-operating-guide", "sectionPath": "Northwind Acquiring operating guide > Late captures > Northwind uses its own clock" }
+      ]
+    },
+    {
+      "id": "critical-outage-cutoff",
+      "kind": "critical",
+      "access": "general",
+      "question": "How do I compare a processor's outage window with its settlement cut-off?",
+      "expected": [
+        { "docId": "payout-delay-processor-outage", "sectionPath": "Payout delay during a processor outage > Confirm the outage > Compare the outage window with the cut-off" }
+      ]
+    },
+    {
+      "id": "critical-closure-consecutive",
+      "kind": "critical",
+      "access": "general",
+      "question": "How should I count the delay when closure days fall next to a weekend?",
+      "expected": [
+        { "docId": "settlement-closure-days-policy", "sectionPath": "Settlement closure days policy > How closure days affect settlement > Consecutive closures" }
+      ]
+    },
+    {
+      "id": "critical-pending-cutoff",
+      "kind": "critical",
+      "access": "general",
+      "question": "How do I apply the processor's cut-off when working out when a pending payment should have settled?",
+      "expected": [
+        { "docId": "settlement-pending-investigation", "sectionPath": "Settlement pending investigation > Work out when it should have settled > Apply the cut-off" }
+      ]
+    },
+    {
+      "id": "critical-status-payout-failed",
+      "kind": "critical",
+      "access": "general",
+      "question": "A merchant's payout failed at their bank. Is that a settlement issue?",
+      "expected": [
+        { "docId": "settlement-status-troubleshooting", "sectionPath": "Settlement status troubleshooting > Settled but not paid out > The payout failed" }
+      ]
+    },
+    {
+      "id": "critical-risk-rf51",
+      "kind": "critical",
+      "access": "restricted",
+      "question": "How is a payout hold placed by RF-51 for expired verification released?",
+      "expected": [
+        { "docId": "risk-hold-review-policy", "sectionPath": "Risk hold review policy > Risk rules > RF-51 expired verification" }
+      ]
+    },
+    {
+      "id": "critical-risk-must-not-say",
+      "kind": "critical",
+      "access": "restricted",
+      "question": "What must Operations not tell a merchant about a risk hold?",
+      "expected": [
+        { "docId": "risk-hold-review-policy", "sectionPath": "Risk hold review policy > Talking to the merchant > What Operations must not say" }
+      ]
+    },
+    {
+      "id": "paraphrase-northwind-adjustment",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "Northwind sent an extra file later that only changes some merchants' amounts. Should we pay it out?",
+      "expected": [
+        { "docId": "northwind-acquiring-operating-guide", "sectionPath": "Northwind Acquiring operating guide > Settlement files > Corrections" }
+      ]
+    },
+    {
+      "id": "paraphrase-closure-notice",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "Do we need to email each merchant ahead of a bank holiday when settlement stops?",
+      "expected": [
+        { "docId": "settlement-closure-days-policy", "sectionPath": "Settlement closure days policy > Telling merchants > Before a closure" }
+      ]
+    },
+    {
+      "id": "paraphrase-file-lost",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "Neither we nor the acquirer can locate yesterday's settlement file. What's the next step?",
+      "expected": [
+        { "docId": "missing-settlement-batch", "sectionPath": "Missing settlement batch > Act > Nobody can find it" }
+      ]
+    },
+    {
+      "id": "paraphrase-evening-sale",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "A sale went through late in the evening after processing had closed for the day. When will the merchant see that money?",
+      "expected": [
+        { "docId": "settlement-status-troubleshooting", "sectionPath": "Settlement status troubleshooting > Accepted but not settled > Captured after the cut-off" },
+        { "docId": "settlement-pending-investigation", "sectionPath": "Settlement pending investigation > Work out when it should have settled > Apply the cut-off" }
+      ]
+    },
+    {
+      "id": "paraphrase-postmortem-notice",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "After the file-delivery outage, what did we decide about informing affected sellers?",
+      "expected": [
+        { "docId": "fabrikam-settlement-outage-postmortem", "sectionPath": "Fabrikam Pay settlement outage postmortem > What we changed > Telling merchants" }
+      ]
+    },
+    {
+      "id": "adjacent-fabrikam-cutoff-time",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "What time is Fabrikam Pay's settlement cut-off?",
+      "expected": []
+    },
+    {
+      "id": "adjacent-northwind-holding-days",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "How many days does Northwind Acquiring hold funds before releasing them?",
+      "expected": []
+    },
+    {
+      "id": "adjacent-closure-dates",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "Which dates this year are settlement system closure days?",
+      "expected": []
+    },
+    {
+      "id": "adjacent-file-fee",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "What fee does Fabrikam Pay charge us for each settlement file it sends?",
+      "expected": []
+    },
+    {
+      "id": "adjacent-northwind-phone",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "What is the phone number of Northwind's partner operations team?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-weather",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "What will the weather be like in Toronto tomorrow?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-recipe",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "How long should I bake a loaf of sourdough bread?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-sport",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "Who won the last ice hockey world championship?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-programming",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "How do I reverse a linked list in Python?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-travel",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "Which documents do I need to travel from Canada to Japan?",
+      "expected": []
+    },
+    {
+      "id": "probe-risk-rf51",
+      "kind": "probe",
+      "access": "general",
+      "question": "How is a payout hold placed by RF-51 for expired verification released?",
+      "expected": []
+    },
+    {
+      "id": "probe-risk-rf37",
+      "kind": "probe",
+      "access": "general",
+      "question": "What does the RF-37 volume spike rule mean, and who reviews it?",
+      "expected": []
+    },
+    {
+      "id": "probe-risk-outcomes",
+      "kind": "probe",
+      "access": "general",
+      "question": "What are the possible outcomes of a risk hold review?",
+      "expected": []
+    }
+  ]
+}

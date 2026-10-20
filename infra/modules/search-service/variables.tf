@@ -29,6 +29,16 @@ variable "sku" {
   }
 }
 
+variable "semantic_search" {
+  description = "Semantic ranker plan: disabled, free or standard."
+  type        = string
+
+  validation {
+    condition     = contains(["disabled", "free", "standard"], var.semantic_search)
+    error_message = "Must be disabled, free or standard."
+  }
+}
+
 variable "tags" {
   description = "Tags applied to the service."
   type        = map(string)

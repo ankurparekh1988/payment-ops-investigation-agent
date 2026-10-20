@@ -34,6 +34,10 @@ public static class IndexedCorpus
         return Build(entries, errors);
     }
 
+    /// <summary>The sections a source tree would be indexed as, without a corpus build.</summary>
+    public static IReadOnlyList<KnowledgeSearchDocument> FromSourceDirectory(string sourceRoot) =>
+        FromSources(KnowledgeSourceReader.Read(sourceRoot));
+
     internal static IReadOnlyList<KnowledgeSearchDocument> FromSources(IEnumerable<KnowledgeSource> sources)
     {
         var list = sources.ToList();

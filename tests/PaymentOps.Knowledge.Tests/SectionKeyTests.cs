@@ -38,4 +38,11 @@ public sealed class SectionKeyTests
         Assert.Matches("^a{64}--[0-9a-f]{64}$", key);
         Assert.Equal(130, key.Length);
     }
+
+    [Fact]
+    public void Generated_keys_are_well_formed()
+    {
+        Assert.True(SectionKey.IsWellFormed(SectionKey.For("doc-a", Path)));
+        Assert.False(SectionKey.IsWellFormed("doc-a--" + new string('g', 64)));
+    }
 }
