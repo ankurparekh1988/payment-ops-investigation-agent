@@ -19,6 +19,10 @@ public abstract class MerchantDataContract
         Assert.Equal("RF-37", merchant.RiskHold!.RuleId);
     }
 
+    [Fact]
+    public async Task A_found_merchants_routing_cannot_be_changed_by_the_caller() =>
+        ReadOnlyResults.AssertReadOnly((await Port.FindAsync("M-1", CancellationToken.None))!.ProcessorIds);
+
     [Theory]
     [InlineData("M-404")]
     [InlineData("m-1")]

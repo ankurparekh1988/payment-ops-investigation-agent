@@ -24,6 +24,21 @@ public abstract class SettlementDataContract
     }
 
     [Fact]
+    public async Task Results_and_the_lists_inside_them_cannot_be_changed_by_the_caller()
+    {
+        var files = await Port.GetFilesAsync("p-a", Nov2, Nov4, CancellationToken.None);
+        var payouts = await Port.GetPayoutsAsync("M-1", Nov2, Nov4, CancellationToken.None);
+
+        ReadOnlyResults.AssertReadOnly(await Port.GetPaymentsAsync("M-1", Utc(2026, 11, 1, 0, 0), Utc(2026, 11, 7, 0, 0), CancellationToken.None));
+        ReadOnlyResults.AssertReadOnly(await Port.GetCalendarAsync(Nov2, Nov4, CancellationToken.None));
+        ReadOnlyResults.AssertReadOnly(files);
+        ReadOnlyResults.AssertReadOnly(files[0].Lines);
+        ReadOnlyResults.AssertReadOnly(files[0].Lines[0].PaymentIds);
+        ReadOnlyResults.AssertReadOnly(payouts);
+        ReadOnlyResults.AssertReadOnly(payouts[0].SourceFileIds);
+    }
+
+    [Fact]
     public async Task Payment_range_is_half_open()
     {
         var payments = await Port.GetPaymentsAsync("M-1", Utc(2026, 11, 2, 10, 0), Utc(2026, 11, 3, 0, 0), CancellationToken.None);

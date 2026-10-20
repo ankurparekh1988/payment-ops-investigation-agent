@@ -49,13 +49,16 @@ internal static class DemoDatasetLoader
         }
 
         errors.AddRange(dataset is null ? ["The dataset is empty."] : DemoDatasetIntegrity.Check(dataset));
-        return errors.Count == 0 ? dataset! : throw new InvalidDemoDatasetException(errors);
+        return errors.Count == 0 ? DemoDatasetSnapshot.Freeze(dataset!) : throw new InvalidDemoDatasetException(errors);
     }
 
-    /// <summary>Returns the dataset if it passes every integrity rule; otherwise throws with all the problems.</summary>
+    /// <summary>
+    /// Returns an immutable copy of the dataset if it passes every integrity rule; otherwise throws with all
+    /// the problems.
+    /// </summary>
     public static DemoDataset Checked(DemoDataset dataset)
     {
         var errors = DemoDatasetIntegrity.Check(dataset);
-        return errors.Count == 0 ? dataset : throw new InvalidDemoDatasetException(errors);
+        return errors.Count == 0 ? DemoDatasetSnapshot.Freeze(dataset) : throw new InvalidDemoDatasetException(errors);
     }
 }

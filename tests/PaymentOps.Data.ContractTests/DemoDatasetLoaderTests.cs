@@ -89,7 +89,7 @@ public sealed class DemoDatasetLoaderTests
 
     [Theory]
     [InlineData("amount", "30.00")]
-    [InlineData("currency", "EUR")]
+    [InlineData("currency", "GBP")]
     public void A_file_line_must_add_up_to_its_payments(string field, string value)
     {
         var json = DatasetJson.Valid();
@@ -100,7 +100,7 @@ public sealed class DemoDatasetLoaderTests
 
     [Theory]
     [InlineData("amount", "30.00")]
-    [InlineData("currency", "EUR")]
+    [InlineData("currency", "GBP")]
     public void A_payout_must_add_up_to_its_source_lines(string field, string value)
     {
         var json = DatasetJson.Valid();
@@ -272,15 +272,71 @@ public sealed class DemoDatasetLoaderTests
         DatasetJson.AssertRejected(json, "p1", "Mars/Olympus");
     }
 
+    [Fact]
+    public void Risk_hold_ids_are_unique_across_merchants()
+    {
+        var json = DatasetJson.Valid();
+        var second = json.First("merchants").DeepClone().AsObject();
+        second["id"] = "M-2";
+        json["merchants"]!.AsArray().Add(second);
+
+        DatasetJson.AssertRejected(json, "RH-1", "more than once");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void A_risk_hold_needs_an_id(string id)
+    {
+        var json = DatasetJson.Valid();
+        json.First("merchants")["riskHold"]!["id"] = id;
+
+        DatasetJson.AssertRejected(json, "risk hold", "empty id");
+    }
+
+    // Null means a manual hold; blank text would be a third state with no meaning.
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void A_risk_hold_rule_id_is_null_or_a_rule(string ruleId)
+    {
+        var json = DatasetJson.Valid();
+        json.First("merchants")["riskHold"]!["ruleId"] = ruleId;
+
+        DatasetJson.AssertRejected(json, "M-1", "rule id");
+    }
+
+    [Theory]
+    [InlineData("merchants", "processorIds", "p1")]
+    [InlineData("payouts", "sourceFileIds", "SF-1")]
+    public void A_list_of_ids_cant_name_the_same_record_twice(string section, string list, string id)
+    {
+        var json = DatasetJson.Valid();
+        json.First(section)[list]!.AsArray().Add(id);
+
+        DatasetJson.AssertRejected(json, id, "listed more than once");
+    }
+
+    [Fact]
+    public void A_file_line_cant_list_the_same_payment_twice()
+    {
+        var json = DatasetJson.Valid();
+        json.First("files")["lines"]![0]!["paymentIds"]!.AsArray().Add("PAY-1");
+
+        DatasetJson.AssertRejected(json, "PAY-1", "listed more than once");
+    }
+
     [Theory]
     [InlineData("payments", "usd")]
     [InlineData("payouts", "US")]
-    public void Currencies_must_be_three_upper_case_letters(string section, string currency)
+    [InlineData("payments", "ZZZ")]
+    [InlineData("payouts", "EUR")]
+    public void Currencies_must_be_ones_the_dataset_supports(string section, string currency)
     {
         var json = DatasetJson.Valid();
         json.First(section)["currency"] = currency;
 
-        DatasetJson.AssertRejected(json, currency);
+        DatasetJson.AssertRejected(json, $"'{currency}'", "the dataset supports");
     }
 
     [Theory]

@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 using PaymentOps.Domain.Merchants;
 using PaymentOps.Domain.Processors;
 using PaymentOps.Domain.Settlement;
@@ -11,8 +9,11 @@ namespace PaymentOps.Data.Demo.Dataset;
 /// the files they were paid from, and nothing has happened after the as-of time. JSON shape, UTC times and
 /// null list entries are already enforced by the loader.
 /// </summary>
-internal static partial class DemoDatasetIntegrity
+internal static class DemoDatasetIntegrity
 {
+    // The ISO 4217 codes the scenarios use; a new one is added here deliberately, not by typing any three letters.
+    private static readonly string[] SupportedCurrencies = ["GBP", "USD"];
+
     public static IReadOnlyList<string> Check(DemoDataset dataset)
     {
         var errors = new List<string>();
@@ -27,6 +28,7 @@ internal static partial class DemoDatasetIntegrity
         Index("payout", dataset.Payouts, p => p.Id, errors);
         Index("incident", dataset.Incidents, i => i.Id, errors);
         Index("error event", dataset.ErrorEvents, e => e.Id, errors);
+        Index("risk hold", dataset.Merchants.Select(m => m.RiskHold).OfType<RiskHold>(), h => h.Id, errors);
 
         CheckProcessors(dataset, context);
         CheckClosureDays(dataset, context);
@@ -84,6 +86,7 @@ internal static partial class DemoDatasetIntegrity
     {
         foreach (var merchant in dataset.Merchants)
         {
+            context.ListedOnce(merchant.ProcessorIds, $"merchant {merchant.Id}");
             foreach (var processorId in merchant.ProcessorIds)
             {
                 context.Known("processor", processorId, context.Processors, $"merchant {merchant.Id}");
@@ -92,6 +95,10 @@ internal static partial class DemoDatasetIntegrity
             if (merchant.RiskHold is { } hold)
             {
                 context.Happened("placed", $"merchant {merchant.Id} hold {hold.Id}", hold.PlacedAt);
+                if (hold.RuleId is not null && string.IsNullOrWhiteSpace(hold.RuleId))
+                {
+                    context.Errors.Add($"merchant {merchant.Id} hold {hold.Id}: a blank rule id; a manual hold has none (null).");
+                }
             }
         }
     }
@@ -143,6 +150,7 @@ internal static partial class DemoDatasetIntegrity
             {
                 Money($"{name} line for {line.MerchantId}", line.Amount, line.Currency, context.Errors);
                 context.Known("merchant", line.MerchantId, context.Merchants, name);
+                context.ListedOnce(line.PaymentIds, $"{name} line for {line.MerchantId}");
                 var listed = line.PaymentIds.Where(context.Payments.ContainsKey).Select(id => context.Payments[id]).ToList();
                 if (listed.Count == line.PaymentIds.Count
                     && (listed.Sum(p => p.Amount) != line.Amount || listed.Any(p => p.Currency != line.Currency)))
@@ -194,6 +202,8 @@ internal static partial class DemoDatasetIntegrity
             {
                 context.Errors.Add($"{name}: has no source file.");
             }
+
+            context.ListedOnce(payout.SourceFileIds, name);
 
             var problems = payout.SourceFileIds.Select(id => SourceFileProblem(payout, id, context)).OfType<string>().ToList();
             context.Errors.AddRange(problems.Select(problem => $"{name}: {problem}"));
@@ -305,14 +315,11 @@ internal static partial class DemoDatasetIntegrity
             errors.Add($"{owner}: amount must be positive, not {amount}.");
         }
 
-        if (!CurrencyCode().IsMatch(currency))
+        if (!SupportedCurrencies.Contains(currency))
         {
-            errors.Add($"{owner}: currency '{currency}' isn't a three-letter ISO 4217 code.");
+            errors.Add($"{owner}: currency '{currency}' isn't one the dataset supports ({string.Join(", ", SupportedCurrencies)}).");
         }
     }
-
-    [GeneratedRegex("^[A-Z]{3}$", RegexOptions.CultureInvariant)]
-    private static partial Regex CurrencyCode();
 
     private sealed record Context(
         DateTimeOffset AsOf,
@@ -328,6 +335,15 @@ internal static partial class DemoDatasetIntegrity
             if (!index.ContainsKey(id))
             {
                 Errors.Add($"{owner}: unknown {kind} '{id}'.");
+            }
+        }
+
+        // A repeated id would count one source or payment twice.
+        public void ListedOnce(IEnumerable<string> ids, string owner)
+        {
+            foreach (var id in ids.GroupBy(id => id, StringComparer.Ordinal).Where(g => g.Count() > 1))
+            {
+                Errors.Add($"{owner}: '{id.Key}' is listed more than once.");
             }
         }
 

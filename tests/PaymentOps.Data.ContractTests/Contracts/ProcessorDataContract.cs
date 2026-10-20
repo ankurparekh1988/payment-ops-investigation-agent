@@ -59,6 +59,10 @@ public abstract class ProcessorDataContract
     }
 
     [Fact]
+    public async Task Incidents_cannot_be_changed_by_the_caller() =>
+        ReadOnlyResults.AssertReadOnly(await Port.GetIncidentsAsync("p-a", Utc(2026, 11, 1, 0, 0), Utc(2026, 11, 7, 0, 0), CancellationToken.None));
+
+    [Fact]
     public async Task From_must_be_before_to() =>
         await Assert.ThrowsAsync<ArgumentException>(() => Port.GetIncidentsAsync("p-a", Utc(2026, 11, 3, 0, 0), Utc(2026, 11, 2, 0, 0), CancellationToken.None));
 

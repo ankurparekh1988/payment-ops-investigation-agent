@@ -2,7 +2,7 @@
 
 A synthetic snapshot of the systems of record the investigation agent queries: merchants and their risk holds, payments, settlement files, payouts, the settlement calendar, processor configuration and incidents, and our own error events. Everything here is invented.
 
-`dataset.json` is built into `PaymentOps.Data.Demo` and checked when the app starts. A broken reference, amounts that don't add up, a payout due on a non-settlement day or paid before its file arrived, a non-UTC time, or anything dated after the as-of time stops startup, with every problem listed.
+`dataset.json` is built into `PaymentOps.Data.Demo` and checked when the app starts. A duplicate id, a broken reference, an unsupported currency, amounts that don't add up, a payout due on a non-settlement day or paid before its file arrived, a non-UTC time, or anything dated after the as-of time stops startup, with every problem listed.
 
 ## The as-of time
 
@@ -34,4 +34,4 @@ Each also has something nearby that looks related but isn't:
 
 Edit `dataset.json` directly and run `dotnet test tests/PaymentOps.Data.ContractTests`. The loader tests report any broken reference, and the scenario tests fail if a change stops a scenario from being solvable.
 
-Optional fields are written out as `null`, never left out. Times are UTC with a `Z`. A file line's amount is the sum of its payments, and a payout's is the sum of its merchant's lines in its source files; the loader checks both.
+Optional fields are written out as `null`, never left out. Times are UTC with a `Z`. A file line's amount is the sum of its payments, and a payout's is the sum of its merchant's lines in its source files; the loader checks both. Currencies are `USD` or `GBP`; another is added to the loader's list on purpose.

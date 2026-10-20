@@ -47,6 +47,10 @@ public abstract class ErrorEventDataContract
     }
 
     [Fact]
+    public async Task Events_cannot_be_changed_by_the_caller() =>
+        ReadOnlyResults.AssertReadOnly(await Port.GetEventsAsync(new("p-a", null, Start, End), CancellationToken.None));
+
+    [Fact]
     public async Task A_query_needs_a_processor_or_a_merchant() =>
         await Assert.ThrowsAsync<ArgumentException>(() => Port.GetEventsAsync(new(null, null, Start, End), CancellationToken.None));
 

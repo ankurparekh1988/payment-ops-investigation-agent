@@ -15,7 +15,7 @@ The agent's behaviour has to be built and tested against data that is realistic 
 
 - Four ports in `PaymentOps.Domain`: `IMerchantData`, `ISettlementData`, `IProcessorData` and `IErrorEventData`. Each groups what one kind of system would answer; there's no repository per record type.
 - `PaymentOps.Data.Demo` implements them over `data/datasets/default/dataset.json`, built into the assembly and checked strictly at startup. Only the web host references it.
-- The contract the ports promise is written as tests: half-open ranges with no maximum span, empty results for nothing found, exact ids and stable ordering. The demo adapters run them, and a real adapter's tests would inherit them. An unavailable source throws one exception, `DataSourceUnavailableException`, whatever the source.
+- The contract the ports promise is written as tests: half-open ranges with no maximum span, empty results for nothing found, exact ids, stable ordering, and results a caller can't change. The demo adapters run them, and a real adapter's tests would inherit them. An unavailable source throws one exception, `DataSourceUnavailableException`, whatever the source.
 - The dataset has a fixed as-of time, so the scenarios reason about the same days whenever they run.
 - Fault injection wraps the ports so failure handling can be tested. Only a test host can enable it.
 
