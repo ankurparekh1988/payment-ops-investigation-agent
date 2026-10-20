@@ -4,4 +4,8 @@
     <ProjectReference Include="..\PaymentOps.Domain\PaymentOps.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaymentOps.Data.ContractTests" />
+  </ItemGroup>
+
 </Project>
