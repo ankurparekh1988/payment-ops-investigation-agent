@@ -275,6 +275,8 @@ public sealed class AiReleaseLoaderTests
     [Theory]
     [InlineData("-0.25")]
     [InlineData("4.25")]
+    [InlineData(".nan")]
+    [InlineData(".inf")]
     public void A_floor_outside_the_reranker_scale_fails(string floor)
     {
         var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  mode: semantic\n  semanticFloor: {floor}")).LoadErrors();

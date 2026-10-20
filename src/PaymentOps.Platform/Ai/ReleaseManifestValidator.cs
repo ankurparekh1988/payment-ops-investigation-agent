@@ -55,8 +55,8 @@ internal static partial class ReleaseManifestValidator
                 errors.Add("retrieval.semanticFloor is set with mode lexical, where it would never apply; remove it or use semantic.");
             }
 
-            // The semantic reranker scores from 0 to 4.
-            if (floor is < 0 or > 4)
+            // The semantic reranker scores from 0 to 4. NaN fails every comparison, so it's checked first.
+            if (!double.IsFinite(floor) || floor is < 0 or > 4)
             {
                 errors.Add($"retrieval.semanticFloor is {floor.ToString(CultureInfo.InvariantCulture)}; it must be between 0 and 4.");
             }

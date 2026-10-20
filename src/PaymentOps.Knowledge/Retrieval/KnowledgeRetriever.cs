@@ -30,6 +30,12 @@ public sealed class KnowledgeRetriever
     {
         ArgumentNullException.ThrowIfNull(access);
 
+        // The release validator already refuses this; lexical hits have no reranker score, so a floor would drop them all.
+        if (semanticFloor is not null && mode != RetrievalMode.Semantic)
+        {
+            throw new ArgumentException("A semantic floor applies only to semantic retrieval.", nameof(semanticFloor));
+        }
+
         var options = KnowledgeSearch.Options(Top, access.Predicate);
         if (mode == RetrievalMode.Semantic)
         {

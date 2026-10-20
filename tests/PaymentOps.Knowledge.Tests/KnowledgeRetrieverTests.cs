@@ -98,6 +98,17 @@ public sealed class KnowledgeRetrieverTests
     }
 
     [Fact]
+    public async Task A_floor_with_lexical_retrieval_is_refused_before_searching()
+    {
+        // Lexical hits have no reranker score, so a floor would silently drop every one.
+        var (retriever, handler) = Create(SearchResponses.Hits(("a", "general", 3.25)));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            retriever.RetrieveAsync("q", KnowledgeAccess.From(TestUser.General), RetrievalMode.Lexical, 2.0, CancellationToken.None));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task A_search_failure_is_reported_as_unavailable_with_its_status()
     {
         var handler = new StubSearchHandler(_ => (HttpStatusCode.Forbidden, "{\"error\":{\"code\":\"Forbidden\",\"message\":\"no\"}}"));
