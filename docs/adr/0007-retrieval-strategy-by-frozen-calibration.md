@@ -13,7 +13,7 @@ Azure AI Search can rank lexically, rerank semantically, search vectors, or comb
 
 - The AI release chooses the mode (`retrieval.mode`) and an optional reranker-score floor (`retrieval.semanticFloor`); requests can't.
 - `retrieval-compare.yml` runs reviewed calibration cases in both modes against the live index, as a manual run from `main`. It only queries, and it fails if a General user's question returns a Restricted section.
-- The rule: a mode passes if every critical case finds an expected section in its top five. If only one mode passes, it's chosen. If both pass, semantic is chosen only if it improves mean reciprocal rank by at least 0.10. A floor is chosen only from unrelated questions, and only if it costs no answerable case its expected section.
+- The rule: a mode passes if every critical case finds an expected section in its top five. If only one mode passes, it's chosen. If both pass, semantic is chosen only if it improves mean reciprocal rank by at least 0.10. A floor is chosen only from unrelated questions, and only if every answerable case keeps at least one expected section at or above it.
 - If neither mode passes, vector or hybrid search is designed before anything is built on top of retrieval.
 - The workflow recommends; adopting a result is a reviewed change to the AI release. The outcome is recorded below, without rewriting this decision.
 

@@ -29,7 +29,7 @@ Expected sections are written as a document id and heading path, such as *Risk h
 3. Neither passes: retrieval needs more than lexical and semantic ranking, so vector or hybrid search is designed before building on it.
 4. Only one passes: that one.
 5. Both pass: semantic only if its mean reciprocal rank is at least 0.10 higher; otherwise lexical, which is simpler and cheaper.
-6. If semantic is chosen, the floor is the highest of 0.25, 0.50 … 4.00 that takes no `critical` or `paraphrase` case's expected section away and leaves at least half the `unrelated` cases with no hits. If none does, there's no floor.
+6. If semantic is chosen, the floor is the highest of 0.25, 0.50 … 4.00 at which every `critical` and `paraphrase` case keeps at least one expected section, and at least half the `unrelated` cases have no hits left. If none does, there's no floor; an answerable case that semantic ranking already missed therefore means no floor.
 
 Mean reciprocal rank is the average, over `critical` and `paraphrase` cases, of 1 / the rank of the first expected section in the top five (0 if it isn't there).
 

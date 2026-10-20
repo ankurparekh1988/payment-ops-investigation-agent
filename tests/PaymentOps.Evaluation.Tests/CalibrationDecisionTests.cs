@@ -116,8 +116,9 @@ public sealed class CalibrationDecisionTests
     }
 
     [Fact]
-    public void A_case_semantic_already_misses_doesnt_stop_a_floor_that_costs_no_one_their_hit()
+    public void An_answerable_case_semantic_already_misses_leaves_no_floor()
     {
+        // The paraphrase case has no expected section at any floor, so no candidate can keep one for every answerable case.
         var result = CalibrationDecision.Decide(
         [
             Run("c1", CaseKind.Critical, CalibrationDecision.Lexical, null),
@@ -128,7 +129,7 @@ public sealed class CalibrationDecisionTests
         ]);
 
         Assert.Equal(CalibrationDecision.Semantic, result.RecommendedMode);
-        Assert.Equal(2.5, result.RecommendedFloor);
+        Assert.Null(result.RecommendedFloor);
     }
 
     [Fact]

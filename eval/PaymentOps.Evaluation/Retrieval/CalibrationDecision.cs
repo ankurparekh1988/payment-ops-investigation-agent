@@ -61,11 +61,11 @@ internal static class CalibrationDecision
         return new ModeSummary(mode, critical.Count > 0 && misses.Count == 0, misses, mrr);
     }
 
-    // 0.25, 0.50, ... 4.00 on the reranker's 0-4 scale. A floor may not cost an answerable case the
-    // expected section it found; a case that found none has nothing for the floor to take.
+    // 0.25, 0.50, ... 4.00 on the reranker's 0-4 scale. Every answerable case must keep an expected
+    // section at the floor, so one that semantic already missed rules out every floor.
     private static List<FloorCandidate> FloorCandidates(IReadOnlyList<CaseRun> semantic)
     {
-        var answerable = semantic.Where(run => CalibrationCase.Answerable(run.Kind) && run.ExpectedScores.Count > 0).ToList();
+        var answerable = semantic.Where(run => CalibrationCase.Answerable(run.Kind)).ToList();
         var unrelated = semantic.Where(run => run.Kind == CaseKind.Unrelated).ToList();
         return [.. Enumerable.Range(1, 16).Select(step => step * 0.25).Select(floor =>
         {
