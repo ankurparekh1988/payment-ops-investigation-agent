@@ -8,7 +8,7 @@
 |---|---|
 | Solution structure | ✅ Projects and allowed dependency directions in place |
 | Architecture tests | ✅ Dependency rules enforced in `PaymentOps.ArchitectureTests` |
-| Web host | ✅ Placeholder Blazor host with a `/health` endpoint |
+| Web host | ✅ Blazor host with the Ask page, source pages and health endpoints |
 | Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
 | Azure platform | ✅ Defined in Terraform, with a model preflight. Deployed only by the deployment pipeline, after approval |
 | Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry and queries the knowledge index with its managed identity) |
