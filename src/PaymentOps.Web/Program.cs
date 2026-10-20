@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent;
 using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Web;
@@ -23,6 +24,9 @@ var builder = WebApplication.CreateBuilder(args);
 var aiRelease = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
 builder.Services.AddSingleton(aiRelease);
 builder.Services.AddSingleton<IPromptProvider, PromptProvider>();
+
+// The demo systems of record, also built in and checked at startup. Fault injection stays off here.
+builder.Services.AddDemoData(builder.Configuration);
 
 // In Azure this resolves to the app's managed identity (AZURE_CLIENT_ID); locally, the developer's sign-in.
 TokenCredential azureCredential = new DefaultAzureCredential();
