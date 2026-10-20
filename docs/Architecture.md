@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> Only the foundation is in place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, and the knowledge corpus and its search index. Product and AI capabilities come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> In place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, the knowledge corpus and its search index, and grounded answers over that index with server-checked citations. The investigation agent and its data tools come next. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -45,7 +45,7 @@ Models, content filters and prompts are configuration that changes behaviour, so
 
 ```mermaid
 flowchart LR
-  M["ai/manifest.yaml<br/>models, filters, prompt versions and hashes"]
+  M["ai/manifest.yaml<br/>models, filters, retrieval settings,<br/>prompt versions and hashes"]
   P["ai/prompts/*.md"]
   TF["Terraform<br/>model deployments, filters"]
   B["Build<br/>embedded in PaymentOps.Platform"]
@@ -66,7 +66,7 @@ flowchart LR
 - **Access.** Code reads prompts through `IPromptProvider`. Placeholders are `{{name}}`, filled in one pass.
 - **Visibility.** At startup the app logs its schema version, deployment names and each prompt's id, version and hash, never prompt text.
 
-*As of 2026-10-14.* The manifest has no prompts yet: each prompt is added with the feature that first uses it, starting with grounded answers.
+*As of 2026-10-19.* The manifest holds one prompt, `grounded-answer`, and the retrieval settings: the index, the mode and an optional semantic floor. Each further prompt is added with the feature that first uses it.
 
 ## Knowledge corpus
 
