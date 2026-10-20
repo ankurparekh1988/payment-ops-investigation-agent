@@ -26,10 +26,10 @@ public sealed class ScenarioSliceTests
     private readonly DemoErrorEventData _events = new(Dataset);
 
     [Fact]
-    public void The_shipped_dataset_loads_as_of_a_tuesday_evening()
+    public void The_shipped_dataset_loads_as_of_early_wednesday()
     {
-        Assert.Equal(new DateTimeOffset(2026, 11, 10, 22, 0, 0, TimeSpan.Zero), _dataset.AsOf);
-        Assert.Equal(DayOfWeek.Tuesday, _dataset.AsOf.DayOfWeek);
+        Assert.Equal(new DateTimeOffset(2026, 11, 11, 6, 0, 0, TimeSpan.Zero), _dataset.AsOf);
+        Assert.Equal(DayOfWeek.Wednesday, _dataset.AsOf.DayOfWeek);
     }
 
     // S1: M-1042's Fabrikam payout for Monday is missing because Fabrikam's batch never closed.
@@ -60,6 +60,9 @@ public sealed class ScenarioSliceTests
         Assert.Empty(await _events.GetEventsAsync(new(Northwind, null, window.From, window.To), None));
 
         Assert.Empty(await _settlement.GetFilesAsync(Fabrikam, monday, monday.AddDays(1), None));
+
+        // "Delayed yesterday": Fabrikam pays the settlement day after the batch, which is the day before the as-of date.
+        Assert.Equal(DateOnly.FromDateTime(_dataset.AsOf.UtcDateTime).AddDays(-1), await SettlementDaysAfter(monday, 1));
 
         // The other processor's batch for the same day arrived, and its payout is on Northwind's normal schedule.
         var northwindFile = Assert.Single(await _settlement.GetFilesAsync(Northwind, monday, monday.AddDays(1), None));
@@ -101,7 +104,7 @@ public sealed class ScenarioSliceTests
         var payout = Assert.Single(await _settlement.GetPayoutsAsync("M-6230", nextSettlementDay, nextSettlementDay.AddDays(1), None));
         Assert.Equal(await SettlementDaysAfter(nextSettlementDay, northwind.Configuration.HoldingSettlementDays), payout.ScheduledFor);
         Assert.Equal(PayoutStatus.Scheduled, payout.Status);
-        Assert.True(payout.ScheduledFor > DateOnly.FromDateTime(_dataset.AsOf.UtcDateTime));
+        Assert.True(payout.ScheduledFor >= DateOnly.FromDateTime(_dataset.AsOf.UtcDateTime));
     }
 
     [Fact]
@@ -147,31 +150,39 @@ public sealed class ScenarioSliceTests
             e => e.Category == ErrorCategory.FileRejected);
     }
 
-    // S4: Northwind never splits, so a second file for the same batch with the same payments is a resend.
+    // S4: our acknowledgement failed, so Fabrikam resent the whole file after the day's payout run.
     [Fact]
     public async Task S4_a_resent_file_after_a_failed_acknowledgement_created_a_second_payout()
     {
-        var tuesday = new DateOnly(2026, 11, 3);
-        var files = (await _settlement.GetFilesAsync(Northwind, tuesday, tuesday.AddDays(1), None)).OrderBy(f => f.ReceivedAt).ToList();
+        var thursday = new DateOnly(2026, 11, 5);
+        var files = (await _settlement.GetFilesAsync(Fabrikam, thursday, thursday.AddDays(1), None)).OrderBy(f => f.ReceivedAt).ToList();
 
         Assert.Equal(2, files.Count);
         Assert.Equal(PaymentIds(files[0]), PaymentIds(files[1]));
 
-        var ack = Assert.Single(await _events.GetEventsAsync(new(Northwind, null, files[0].ReceivedAt, files[1].ReceivedAt), None));
-        Assert.Equal(ErrorCategory.AcknowledgementFailed, ack.Category);
+        var events = await _events.GetEventsAsync(new(Fabrikam, null, files[0].ReceivedAt, files[1].ReceivedAt), None);
+        var ack = Assert.Single(events, e => e.Category == ErrorCategory.AcknowledgementFailed);
         Assert.Equal(files[0].Id, ack.FileId);
+
+        // The resend arrived after that day's 14:00 UTC payout run, so its payout is due the next settlement day.
+        var resendDay = DateOnly.FromDateTime(files[1].ReceivedAt.UtcDateTime);
+        Assert.True(files[1].ReceivedAt.TimeOfDay > TimeSpan.FromHours(14));
+        var duplicateDue = await SettlementDaysAfter(resendDay, 1);
 
         foreach (var merchantId in files[0].Lines.Select(l => l.MerchantId))
         {
-            var payouts = await _settlement.GetPayoutsAsync(merchantId, tuesday, tuesday.AddDays(1), None);
+            var payouts = await _settlement.GetPayoutsAsync(merchantId, thursday, thursday.AddDays(1), None);
             var original = Assert.Single(payouts, p => p.SourceFileIds.SequenceEqual([files[0].Id]));
             var duplicate = Assert.Single(payouts, p => p.SourceFileIds.SequenceEqual([files[1].Id]));
             Assert.Equal(PayoutStatus.Paid, original.Status);
+            Assert.Equal(await SettlementDaysAfter(thursday, 1), original.ScheduledFor);
             Assert.Equal(PayoutStatus.Scheduled, duplicate.Status);
+            Assert.Equal(duplicateDue, duplicate.ScheduledFor);
             Assert.Equal(original.Amount, duplicate.Amount);
         }
     }
 
+    // Fabrikam also splits batches, so telling a resend from a split means comparing the payments.
     [Fact]
     public async Task S4_distractor_a_fabrikam_split_batch_is_two_files_with_disjoint_payments()
     {

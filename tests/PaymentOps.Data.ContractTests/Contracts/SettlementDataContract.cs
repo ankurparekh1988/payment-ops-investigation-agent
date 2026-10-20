@@ -20,7 +20,7 @@ public abstract class SettlementDataContract
     {
         var payments = await Port.GetPaymentsAsync("M-1", Utc(2026, 11, 1, 0, 0), Utc(2026, 11, 7, 0, 0), CancellationToken.None);
 
-        Assert.Equal(["PAY-1", "PAY-2", "PAY-3", "PAY-5"], payments.Select(p => p.Id));
+        Assert.Equal(["PAY-1", "PAY-2", "PAY-3", "PAY-6", "PAY-5"], payments.Select(p => p.Id));
     }
 
     [Fact]
@@ -45,6 +45,7 @@ public abstract class SettlementDataContract
     [Fact]
     public async Task Payouts_are_the_merchants_own_by_batch_date_then_id_with_their_provenance()
     {
+        // PO-5's batch date is the range end, so it's excluded.
         var payouts = await Port.GetPayoutsAsync("M-1", Nov2, Nov4, CancellationToken.None);
 
         Assert.Equal(["PO-1", "PO-2", "PO-3"], payouts.Select(p => p.Id));
@@ -96,7 +97,7 @@ public abstract class SettlementDataContract
         var payments = await Port.GetPaymentsAsync("M-1", Utc(2026, 1, 1, 0, 0), Utc(2027, 2, 5, 0, 0), CancellationToken.None);
         var days = await Port.GetCalendarAsync(new DateOnly(2026, 1, 1), new DateOnly(2027, 2, 5), CancellationToken.None);
 
-        Assert.Equal(4, payments.Count);
+        Assert.Equal(5, payments.Count);
         Assert.Equal(400, days.Count);
     }
 

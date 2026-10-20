@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -6,11 +7,17 @@ namespace PaymentOps.Data.Demo.Dataset;
 /// <summary>Rejects any time not written in UTC, for every timestamp field at once.</summary>
 internal sealed class UtcDateTimeOffsetConverter : JsonConverter<DateTimeOffset>
 {
-    // A local offset would silently shift cut-off and calendar reasoning.
+    // A local offset would silently shift cut-off and calendar reasoning. The text is checked, not the parsed
+    // value: a time with no offset would otherwise take the host's zone and pass only on UTC machines.
     public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var value = reader.GetDateTimeOffset();
-        return value.Offset == TimeSpan.Zero ? value : throw new JsonException($"'{value:O}' must be written in UTC (Z).");
+        var text = reader.GetString() ?? string.Empty;
+        if (!text.EndsWith('Z') || !DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var value))
+        {
+            throw new JsonException($"'{text}' must be a time written in UTC, ending in Z.");
+        }
+
+        return value;
     }
 
     public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options) => writer.WriteStringValue(value);

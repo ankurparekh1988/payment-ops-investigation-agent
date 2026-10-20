@@ -27,6 +27,7 @@ public static class DemoDataServiceCollectionExtensions
 {
     private const string FaultsSection = "DemoData:Faults";
     private static readonly TimeSpan DefaultFaultDelay = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan MaxFaultDelay = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Registers the data ports over the built-in demo dataset, which is loaded and checked now so a bad
@@ -63,6 +64,12 @@ public static class DemoDataServiceCollectionExtensions
                 throw new InvalidOperationException($"{key} isn't a data port; use one of {string.Join(", ", DemoDataPorts.All)}.");
             }
 
+            // Some hosts also give a section with children a value, so only a bare value is a mistake.
+            if (port.Value is not null && !port.GetChildren().Any())
+            {
+                throw new InvalidOperationException($"{key} needs a Mode (and optionally a Delay) beneath it, not a value.");
+            }
+
             var unknown = port.GetChildren().Select(c => c.Key).Except(["Mode", "Delay"], StringComparer.Ordinal).ToList();
             if (unknown.Count > 0)
             {
@@ -79,9 +86,11 @@ public static class DemoDataServiceCollectionExtensions
             var mode = Enum.Parse<FaultMode>(modeText);
 
             var delay = DefaultFaultDelay;
-            if (port["Delay"] is { } delayText && (!TimeSpan.TryParse(delayText, CultureInfo.InvariantCulture, out delay) || delay < TimeSpan.Zero))
+            // hh:mm:ss only: a bare "2" would parse as two days.
+            if (port["Delay"] is { } delayText
+                && (!TimeSpan.TryParseExact(delayText, @"hh\:mm\:ss\.FFF", CultureInfo.InvariantCulture, out delay) || delay > MaxFaultDelay))
             {
-                throw new InvalidOperationException($"{key}:Delay '{delayText}' isn't a non-negative time span such as 00:00:02.");
+                throw new InvalidOperationException($"{key}:Delay '{delayText}' must be a time span such as 00:00:02, up to {MaxFaultDelay}.");
             }
 
             if (mode != FaultMode.None && !allowFaultInjection)

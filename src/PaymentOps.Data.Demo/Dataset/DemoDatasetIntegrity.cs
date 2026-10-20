@@ -22,6 +22,7 @@ internal static partial class DemoDatasetIntegrity
             Index("merchant", dataset.Merchants, m => m.Id, errors),
             Index("payment", dataset.Payments, p => p.Id, errors),
             Index("settlement file", dataset.Files, f => f.Id, errors),
+            [.. dataset.ClosureDays.Select(c => c.Date)],
             errors);
         Index("payout", dataset.Payouts, p => p.Id, errors);
         Index("incident", dataset.Incidents, i => i.Id, errors);
@@ -39,9 +40,26 @@ internal static partial class DemoDatasetIntegrity
 
     private static void CheckProcessors(DemoDataset dataset, Context context)
     {
-        foreach (var processor in dataset.Processors.Where(p => !TimeZoneInfo.TryFindSystemTimeZoneById(p.Configuration.TimeZoneId, out _)))
+        foreach (var processor in dataset.Processors)
         {
-            context.Errors.Add($"processor {processor.Id}: unknown time zone '{processor.Configuration.TimeZoneId}'.");
+            var name = $"processor {processor.Id}";
+            var configuration = processor.Configuration;
+
+            // IANA ids only, as the record documents; Windows also resolves its own names.
+            if (!TimeZoneInfo.TryFindSystemTimeZoneById(configuration.TimeZoneId, out var zone) || !zone.HasIanaId)
+            {
+                context.Errors.Add($"{name}: '{configuration.TimeZoneId}' isn't an IANA time zone.");
+            }
+
+            if (configuration.HoldingSettlementDays < 0)
+            {
+                context.Errors.Add($"{name}: holding period can't be negative ({configuration.HoldingSettlementDays}).");
+            }
+
+            if (configuration.LateAfter < TimeSpan.Zero)
+            {
+                context.Errors.Add($"{name}: late-after allowance can't be negative ({configuration.LateAfter}).");
+            }
         }
     }
 
@@ -125,6 +143,13 @@ internal static partial class DemoDatasetIntegrity
             {
                 Money($"{name} line for {line.MerchantId}", line.Amount, line.Currency, context.Errors);
                 context.Known("merchant", line.MerchantId, context.Merchants, name);
+                var listed = line.PaymentIds.Where(context.Payments.ContainsKey).Select(id => context.Payments[id]).ToList();
+                if (listed.Count == line.PaymentIds.Count
+                    && (listed.Sum(p => p.Amount) != line.Amount || listed.Any(p => p.Currency != line.Currency)))
+                {
+                    context.Errors.Add($"{name}: the line for {line.MerchantId} is {line.Amount} {line.Currency}, but its payments add up to {listed.Sum(p => p.Amount)} {string.Join("/", listed.Select(p => p.Currency).Distinct())}.");
+                }
+
                 foreach (var paymentId in line.PaymentIds)
                 {
                     if (!context.Payments.TryGetValue(paymentId, out var payment))
@@ -160,9 +185,9 @@ internal static partial class DemoDatasetIntegrity
                 context.Errors.Add($"{name}: a paid time goes with status Paid, and only with it.");
             }
 
-            if (payout.PaidAt is { } paidAt)
+            if (payout.ScheduledFor <= payout.BatchDate || SettlementCalendar.IsWeekend(payout.ScheduledFor) || context.ClosureDays.Contains(payout.ScheduledFor))
             {
-                context.Happened("paid", name, paidAt);
+                context.Errors.Add($"{name}: due {payout.ScheduledFor:yyyy-MM-dd}, which isn't a settlement day after its batch date {payout.BatchDate:yyyy-MM-dd}.");
             }
 
             if (payout.SourceFileIds.Count == 0)
@@ -170,11 +195,28 @@ internal static partial class DemoDatasetIntegrity
                 context.Errors.Add($"{name}: has no source file.");
             }
 
-            foreach (var fileId in payout.SourceFileIds)
+            var problems = payout.SourceFileIds.Select(id => SourceFileProblem(payout, id, context)).OfType<string>().ToList();
+            context.Errors.AddRange(problems.Select(problem => $"{name}: {problem}"));
+            if (problems.Count > 0 || payout.SourceFileIds.Count == 0)
             {
-                if (SourceFileProblem(payout, fileId, context) is { } problem)
+                continue;
+            }
+
+            var files = payout.SourceFileIds.Select(id => context.Files[id]).ToList();
+            var lines = files.SelectMany(f => f.Lines).Where(l => l.MerchantId == payout.MerchantId).ToList();
+            if (lines.Sum(l => l.Amount) != payout.Amount || lines.Any(l => l.Currency != payout.Currency))
+            {
+                context.Errors.Add($"{name}: is {payout.Amount} {payout.Currency}, but its source lines add up to {lines.Sum(l => l.Amount)} {string.Join("/", lines.Select(l => l.Currency).Distinct())}.");
+            }
+
+            if (payout.PaidAt is { } paidAt)
+            {
+                context.Happened("paid", name, paidAt);
+
+                // Paid on or after the day it was due, and only once every source file had arrived.
+                if (DateOnly.FromDateTime(paidAt.UtcDateTime) < payout.ScheduledFor || files.Any(f => paidAt < f.ReceivedAt))
                 {
-                    context.Errors.Add($"{name}: {problem}");
+                    context.Errors.Add($"{name}: paid {paidAt:u}, before it was due or before its source files arrived.");
                 }
             }
         }
@@ -212,12 +254,26 @@ internal static partial class DemoDatasetIntegrity
             context.Happened("occurred", name, errorEvent.OccurredAt);
             if (errorEvent.MerchantId is { } merchantId)
             {
-                context.Known("merchant", merchantId, context.Merchants, name);
+                if (!context.Merchants.TryGetValue(merchantId, out var merchant))
+                {
+                    context.Errors.Add($"{name}: unknown merchant '{merchantId}'.");
+                }
+                else if (!merchant.ProcessorIds.Contains(errorEvent.ProcessorId))
+                {
+                    context.Errors.Add($"{name}: merchant {merchantId} isn't routed to {errorEvent.ProcessorId}.");
+                }
             }
 
             if (errorEvent.FileId is { } fileId)
             {
-                context.Known("settlement file", fileId, context.Files, name);
+                if (!context.Files.TryGetValue(fileId, out var file))
+                {
+                    context.Errors.Add($"{name}: unknown settlement file '{fileId}'.");
+                }
+                else if (file.ProcessorId != errorEvent.ProcessorId)
+                {
+                    context.Errors.Add($"{name}: file {fileId} is {file.ProcessorId}'s, not {errorEvent.ProcessorId}'s.");
+                }
             }
         }
     }
@@ -264,6 +320,7 @@ internal static partial class DemoDatasetIntegrity
         Dictionary<string, Merchant> Merchants,
         Dictionary<string, Payment> Payments,
         Dictionary<string, SettlementFile> Files,
+        HashSet<DateOnly> ClosureDays,
         List<string> Errors)
     {
         public void Known<T>(string kind, string id, Dictionary<string, T> index, string owner)

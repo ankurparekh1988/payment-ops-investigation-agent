@@ -31,10 +31,19 @@ public abstract class ProcessorDataContract
     [Fact]
     public async Task An_open_incident_that_started_earlier_overlaps_the_window()
     {
-        var incidents = await Port.GetIncidentsAsync("p-a", Utc(2026, 11, 5, 0, 0), Utc(2026, 11, 6, 0, 0), CancellationToken.None);
+        var incidents = await Port.GetIncidentsAsync("p-a", Utc(2026, 11, 6, 0, 0), Utc(2026, 11, 7, 0, 0), CancellationToken.None);
 
         Assert.Equal(["INC-1"], incidents.Select(i => i.Id));
         Assert.Null(incidents[0].ResolvedAt);
+    }
+
+    // An outage that covered the window's start counts even though it's over: the "outage covered the cut-off" case.
+    [Fact]
+    public async Task A_resolved_incident_that_started_earlier_overlaps_the_window()
+    {
+        var incidents = await Port.GetIncidentsAsync("p-a", Utc(2026, 11, 5, 0, 0), Utc(2026, 11, 6, 0, 0), CancellationToken.None);
+
+        Assert.Equal(["INC-1", "INC-5"], incidents.Select(i => i.Id));
     }
 
     [Fact]
@@ -58,7 +67,7 @@ public abstract class ProcessorDataContract
     {
         var incidents = await Port.GetIncidentsAsync("p-a", Utc(2025, 1, 1, 0, 0), Utc(2027, 1, 1, 0, 0), CancellationToken.None);
 
-        Assert.Equal(["INC-3", "INC-1", "INC-2"], incidents.Select(i => i.Id));
+        Assert.Equal(["INC-3", "INC-1", "INC-2", "INC-5"], incidents.Select(i => i.Id));
     }
 
     [Fact]

@@ -55,8 +55,11 @@ public abstract class ErrorEventDataContract
         await Assert.ThrowsAsync<ArgumentException>(() => Port.GetEventsAsync(new("p-a", null, End, End), CancellationToken.None));
 
     [Fact]
-    public async Task Unknown_or_differently_cased_ids_find_nothing() =>
-        Assert.Empty(await Port.GetEventsAsync(new("P-A", "m-1", Start, End), CancellationToken.None));
+    public async Task Unknown_or_differently_cased_ids_find_nothing()
+    {
+        Assert.Empty(await Port.GetEventsAsync(new("P-A", null, Start, End), CancellationToken.None));
+        Assert.Empty(await Port.GetEventsAsync(new(null, "m-1", Start, End), CancellationToken.None));
+    }
 
     [Fact]
     public async Task There_is_no_maximum_span() =>

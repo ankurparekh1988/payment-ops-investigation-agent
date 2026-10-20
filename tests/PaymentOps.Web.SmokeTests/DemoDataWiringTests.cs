@@ -28,6 +28,8 @@ public sealed class DemoDataWiringTests
         using var factory = new PaymentOpsWebApplicationFactory();
         using var configured = factory.WithWebHostBuilder(b => b.UseSetting("DemoData:Faults:Settlement:Mode", "Unavailable"));
 
-        Assert.ThrowsAny<Exception>(() => configured.CreateClient());
+        // The opt-in check, not some other startup failure, is what stops it.
+        var failure = Assert.ThrowsAny<Exception>(() => configured.CreateClient());
+        Assert.Contains("DemoData:Faults:Settlement:Mode is Unavailable", failure.ToString(), StringComparison.Ordinal);
     }
 }

@@ -79,6 +79,84 @@ public sealed class DemoDatasetLoaderTests
     }
 
     [Fact]
+    public void A_time_with_no_offset_is_rejected_on_any_host()
+    {
+        var json = DatasetJson.Valid();
+        json.First("payments")["capturedAt"] = "2026-11-02T15:00:00";
+
+        DatasetJson.AssertRejected(json, "UTC");
+    }
+
+    [Theory]
+    [InlineData("amount", "30.00")]
+    [InlineData("currency", "EUR")]
+    public void A_file_line_must_add_up_to_its_payments(string field, string value)
+    {
+        var json = DatasetJson.Valid();
+        json.First("files")["lines"]![0]![field] = field == "amount" ? decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : value;
+
+        DatasetJson.AssertRejected(json, "SF-1");
+    }
+
+    [Theory]
+    [InlineData("amount", "30.00")]
+    [InlineData("currency", "EUR")]
+    public void A_payout_must_add_up_to_its_source_lines(string field, string value)
+    {
+        var json = DatasetJson.Valid();
+        json.First("payouts")[field] = field == "amount" ? decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : value;
+
+        DatasetJson.AssertRejected(json, "PO-1");
+    }
+
+    [Theory]
+    [InlineData("holdingSettlementDays", "-1")]
+    [InlineData("lateAfter", "-02:00:00")]
+    [InlineData("timeZoneId", "Eastern Standard Time")]
+    public void Processor_settings_must_make_sense(string field, string value)
+    {
+        var json = DatasetJson.Valid();
+        json.First("processors")["configuration"]![field] = field == "holdingSettlementDays" ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : value;
+
+        DatasetJson.AssertRejected(json, "p1");
+    }
+
+    [Fact]
+    public void An_error_event_must_belong_to_its_processor()
+    {
+        var json = DatasetJson.Valid();
+        json["processors"]!.AsArray().Add(ProcessorTwo());
+        json.First("errorEvents")["processorId"] = "p2";
+
+        // Its file and its merchant are both p1's.
+        var errors = DatasetJson.Errors(json);
+        Assert.Contains(errors, e => e.Contains("EV-1", StringComparison.Ordinal) && e.Contains("SF-1", StringComparison.Ordinal));
+        Assert.Contains(errors, e => e.Contains("EV-1", StringComparison.Ordinal) && e.Contains("M-1", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("scheduledFor", "2026-11-02")] // the batch date itself
+    [InlineData("scheduledFor", "2026-11-01")] // a Sunday, before the batch
+    [InlineData("paidAt", "2026-11-03T06:00:00Z")] // before the file arrived
+    [InlineData("paidAt", "2026-11-02T23:00:00Z")] // before the day it was due
+    public void A_payout_is_due_on_a_settlement_day_after_its_batch_and_paid_after_its_files(string field, string value)
+    {
+        var json = DatasetJson.Valid();
+        json.First("payouts")[field] = value;
+
+        DatasetJson.AssertRejected(json, "PO-1");
+    }
+
+    [Fact]
+    public void A_payout_due_on_a_closure_day_is_rejected()
+    {
+        var json = DatasetJson.Valid();
+        json["closureDays"]!.AsArray().Add(new JsonObject { ["date"] = "2026-11-03", ["reason"] = "Closure" });
+
+        DatasetJson.AssertRejected(json, "PO-1", "2026-11-03");
+    }
+
+    [Fact]
     public void A_missing_section_is_rejected()
     {
         var json = DatasetJson.Valid();
@@ -281,7 +359,9 @@ public sealed class DemoDatasetLoaderTests
         json.First("payments")["currency"] = "usd";
         json.First("processors")["configuration"]!["timeZoneId"] = "Mars/Olympus";
 
-        Assert.Equal(2, DatasetJson.Errors(json).Count);
+        var errors = DatasetJson.Errors(json);
+        Assert.Contains(errors, e => e.Contains("usd", StringComparison.Ordinal));
+        Assert.Contains(errors, e => e.Contains("Mars/Olympus", StringComparison.Ordinal));
     }
 
     private static JsonObject DueAfterAsOf(string status)

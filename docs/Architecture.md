@@ -173,9 +173,9 @@ flowchart LR
 | `IProcessorData` | A processor's configured cut-off, time zone, delivery times and holding period, and the incidents it reported | Processor configuration and status feeds |
 | `IErrorEventData` | Our errors exchanging payments and files with processors, for a processor, a merchant or both | Platform logs or an error store |
 
-- **One contract for every implementation.** Ranges are half-open and must not be empty; nothing found is an empty result, not an error; ids match exactly; results come in time order, then id. There's no maximum span: a limit on what the agent may ask belongs to its tools, not to what a data source can answer. A data source that can't answer throws `DataSourceUnavailableException`, whatever it is. Contract tests in `PaymentOps.Data.ContractTests` state all of this, and a real implementation's tests would inherit them.
-- **The dataset.** `data/datasets/default/dataset.json` is embedded in `PaymentOps.Data.Demo`. At startup it's read strictly and checked: every reference resolves, a payout's source files exist, were accepted and match its processor, batch and merchant, every time is UTC, and nothing has happened after the dataset's as-of time. Any problem stops startup with all of them listed.
-- **A fixed as-of time.** The data is a snapshot taken at Tuesday 10 November 2026, 22:00 UTC, so investigations reason about the same "yesterday" whenever they run. Sign-in and sessions use real time.
+- **One contract for every implementation.** Ranges are half-open and must not be empty; nothing found is an empty result, not an error; ids match exactly; results come in time order, then id. There's no maximum span: a limit on what the agent may ask belongs to its tools, not to what a data source can answer. Contract tests in `PaymentOps.Data.ContractTests` state these rules, and a real implementation's tests would inherit them. A data source that can't answer throws `DataSourceUnavailableException`, whatever it is; the fault injection tests check that path.
+- **The dataset.** `data/datasets/default/dataset.json` is embedded in `PaymentOps.Data.Demo`. At startup it's read strictly and checked: every reference resolves, amounts add up from payments to file lines to payouts, a payout's source files exist, were accepted and match its processor, batch and merchant, payouts are due on a settlement day and paid after their files arrived, every time is UTC, and nothing has happened after the dataset's as-of time. Any problem stops startup with all of them listed.
+- **A fixed as-of time.** The data is a snapshot taken at Wednesday 11 November 2026, 06:00 UTC, so investigations reason about the same "yesterday" whenever they run. Sign-in and sessions use real time.
 - **Fault injection.** Each port can be made slow, unresponsive, empty or unavailable, every call alike so runs repeat. Only a test host can enable it, in code; a fault setting in configuration without that stops startup.
 
 The dataset has a slice for each investigation scenario, plus nearby records that look related but aren't ([dataset notes](../data/datasets/default/README.md)):
@@ -185,7 +185,7 @@ The dataset has a slice for each investigation scenario, plus nearby records tha
 | Payouts delayed by a processor outage | A settlement incident that covered the processor's cut-off, file transfer timeouts from that processor only, and no settlement file for the day; the other processor's file arrived |
 | A missed cut-off before a closure day | A capture minutes after the cut-off, a closure day and a weekend, and a payout due later than the merchant expects but on time |
 | A risk hold | Payments and files as normal, every payout held, and the rule id on the hold |
-| A duplicate settlement batch | Two files for one batch with the same payments, a failed acknowledgement between them, and a second payout from the resend |
+| A duplicate settlement batch | A failed acknowledgement, then the same file sent again with the same payments, and a second payout due from the resend; a split batch from the same processor looks similar but has different payments |
 
 ## Project references
 

@@ -7,7 +7,8 @@ namespace PaymentOps.Data.ContractTests.Contracts;
 
 /// <summary>
 /// The records every port contract runs against. A real adapter's tests load these into its own store;
-/// the values sit on range boundaries and share timestamps so ordering and half-open ranges are tested.
+/// the values sit on range boundaries, share timestamps and are listed out of order, so ordering and half-open
+/// ranges are really tested.
 /// </summary>
 public sealed class ContractData
 {
@@ -33,9 +34,11 @@ public sealed class ContractData
 
     public IReadOnlyList<Payment> Payments { get; } =
     [
-        new("PAY-1", "M-1", "p-a", 10m, "USD", Utc(2026, 11, 2, 10, 0), Utc(2026, 11, 2, 10, 0), new(2026, 11, 2)),
-        new("PAY-2", "M-1", "p-a", 20m, "USD", Utc(2026, 11, 3, 0, 0), Utc(2026, 11, 3, 0, 0), new(2026, 11, 3)),
+        // The processor's capture time differs from ours, so a filter on the wrong one gets PAY-1 wrong.
+        new("PAY-1", "M-1", "p-a", 10m, "USD", Utc(2026, 11, 2, 10, 0), Utc(2026, 11, 3, 0, 30), new(2026, 11, 2)),
         new("PAY-3", "M-1", "p-b", 30m, "GBP", Utc(2026, 11, 3, 0, 0), null, new(2026, 11, 3)),
+        new("PAY-2", "M-1", "p-a", 20m, "USD", Utc(2026, 11, 3, 0, 0), Utc(2026, 11, 3, 0, 0), new(2026, 11, 3)),
+        new("PAY-6", "M-1", "p-a", 60m, "USD", Utc(2026, 11, 4, 15, 0), Utc(2026, 11, 4, 15, 0), new(2026, 11, 4)),
         new("PAY-4", "M-2", "p-a", 40m, "USD", Utc(2026, 11, 2, 12, 0), Utc(2026, 11, 2, 12, 0), new(2026, 11, 2)),
         new("PAY-5", "M-1", "p-a", 50m, "USD", Utc(2026, 11, 6, 21, 0), null, null),
     ];
@@ -46,13 +49,15 @@ public sealed class ContractData
         new("SF-A1", "p-a", new(2026, 11, 2), Utc(2026, 11, 3, 7, 0), SettlementFileStatus.Accepted,
             [new("M-1", ["PAY-1"], 10m, "USD"), new("M-2", ["PAY-4"], 40m, "USD")]),
         new("SF-B1", "p-b", new(2026, 11, 3), Utc(2026, 11, 4, 3, 0), SettlementFileStatus.Accepted, [new("M-1", ["PAY-3"], 30m, "GBP")]),
+        new("SF-A3", "p-a", new(2026, 11, 4), Utc(2026, 11, 5, 7, 0), SettlementFileStatus.Accepted, [new("M-1", ["PAY-6"], 60m, "USD")]),
     ];
 
     public IReadOnlyList<Payout> Payouts { get; } =
     [
         new("PO-1", "M-1", "p-a", new(2026, 11, 2), ["SF-A1"], new(2026, 11, 3), 10m, "USD", PayoutStatus.Paid, Utc(2026, 11, 3, 12, 0)),
-        new("PO-2", "M-1", "p-a", new(2026, 11, 3), ["SF-A2"], new(2026, 11, 5), 20m, "USD", PayoutStatus.Paid, Utc(2026, 11, 5, 12, 0)),
         new("PO-3", "M-1", "p-b", new(2026, 11, 3), ["SF-B1"], new(2026, 11, 9), 30m, "GBP", PayoutStatus.Scheduled, null),
+        new("PO-2", "M-1", "p-a", new(2026, 11, 3), ["SF-A2"], new(2026, 11, 5), 20m, "USD", PayoutStatus.Paid, Utc(2026, 11, 5, 12, 0)),
+        new("PO-5", "M-1", "p-a", new(2026, 11, 4), ["SF-A3"], new(2026, 11, 5), 60m, "USD", PayoutStatus.Paid, Utc(2026, 11, 5, 12, 0)),
         new("PO-4", "M-2", "p-a", new(2026, 11, 2), ["SF-A1"], new(2026, 11, 3), 40m, "USD", PayoutStatus.Paid, Utc(2026, 11, 3, 12, 0)),
     ];
 
@@ -62,6 +67,7 @@ public sealed class ContractData
         new("INC-2", "p-a", ProcessorComponent.Authorization, "Elevated declines", Utc(2026, 11, 3, 10, 0), Utc(2026, 11, 3, 12, 0), null),
         new("INC-3", "p-a", ProcessorComponent.FileDelivery, "Late files", Utc(2026, 10, 31, 10, 0), Utc(2026, 11, 2, 0, 0), null),
         new("INC-4", "p-b", ProcessorComponent.Settlement, "Batch closed late", Utc(2026, 11, 3, 9, 0), Utc(2026, 11, 3, 10, 0), null),
+        new("INC-5", "p-a", ProcessorComponent.FileDelivery, "Files delayed overnight", Utc(2026, 11, 4, 22, 0), Utc(2026, 11, 5, 2, 0), null),
     ];
 
     public IReadOnlyList<ErrorEvent> ErrorEvents { get; } =
