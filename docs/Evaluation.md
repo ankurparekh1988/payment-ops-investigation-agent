@@ -1,6 +1,6 @@
 # Evaluation
 
-How AI behaviour is measured, as built so far. Retrieval calibration and a recorded live run of the investigation agent are in place; the evaluation suite and release gate for answers and the agent come later.
+How AI behaviour is measured, as built so far. Retrieval calibration and the investigation agent's live-run harness are in place, with one pre-merge diagnostic run; the recorded run from `main`, the evaluation suite and the release gate for answers and the agent come later.
 
 ## Retrieval calibration
 
@@ -61,3 +61,7 @@ Every assessment is checked before it's shown, deterministically and on every ru
 `PaymentOps.Evaluation agent-run` sends about ten seeded questions (`eval/datasets/agent-tasks.json`) through the same service the app uses, against the deployed model and index, each as a simulated Ops Reader with General or Restricted access. It records each trajectory, how many of the tools a person following the runbooks would use the model chose, the validated outcome, latency and token usage.
 
 It sets no thresholds; those, repeated runs and a fixed-sequence baseline belong to the evaluation suite. It has one guard: if no question produces a trajectory of several tools ending in an assessment that passes validation, the agent isn't considered working. It runs locally with the developer's own sign-in, because no pipeline identity has access to the model.
+
+**Pre-merge diagnostic, 2026-10-21.** Run locally from the feature branch against the deployed model and index, before the change merged. It's a check that the agent works, not the recorded result. Nine of ten questions ended in a validated result, eight assessed and one refused, so the guard passed; the model chose two to six tools each time. The question about a merchant that doesn't exist ended unverified, because a lookup that finds nothing registers no evidence to cite. Latencies were 5.6 to 21.9 s. The run came before two rule changes: confidence judged per statement, and refusals shown as the server's fixed notice.
+
+**Recorded run.** Still to come: the run from `main` after merge, recorded here with its date and results.
