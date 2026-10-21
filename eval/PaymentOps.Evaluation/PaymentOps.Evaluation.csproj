@@ -7,10 +7,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PaymentOps.Agent\PaymentOps.Agent.csproj" />
     <ProjectReference Include="..\..\src\PaymentOps.Knowledge\PaymentOps.Knowledge.csproj" />
+    <ProjectReference Include="..\..\src\PaymentOps.Data.Demo\PaymentOps.Data.Demo.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
