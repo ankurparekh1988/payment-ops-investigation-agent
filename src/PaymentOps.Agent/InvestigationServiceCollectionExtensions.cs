@@ -7,6 +7,7 @@ using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
+using PaymentOps.Tools.Knowledge;
 
 namespace PaymentOps.Agent;
 

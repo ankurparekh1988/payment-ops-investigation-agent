@@ -32,6 +32,8 @@ public static class EvidenceIds
 
     public static string Event(string id) => $"event:{id}";
 
+    public static string CalendarDay(DateOnly date) => $"calendar:{Iso(date)}";
+
     public static string ExpectedBatch(string paymentId) => Fact("expected-batch", paymentId);
 
     public static string MissingFile(string processorId, DateOnly batchDate) => Fact("missing-file", processorId, Iso(batchDate));

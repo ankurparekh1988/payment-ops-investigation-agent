@@ -12,6 +12,7 @@ using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 
 using NotAnswered = PaymentOps.Agent.Contracts.InvestigationResult.NotAnswered;
+using PaymentOps.Tools.Knowledge;
 
 namespace PaymentOps.Agent.Answering;
 

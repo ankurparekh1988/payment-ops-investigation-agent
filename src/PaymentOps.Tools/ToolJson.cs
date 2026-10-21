@@ -13,6 +13,9 @@ public static class ToolJson
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
     };
 
+    /// <summary>An enum value as the model reads it, such as <c>file_transfer_timeout</c>; Domain enums stay out of tool output.</summary>
+    public static string Word(Enum value) => JsonNamingPolicy.SnakeCaseLower.ConvertName(value.ToString());
+
     public static string Serialize(ToolResult result) => result switch
     {
         ToolResult.Ok ok => JsonSerializer.Serialize(new { Status = "ok", Result = ok.Body }, Options),
