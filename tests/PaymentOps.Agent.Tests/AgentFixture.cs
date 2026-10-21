@@ -57,12 +57,12 @@ internal sealed class AgentFixture : IDisposable
         string[]? rootCitations = null,
         string outcome = "assessed",
         string confidence = "high") => new
-    {
-        outcome,
-        summary = new { text = "M-1042's Fabrikam batch for 9 November didn't arrive.", evidence_ids = new[] { summaryEvidence }, citation_ids = Array.Empty<string>() },
-        claims = new[] { new { text = "The merchant is routed to Fabrikam Pay.", evidence_ids = claimEvidence ?? ["merchant:M-1042"], citation_ids = claimCitations ?? [] } },
-        root_cause = new { text = rootCause, evidence_ids = rootEvidence ?? [], citation_ids = rootCitations ?? [] },
-        confidence,
-        next_steps = Array.Empty<object>(),
-    };
+        {
+            outcome,
+            summary = new { text = "M-1042's Fabrikam batch for 9 November didn't arrive.", evidence_ids = new[] { summaryEvidence }, citation_ids = Array.Empty<string>() },
+            claims = new[] { new { text = "The merchant is routed to Fabrikam Pay.", evidence_ids = claimEvidence ?? ["merchant:M-1042"], citation_ids = claimCitations ?? [] } },
+            root_cause = new { text = rootCause, evidence_ids = rootEvidence ?? [], citation_ids = rootCitations ?? [] },
+            confidence,
+            next_steps = Array.Empty<object>(),
+        };
 }

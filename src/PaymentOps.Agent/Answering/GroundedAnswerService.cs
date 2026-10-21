@@ -10,9 +10,9 @@ using PaymentOps.Agent.Contracts;
 using PaymentOps.Domain.Security;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
+using PaymentOps.Tools.Knowledge;
 
 using NotAnswered = PaymentOps.Agent.Contracts.InvestigationResult.NotAnswered;
-using PaymentOps.Tools.Knowledge;
 
 namespace PaymentOps.Agent.Answering;
 

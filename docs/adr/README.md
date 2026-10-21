@@ -12,3 +12,5 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0006](0006-grounded-answers-with-a-server-owned-evidence-registry.md) | Grounded answers with a server-owned evidence registry | Accepted |
 | [0007](0007-retrieval-strategy-by-frozen-calibration.md) | Choosing the retrieval strategy by measurement, with vectors deferred | Accepted |
 | [0008](0008-data-ports-with-demo-adapters.md) | Data ports with demo adapters, proven by contract tests | Accepted |
+| [0009](0009-investigation-agent-on-agent-framework.md) | One investigation agent on Agent Framework, with our own limits | Accepted |
+| [0010](0010-validated-assessments-with-per-claim-evidence.md) | Validated assessments with per-claim evidence and server-observed gaps | Accepted |
