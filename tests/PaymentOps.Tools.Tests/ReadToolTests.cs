@@ -49,7 +49,7 @@ public sealed class ReadToolTests
         Assert.True(count > 2);
         Assert.Equal(2, group["event_ids"]!["items"]!.AsArray().Count);
         Assert.Equal(count, Fact(ok, (string)group["evidence_id"]!).SourceIds.Count);
-        Assert.Contains(ok.Truncations, t => t.Total == count);
+        Assert.Contains(ok.Truncations, t => t.Total == count && t.What == "File transfer timeout events from fabrikam-pay");
     }
 
     [Fact]

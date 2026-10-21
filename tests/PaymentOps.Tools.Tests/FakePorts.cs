@@ -17,6 +17,8 @@ internal sealed class FakePorts(DateTimeOffset now) : IMerchantData, ISettlement
 
     public List<Payment> Payments { get; } = [];
 
+    public List<SettlementFile> Files { get; } = [];
+
     public DateTimeOffset Now { get; } = now;
 
     public DateOnly Today => DateOnly.FromDateTime(Now.UtcDateTime);
@@ -34,7 +36,7 @@ internal sealed class FakePorts(DateTimeOffset now) : IMerchantData, ISettlement
         Task.FromResult<IReadOnlyList<Payment>>([.. Payments.Where(p => p.MerchantId == merchantId && p.CapturedAt >= fromInclusive && p.CapturedAt < toExclusive)]);
 
     public Task<IReadOnlyList<SettlementFile>> GetFilesAsync(string processorId, DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<SettlementFile>>([]);
+        Task.FromResult<IReadOnlyList<SettlementFile>>([.. Files.Where(f => f.ProcessorId == processorId && f.BatchDate >= fromInclusive && f.BatchDate < toExclusive)]);
 
     public Task<IReadOnlyList<Payout>> GetPayoutsAsync(string merchantId, DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<Payout>>([]);

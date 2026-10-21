@@ -14,7 +14,7 @@ public sealed record SettlementActivity(string MerchantId, string EvidenceId, IR
 
 public sealed record ProcessorBatches(string Id, string Name, string EvidenceId, ListOf<Batch> Batches);
 
-/// <param name="MissingFile">Set when payments are expected in this batch, its file is due, and no accepted file arrived.</param>
+/// <param name="MissingFile">Set when payments are expected in this batch, its file is due, and no file arrived. A rejected file isn't missing.</param>
 /// <param name="PaymentSets">Set when the processor sent more than one accepted file for this batch date.</param>
 public sealed record Batch(DateOnly Date, ListOf<PaymentView> Payments, IReadOnlyList<FileView> Files, IReadOnlyList<PayoutView> Payouts, FactRef? MissingFile, PaymentSetsView? PaymentSets);
 
@@ -180,19 +180,18 @@ public sealed class SettlementBatchesTool(
         }
 
         // Missing is only ever claimed against payments expected in the batch, so an empty source can't look like an outage.
+        // "A file we received but rejected is not missing" (missing-settlement-batch): any file for the batch counts as arrived.
         private FactRef? MissingFile(Processor processor, DateOnly date, List<Payment> batchPayments, List<SettlementFile> batchFiles)
         {
-            if (batchPayments.Count == 0
-                || batchFiles.Exists(f => f.Status == SettlementFileStatus.Accepted)
-                || !SettlementTiming.FileDue(date, processor.Configuration, clock.Now))
+            if (batchPayments.Count == 0 || batchFiles.Count > 0 || !SettlementTiming.FileDue(date, processor.Configuration, clock.Now))
             {
                 return null;
             }
 
             return new FactRef(evidence.Derive(
                 EvidenceIds.MissingFile(processor.Id, date),
-                $"No accepted {processor.Name} file for {date:yyyy-MM-dd}",
-                [.. batchPayments.Select(p => EvidenceIds.Payment(p.Id)), EvidenceIds.Processor(processor.Id), .. batchFiles.Select(f => EvidenceIds.File(f.Id))]));
+                $"No {processor.Name} file arrived for {date:yyyy-MM-dd}",
+                [.. batchPayments.Select(p => EvidenceIds.Payment(p.Id)), EvidenceIds.Processor(processor.Id)]));
         }
 
         private PaymentSetsView? PaymentSets(Processor processor, DateOnly date, List<SettlementFile> batchFiles)

@@ -153,7 +153,7 @@ public sealed class ToolGuardTests
         await Guard().Wrap(tool).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
 
         Assert.True(_turn.TryGetEvidence("merchant:M-1", out _));
-        Assert.Contains(_turn.Gaps, g => g.Wording == "Payments was cut to the first 20 of 57.");
+        Assert.Contains(_turn.Gaps, g => g.Wording == "Payments: only the first 20 of 57 were shown.");
     }
 
     [Fact]

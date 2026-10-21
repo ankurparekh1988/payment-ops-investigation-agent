@@ -54,9 +54,12 @@ public sealed class ErrorEventsTool(IErrorEventData events, IInvestigationClock 
                 eventIds);
             return new ErrorEventGroup(
                 group.Key.ProcessorId, category, group.Key.Code, members.Count, members[0].OccurredAt, members[^1].OccurredAt,
-                evidence.Cap<string>([.. members.Select(e => e.Id)], $"{category} event ids"), factId);
+                evidence.Cap<string>([.. members.Select(e => e.Id)], $"{Sentence(category)} events from {group.Key.ProcessorId}"), factId);
         }).ToList();
 
         return evidence.Ok(new ErrorEventSummary(evidence.Cap(groups, "Error event groups")));
     }
+
+    // "file_transfer_timeout" as people read it: "File transfer timeout".
+    private static string Sentence(string word) => string.Concat(char.ToUpperInvariant(word[0]).ToString(), word[1..].Replace('_', ' '));
 }

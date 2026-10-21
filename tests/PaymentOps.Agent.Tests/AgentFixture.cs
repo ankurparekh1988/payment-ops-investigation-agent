@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -35,15 +36,15 @@ internal sealed class AgentFixture : IDisposable
             .BuildServiceProvider();
     }
 
-    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null) => new(
+    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null) => new(
         model,
         _provider.GetServices<IInvestigationTool>(),
         new PromptProvider(Release),
         _provider.GetRequiredService<IInvestigationClock>(),
         user ?? TestUser.Reader,
         Options.Create(new InvestigationLimits()),
-        TimeProvider.System,
-        NullLogger<InvestigationAgentRunner>.Instance);
+        time ?? TimeProvider.System,
+        logger ?? NullLogger<InvestigationAgentRunner>.Instance);
 
     public void Dispose() => _provider.Dispose();
 

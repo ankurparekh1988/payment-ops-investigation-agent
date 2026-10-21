@@ -22,7 +22,7 @@ internal sealed record ObservedGap(ObservedGapKind Kind, string Wording)
     public static ObservedGap Timeout(string source) => new(ObservedGapKind.Timeout, $"{source} didn't respond in time.");
 
     public static ObservedGap Truncated(Truncation truncation) =>
-        new(ObservedGapKind.Truncated, $"{truncation.What} was cut to the first {truncation.Shown} of {truncation.Total}.");
+        new(ObservedGapKind.Truncated, $"{truncation.What}: only the first {truncation.Shown} of {truncation.Total} were shown.");
 
     public static ObservedGap NotAuthorized(string tool) => new(ObservedGapKind.NotAuthorized, $"{tool} wasn't available to this user.");
 

@@ -94,18 +94,18 @@ internal sealed class InvestigationAgentRunner(
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
             // Cancelled by neither the caller nor our turn timeout: the model or Search client timed out on its own.
-            InvestigationLog.ModelFailed(logger, null, timer.ElapsedMilliseconds, ex);
+            InvestigationLog.ModelFailed(logger, ex, timer.ElapsedMilliseconds);
             return new NotAssessed(NotAssessedReason.ModelUnavailable);
         }
         catch (Exception ex) when (ModelFailure.IsServiceFailure(ex))
         {
-            InvestigationLog.ModelFailed(logger, ModelFailure.LastAttempt(ex)?.Status, timer.ElapsedMilliseconds, ex);
+            InvestigationLog.ModelFailed(logger, ex, timer.ElapsedMilliseconds);
             return new NotAssessed(NotAssessedReason.ModelUnavailable);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // A tool or the loop failed unexpectedly; the framework ended the loop without retrying, and so do we.
-            InvestigationLog.Aborted(logger, timer.ElapsedMilliseconds, ex);
+            InvestigationLog.Aborted(logger, ex, timer.ElapsedMilliseconds);
             return new NotAssessed(NotAssessedReason.AssessmentUnverified);
         }
 

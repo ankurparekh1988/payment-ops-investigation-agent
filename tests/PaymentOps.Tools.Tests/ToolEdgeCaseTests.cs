@@ -31,6 +31,23 @@ public sealed class ToolEdgeCaseTests
         Assert.Contains("\"date\":\"2026-11-09\"", ToolJson.Serialize(ok), StringComparison.Ordinal);
     }
 
+    // "A file we received but rejected is not missing; it needs fixing and reprocessing." (missing-settlement-batch)
+    [Fact]
+    public async Task A_batch_whose_only_file_was_rejected_isnt_missing()
+    {
+        var ports = new FakePorts(new DateTimeOffset(2026, 11, 12, 6, 0, 0, TimeSpan.Zero));
+        ports.Merchants.Add(new Merchant("M-1", "Merchant", ["p-la"], null));
+        ports.Processors.Add(new Processor("p-la", "West Coast Pay", LosAngeles));
+        ports.Payments.Add(new Payment("PAY-1", "M-1", "p-la", 10m, "USD", new DateTimeOffset(2026, 11, 10, 18, 0, 0, TimeSpan.Zero), null, null));
+        ports.Files.Add(new SettlementFile("SF-1", "p-la", new DateOnly(2026, 11, 10), new DateTimeOffset(2026, 11, 11, 10, 0, 0, TimeSpan.Zero), SettlementFileStatus.Rejected, [new SettlementLine("M-1", ["PAY-1"], 10m, "USD")]));
+        var tool = new SettlementBatchesTool(ports, ports, ports, ports, Options.Create(new ToolOptions()));
+
+        var ok = Ok(await tool.RunAsync(new SettlementBatchesRequest("M-1", "2026-11-10", "2026-11-10"), TestUser.Reader, CancellationToken.None));
+
+        Assert.DoesNotContain(ok.Evidence, e => e.Id.StartsWith("fact:missing-file:", StringComparison.Ordinal));
+        Assert.Contains("\"status\":\"rejected\"", ToolJson.Serialize(ok), StringComparison.Ordinal);
+    }
+
     // Evidence is what a tool actually read; a routed processor with no record isn't one.
     [Fact]
     public async Task A_routed_processor_with_no_record_isnt_registered_as_evidence()

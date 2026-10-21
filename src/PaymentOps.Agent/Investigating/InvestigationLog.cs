@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 
+using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
 
 namespace PaymentOps.Agent.Investigating;
@@ -26,9 +27,18 @@ internal static partial class InvestigationLog
     [LoggerMessage(EventId = 3002, Level = LogLevel.Information, Message = "Investigation not assessed: {Reason}, {Gaps} gaps, {ElapsedMs} ms")]
     private static partial void NotAssessed(ILogger logger, NotAssessedReason reason, int gaps, long elapsedMs);
 
-    [LoggerMessage(EventId = 3003, Level = LogLevel.Warning, Message = "Investigation model call failed: status {Status}, {ElapsedMs} ms")]
-    public static partial void ModelFailed(ILogger logger, int? status, long elapsedMs, Exception exception);
+    // Only the exception's type and the service's codes: service messages can echo the request, and so the question.
+    public static void ModelFailed(ILogger logger, Exception exception, long elapsedMs)
+    {
+        var attempt = ModelFailure.LastAttempt(exception);
+        ModelFailed(logger, exception.GetType().Name, attempt?.Status, attempt is null ? null : ModelFailure.ErrorCode(attempt), attempt is null ? null : ModelFailure.RequestId(attempt), elapsedMs);
+    }
 
-    [LoggerMessage(EventId = 3004, Level = LogLevel.Error, Message = "Investigation aborted by an unexpected failure after {ElapsedMs} ms")]
-    public static partial void Aborted(ILogger logger, long elapsedMs, Exception exception);
+    public static void Aborted(ILogger logger, Exception exception, long elapsedMs) => Aborted(logger, exception.GetType().Name, elapsedMs);
+
+    [LoggerMessage(EventId = 3003, Level = LogLevel.Warning, Message = "Investigation model call failed: {ExceptionType}, status {Status}, code {ErrorCode}, request {RequestId}, {ElapsedMs} ms")]
+    private static partial void ModelFailed(ILogger logger, string exceptionType, int? status, string? errorCode, string? requestId, long elapsedMs);
+
+    [LoggerMessage(EventId = 3004, Level = LogLevel.Error, Message = "Investigation aborted by an unexpected failure: {ExceptionType}, after {ElapsedMs} ms")]
+    private static partial void Aborted(ILogger logger, string exceptionType, long elapsedMs);
 }

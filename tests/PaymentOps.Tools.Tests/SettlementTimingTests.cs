@@ -19,8 +19,8 @@ public sealed class SettlementTimingTests
 
     private static DateTimeOffset Utc(int day, int hour, int minute, int month = 11) => new(2026, month, day, hour, minute, 0, TimeSpan.Zero);
 
-    // "Payments captured that day join the next settlement day's batch" (settlement-closure-days-policy), and a
-    // capture after the cut-off belongs to the next settlement day's batch (settlement-status-troubleshooting).
+    // "Payments captured that day join the next settlement day's batch" (settlement-closure-days-policy), and "a
+    // payment captured after the cut-off belongs to the next settlement day's batch" (fabrikam-pay-operating-guide).
     [Fact]
     public void A_capture_after_the_cut_off_before_a_closure_day_and_weekend_lands_on_the_monday()
     {
@@ -68,6 +68,13 @@ public sealed class SettlementTimingTests
     [InlineData(11, 2, false)]
     public void The_cut_off_follows_the_zones_offset_on_the_day(int month, int day, bool afterCutOff) =>
         Assert.Equal(afterCutOff, SettlementTiming.Timing(Captured(Utc(day, 20, 30, month)), NewYork, IsSettlementDay).AfterCutOff);
+
+    // London leaves summer time on 25 October 2026: the 17:00 cut-off is 16:00 UTC before it and 17:00 UTC after.
+    [Theory]
+    [InlineData(23, true)]
+    [InlineData(26, false)]
+    public void The_london_cut_off_follows_summer_time(int day, bool afterCutOff) =>
+        Assert.Equal(afterCutOff, SettlementTiming.Timing(Captured(Utc(day, 16, 30, 10)), London, IsSettlementDay).AfterCutOff);
 
     // The batch's file is expected the next morning at the processor's delivery time, plus its grace period.
     [Theory]

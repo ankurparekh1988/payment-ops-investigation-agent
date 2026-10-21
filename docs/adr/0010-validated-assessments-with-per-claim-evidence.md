@@ -17,7 +17,7 @@ An investigation's answer mixes three kinds of support: records from systems of 
 - Server code registers evidence as tools return it, from typed results: knowledge sections numbered `S1`… across the investigation, records by type and id, and computed facts with the exact records they came from. A count is supported by the group that counted every event: a statement citing some of a group's events must cite the group too, so the ids shown under a list cap can't stand in for it.
 - The summary and every claim need at least one id, and every id must be in the investigation's evidence. A failure goes back to the model, listed by rule, for one correction with only `submit_assessment` available; a second failure shows nothing.
 - A root cause is labelled *assessment* only with both data and knowledge behind it; otherwise *hypothesis*. The model doesn't choose the label.
-- Gaps (a source unavailable or too slow, a list cut short, a check the user wasn't allowed, a limit reached) are recorded as they happen and shown in fixed words. The model doesn't report gaps, so it can't leave one out. Gaps cap confidence, a stopped investigation is incomplete, and with every data source failed there's no root cause, whatever was submitted.
+- Gaps (a source unavailable or too slow, a list cut short, a check the user wasn't allowed, a limit reached) are recorded as they happen and shown in fixed words. The model doesn't report gaps, so it can't leave one out. Gaps cap confidence, a stopped investigation is incomplete, and when the data tools it tried all failed there's no root cause, whatever was submitted.
 
 ## Consequences
 
