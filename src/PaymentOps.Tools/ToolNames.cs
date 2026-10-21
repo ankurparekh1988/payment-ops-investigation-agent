@@ -9,5 +9,8 @@ public static class ToolNames
     public const string ErrorEvents = "get_error_events";
     public const string KnowledgeSearch = "search_knowledge";
 
+    /// <summary>The agent's terminal tool; it reads nothing, so it's not among the read tools.</summary>
+    public const string SubmitAssessment = "submit_assessment";
+
     public static IReadOnlyList<string> ReadTools { get; } = [MerchantProfile, SettlementBatches, ProcessorStatus, ErrorEvents, KnowledgeSearch];
 }

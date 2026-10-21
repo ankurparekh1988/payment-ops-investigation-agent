@@ -16,7 +16,8 @@ public sealed record ErrorEventSummary(ListOf<ErrorEventGroup> Groups);
 public sealed record ErrorEventGroup(string ProcessorId, string Category, string Code, int Count, DateTimeOffset First, DateTimeOffset Last, ListOf<string> EventIds, string EvidenceId);
 
 /// <summary>Our own error events for a processor, a merchant or both, grouped so repeats read as one pattern.</summary>
-public sealed class ErrorEventsTool(IErrorEventData events, IInvestigationClock clock, IOptions<ToolOptions> options) : InvestigationTool<ErrorEventsRequest>
+public sealed class ErrorEventsTool(IErrorEventData events, IInvestigationClock clock, IOptions<ToolOptions> options)
+    : InvestigationTool<ErrorEventsRequest>(options)
 {
     public override string Name => ToolNames.ErrorEvents;
 
@@ -30,55 +31,32 @@ public sealed class ErrorEventsTool(IErrorEventData events, IInvestigationClock 
     {
         if (request.ProcessorId is null && request.MerchantId is null)
         {
-            return Invalid("Give a processor_id, a merchant_id, or both.");
+            return new ToolResult.Failed(ToolErrorCode.InvalidArgument, "Give a processor_id, a merchant_id, or both.");
         }
 
-        string? processorId = null;
-        string? merchantId = null;
-        string? error = null;
-        if ((request.ProcessorId is not null && !ToolArguments.TryId(request.ProcessorId, "processor_id", out processorId, out error))
-            || (request.MerchantId is not null && !ToolArguments.TryId(request.MerchantId, "merchant_id", out merchantId, out error)))
-        {
-            return Invalid(error!);
-        }
-
-        if (!ToolArguments.TryRange(request.StartDate, request.EndDate, clock.Today, out var range, out var code, out error))
-        {
-            return Invalid(error!, code);
-        }
-
-        var found = await DataSourceCall.RunAsync(
+        var processorId = request.ProcessorId is null ? null : ToolArguments.Id(request.ProcessorId, "processor_id");
+        var merchantId = request.MerchantId is null ? null : ToolArguments.Id(request.MerchantId, "merchant_id");
+        var range = ToolArguments.Range(request.StartDate, request.EndDate, clock.Today);
+        var found = await ReadAsync(
             token => events.GetEventsAsync(new ErrorEventQuery(processorId, merchantId, range.FromUtc, range.ToUtcExclusive), token),
             DataSources.ErrorEvents,
-            options.Value.RetryBackoff,
             cancellationToken);
 
-        var cap = options.Value.MaxListItems;
-        var truncations = new List<Truncation>();
-        var evidence = new List<EvidenceItem>(found.Select(e => new RecordEvidence(EvidenceIds.Event(e.Id), $"Error event {e.Id}")));
-        var groups = new List<ErrorEventGroup>();
-        foreach (var group in found.GroupBy(e => (e.ProcessorId, e.Category, e.Code)))
+        var evidence = Collect();
+        var groups = found.GroupBy(e => (e.ProcessorId, e.Category, e.Code)).Select(group =>
         {
             var members = group.ToList();
             var category = ToolJson.Word(group.Key.Category);
-            var factId = EvidenceIds.EventGroup(group.Key.ProcessorId, merchantId, category, group.Key.Code, range);
-            evidence.Add(new DerivedEvidence(factId, string.Create(CultureInfo.InvariantCulture, $"{members.Count} {category} events from {group.Key.ProcessorId}"), [.. members.Select(e => EvidenceIds.Event(e.Id))]));
+            var eventIds = members.Select(e => evidence.Record(EvidenceIds.Event(e.Id), $"Error event {e.Id}")).ToList();
+            var factId = evidence.Derive(
+                EvidenceIds.EventGroup(group.Key.ProcessorId, merchantId, category, group.Key.Code, range),
+                string.Create(CultureInfo.InvariantCulture, $"{members.Count} {category} events from {group.Key.ProcessorId}"),
+                eventIds);
+            return new ErrorEventGroup(
+                group.Key.ProcessorId, category, group.Key.Code, members.Count, members[0].OccurredAt, members[^1].OccurredAt,
+                evidence.Cap<string>([.. members.Select(e => e.Id)], $"{category} event ids"), factId);
+        }).ToList();
 
-            var ids = ListOf.Capped([.. members.Select(e => e.Id)], cap, $"{category} event ids", out var truncation);
-            if (truncation is not null)
-            {
-                truncations.Add(truncation);
-            }
-
-            groups.Add(new ErrorEventGroup(group.Key.ProcessorId, category, group.Key.Code, members.Count, members[0].OccurredAt, members[^1].OccurredAt, ids, factId));
-        }
-
-        var shown = ListOf.Capped(groups, cap, "Error event groups", out var groupTruncation);
-        if (groupTruncation is not null)
-        {
-            truncations.Add(groupTruncation);
-        }
-
-        return new ToolResult.Ok(new ErrorEventSummary(shown), evidence, truncations);
+        return evidence.Ok(new ErrorEventSummary(evidence.Cap(groups, "Error event groups")));
     }
 }

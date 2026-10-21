@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+
 using PaymentOps.Domain.Security;
 
 namespace PaymentOps.Tools;
@@ -22,7 +24,7 @@ public interface IInvestigationTool
 /// Checks the caller's role before anything else, then turns expected failures into results. Works on its
 /// own, without the agent: the agent only adds limits and the turn's evidence.
 /// </summary>
-public abstract class InvestigationTool<TRequest> : IInvestigationTool
+public abstract class InvestigationTool<TRequest>(IOptions<ToolOptions> options) : IInvestigationTool
     where TRequest : class
 {
     public abstract string Name { get; }
@@ -33,9 +35,12 @@ public abstract class InvestigationTool<TRequest> : IInvestigationTool
 
     public Type RequestType => typeof(TRequest);
 
+    protected ToolOptions Options { get; } = options.Value;
+
     public Task<ToolResult> RunAsync(object request, IUserContext user, CancellationToken cancellationToken) =>
         RunAsync((TRequest)request, user, cancellationToken);
 
+    // Anything other than an expected failure is a bug, and escapes so the agent's loop ends rather than retrying.
     public async Task<ToolResult> RunAsync(TRequest request, IUserContext user, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -54,16 +59,17 @@ public abstract class InvestigationTool<TRequest> : IInvestigationTool
         {
             return ex.Result;
         }
-        catch (ArgumentException)
-        {
-            // Our validation runs first, so this is a port refusing something we let through.
-            return new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The data source refused these arguments.");
-        }
     }
 
     protected abstract Task<ToolResult> RunCoreAsync(TRequest request, IUserContext user, CancellationToken cancellationToken);
 
-    protected static ToolResult.Failed Invalid(string message, ToolErrorCode code = ToolErrorCode.InvalidArgument) => new(code, message);
+    /// <summary>One read from a system of record, retried once when the failure is transient.</summary>
+    protected Task<T> ReadAsync<T>(Func<CancellationToken, Task<T>> read, string source, CancellationToken cancellationToken) =>
+        DataSourceCall.RunAsync(read, source, Options.RetryBackoff, cancellationToken);
+
+    protected EvidenceCollector Collect() => new(Options.MaxListItems);
+
+    protected static ToolResult.Failed NotFound(string what, string id) => new(ToolErrorCode.NotFound, $"No {what} has the id {id}.");
 }
 
 /// <summary>Ends a tool run early with a result, from inside a helper.</summary>

@@ -25,14 +25,19 @@ public static class InvestigationServiceCollectionExtensions
     /// <see cref="IPromptProvider"/>, <see cref="TokenCredential"/>, a scoped <see cref="Domain.Security.IUserContext"/>,
     /// and the data ports with an <see cref="Domain.Investigation.IInvestigationClock"/> for the tools.
     /// </summary>
-    public static IServiceCollection AddInvestigation(this IServiceCollection services, InvestigationEndpoints endpoints)
+    /// <param name="observeModel">Wraps the model client, for an evaluation run that records every request.</param>
+    public static IServiceCollection AddInvestigation(this IServiceCollection services, InvestigationEndpoints endpoints, Func<IChatClient, IChatClient>? observeModel = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
         services.AddSingleton(sp => KnowledgeRetriever.Create(endpoints.SearchEndpoint, sp.GetRequiredService<AiRelease>().KnowledgeIndex, sp.GetRequiredService<TokenCredential>()));
         services.AddSingleton(sp => KnowledgeSectionReader.Create(endpoints.SearchEndpoint, sp.GetRequiredService<AiRelease>().KnowledgeIndex, sp.GetRequiredService<TokenCredential>()));
         services.AddSingleton<IKnowledgeLookup, ReleaseKnowledgeLookup>();
-        services.AddSingleton(sp => ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment));
+        services.AddSingleton(sp =>
+        {
+            var model = ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment);
+            return observeModel is null ? model : observeModel(model);
+        });
         services.AddInvestigationTools();
         services.AddOptions<InvestigationLimits>();
         services.TryAddSingleton(TimeProvider.System);

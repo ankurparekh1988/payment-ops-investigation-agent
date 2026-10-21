@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace PaymentOps.Agent.Investigating;
 
@@ -12,13 +11,7 @@ internal sealed record AssessmentSubmission(
     string Confidence,
     IReadOnlyList<SubmittedNextStep> NextSteps)
 {
-    private static readonly JsonSerializerOptions Strict = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true,
-        RespectNullableAnnotations = true,
-    };
+    private static readonly JsonSerializerOptions Strict = StrictJson.Create(JsonNamingPolicy.SnakeCaseLower);
 
     public static AssessmentSubmission? Parse(JsonElement arguments)
     {

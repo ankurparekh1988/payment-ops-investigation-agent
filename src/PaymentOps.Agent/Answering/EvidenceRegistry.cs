@@ -20,13 +20,14 @@ internal sealed class EvidenceRegistry
     public IReadOnlyList<(string Id, RetrievedSection Section)> Entries { get; }
 
     public static EvidenceRegistry From(IReadOnlyList<RetrievedSection> sections) =>
-        new([.. sections.Select((section, i) => ($"S{i + 1}", section))]);
+        new([.. sections.Select((section, i) => (SectionId(i + 1), section))]);
+
+    /// <summary>How a section is cited: S1, S2 and so on, numbered within one question or investigation.</summary>
+    public static string SectionId(int number) => $"S{number}";
+
+    public static Citation Cite(string id, RetrievedSection section) => new(id, section.Key, section.Title, section.SectionPath);
 
     public bool Contains(string id) => _byId.ContainsKey(id);
 
-    public Citation CitationFor(string id)
-    {
-        var section = _byId[id];
-        return new Citation(id, section.Key, section.Title, section.SectionPath);
-    }
+    public Citation CitationFor(string id) => Cite(id, _byId[id]);
 }

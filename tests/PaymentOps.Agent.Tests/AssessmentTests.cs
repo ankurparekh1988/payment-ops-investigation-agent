@@ -22,7 +22,7 @@ public sealed class AssessmentTests
             new DerivedEvidence("fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10", "3 timeouts", ["event:EV-1", "event:EV-2", "event:EV-3"]),
         ]);
         turn.RegisterSection(new RetrievedSection("k1", "d", "Outage runbook", "Runbook > Outage", "text", "General", null));
-        turn.StructuredOutcome("get_settlement_batches", answered: true);
+        turn.StructuredOutcome(answered: true);
         return turn;
     }
 
@@ -76,18 +76,25 @@ public sealed class AssessmentTests
     public void Blank_text_is_rejected() =>
         Assert.Contains("next_steps[0].text: can't be blank.", AssessmentValidator.Check(Valid() with { NextSteps = [new SubmittedNextStep(" ", [])] }, _turn));
 
-    // A count is supported by the aggregate that counted every event, not by the few event ids shown.
+    // A count is supported by the group that counted every event, not by the few event ids shown.
     [Fact]
-    public void A_count_resting_only_on_shown_event_ids_is_rejected()
+    public void Citing_part_of_a_counted_group_needs_the_group_itself()
     {
-        var byEvents = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["event:EV-1", "event:EV-2"])] };
-        var byFact = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10"])] };
-        var oneEvent = Valid() with { Claims = [Said("A timeout was recorded at 19:05.", ["event:EV-1"])] };
+        const string Group = "fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10";
+        var partOnly = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["event:EV-1", "event:EV-2"])] };
+        var withGroup = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["event:EV-1", Group])] };
+        var whole = Valid() with { Claims = [Said("Timeouts were recorded.", ["event:EV-1", "event:EV-2", "event:EV-3"])] };
 
-        Assert.Contains(AssessmentValidator.Check(byEvents, _turn), f => f.Contains("fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10", StringComparison.Ordinal));
-        Assert.Empty(AssessmentValidator.Check(byFact, _turn));
-        Assert.Empty(AssessmentValidator.Check(oneEvent, _turn));
+        Assert.Contains(AssessmentValidator.Check(partOnly, _turn), f => f.Contains(Group, StringComparison.Ordinal));
+        Assert.Empty(AssessmentValidator.Check(withGroup, _turn));
+        Assert.Empty(AssessmentValidator.Check(whole, _turn));
     }
+
+    [Theory]
+    [InlineData("The file is missing [s1].")]
+    [InlineData("The file is missing [S1, S2].")]
+    public void Near_miss_citation_markers_in_text_are_rejected(string text) =>
+        Assert.Contains(AssessmentValidator.Check(Valid() with { Claims = [Said(text, ["payment:PAY-1"])] }, _turn), f => f.StartsWith("claims[0].text:", StringComparison.Ordinal));
 
     [Fact]
     public void A_root_cause_with_data_and_knowledge_is_an_assessment()
@@ -115,7 +122,7 @@ public sealed class AssessmentTests
     [Fact]
     public void An_observed_gap_caps_confidence_at_medium_and_is_shown_in_fixed_words()
     {
-        _turn.AddGap(ObservedGap.Timeout("get_processor_status", "Processor data"));
+        _turn.AddGap(ObservedGap.Timeout("Processor data"));
 
         var result = AssessmentPolicy.Apply(Valid(), _turn);
 
@@ -134,7 +141,7 @@ public sealed class AssessmentTests
     [Fact]
     public void A_turn_stopped_by_a_limit_is_incomplete_and_low()
     {
-        _turn.Stop("get_error_events");
+        _turn.Stop();
 
         var result = AssessmentPolicy.Apply(Valid(), _turn);
 
@@ -148,8 +155,8 @@ public sealed class AssessmentTests
         var turn = new TurnState();
         turn.Register([new RecordEvidence("payment:PAY-1", "Payment")]);
         turn.RegisterSection(new RetrievedSection("k1", "d", "Runbook", "R", "t", "General", null));
-        turn.StructuredOutcome("get_settlement_batches", answered: false);
-        turn.AddGap(ObservedGap.Unavailable("get_settlement_batches", "Settlement data"));
+        turn.StructuredOutcome(answered: false);
+        turn.AddGap(ObservedGap.Unavailable("Settlement data"));
 
         var result = AssessmentPolicy.Apply(Valid() with { Summary = Said("x", citations: ["S1"]), Claims = [Said("y", citations: ["S1"])], RootCause = Said("Outage.", citations: ["S1"]) }, turn);
 

@@ -7,7 +7,6 @@ public enum ToolErrorCode
     NotFound,
     Unavailable,
     Timeout,
-    KnowledgeUnavailable,
     NotAuthorized,
     LimitReached,
 }

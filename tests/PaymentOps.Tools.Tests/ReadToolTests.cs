@@ -1,3 +1,4 @@
+using PaymentOps.Knowledge.Corpus;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools.ErrorEvents;
 using PaymentOps.Tools.Knowledge;
@@ -14,7 +15,7 @@ public sealed class ReadToolTests
     public async Task A_merchant_profile_shows_routing_and_the_risk_hold_rule()
     {
         using var tools = new ToolFixture();
-        var ok = Ok(await tools.Tool<MerchantProfileTool>().RunAsync(new MerchantProfileRequest("M-2087"), Users.Reader, CancellationToken.None));
+        var ok = Ok(await tools.Tool<MerchantProfileTool>().RunAsync(new MerchantProfileRequest("M-2087"), TestUser.Reader, CancellationToken.None));
         var json = Json(ok);
 
         Assert.Equal("RF-37", (string?)json["risk_hold"]!["rule_id"]);
@@ -27,7 +28,7 @@ public sealed class ReadToolTests
     public async Task Processor_status_shows_the_open_incident_with_its_summary_marked_as_data()
     {
         using var tools = new ToolFixture();
-        var ok = Ok(await tools.Tool<ProcessorStatusTool>().RunAsync(new ProcessorStatusRequest("fabrikam-pay", "2026-11-09", "2026-11-10"), Users.Reader, CancellationToken.None));
+        var ok = Ok(await tools.Tool<ProcessorStatusTool>().RunAsync(new ProcessorStatusRequest("fabrikam-pay", "2026-11-09", "2026-11-10"), TestUser.Reader, CancellationToken.None));
         var incident = Json(ok)["incidents"]!["items"]!.AsArray().Single(i => (string?)i!["id"] == "INC-FAB-1109")!;
 
         Assert.Null(incident["resolved_at"]);
@@ -41,7 +42,7 @@ public sealed class ReadToolTests
     public async Task An_event_group_counts_everything_and_shows_only_the_cap()
     {
         using var tools = new ToolFixture(maxListItems: 2);
-        var ok = Ok(await tools.Tool<ErrorEventsTool>().RunAsync(new ErrorEventsRequest("fabrikam-pay", null, "2026-11-09", "2026-11-10"), Users.Reader, CancellationToken.None));
+        var ok = Ok(await tools.Tool<ErrorEventsTool>().RunAsync(new ErrorEventsRequest("fabrikam-pay", null, "2026-11-09", "2026-11-10"), TestUser.Reader, CancellationToken.None));
         var group = Json(ok)["groups"]!["items"]!.AsArray().Single(g => (string?)g!["category"] == "file_transfer_timeout")!;
         var count = (int)group["count"]!;
 
@@ -56,18 +57,18 @@ public sealed class ReadToolTests
     {
         using var tools = new ToolFixture();
 
-        Failed(await tools.Tool<ErrorEventsTool>().RunAsync(new ErrorEventsRequest(null, null, "2026-11-09", "2026-11-10"), Users.Reader, CancellationToken.None), ToolErrorCode.InvalidArgument);
+        Failed(await tools.Tool<ErrorEventsTool>().RunAsync(new ErrorEventsRequest(null, null, "2026-11-09", "2026-11-10"), TestUser.Reader, CancellationToken.None), ToolErrorCode.InvalidArgument);
     }
 
     [Fact]
     public async Task A_general_users_search_never_reaches_restricted_knowledge()
     {
         var knowledge = new FakeKnowledgeLookup(
-            new RetrievedSection("k1", "d1", "Runbook", "Runbook > Steps", "General text", "General", null),
-            new RetrievedSection("k2", "d2", "Risk policy", "Risk > RF-37", "Restricted text", "Restricted", null));
+            new RetrievedSection("k1", "d1", "Runbook", "Runbook > Steps", "General text", KnowledgeClassification.General, null),
+            new RetrievedSection("k2", "d2", "Risk policy", "Risk > RF-37", "Restricted text", KnowledgeClassification.Restricted, null));
         using var tools = new ToolFixture(knowledge: knowledge);
 
-        var ok = Ok(await tools.Tool<KnowledgeSearchTool>().RunAsync(new KnowledgeSearchRequest("RF-37 hold"), Users.Reader, CancellationToken.None));
+        var ok = Ok(await tools.Tool<KnowledgeSearchTool>().RunAsync(new KnowledgeSearchRequest("RF-37 hold"), TestUser.Reader, CancellationToken.None));
 
         Assert.False(knowledge.LastAccess!.IncludesRestricted);
         Assert.Equal(["k1"], Assert.IsType<KnowledgeSearchResult>(ok.Body).Sections.Select(s => s.Key));
@@ -78,7 +79,7 @@ public sealed class ReadToolTests
     {
         using var tools = new ToolFixture();
 
-        Failed(await tools.Tool<KnowledgeSearchTool>().RunAsync(new KnowledgeSearchRequest(new string('a', 301)), Users.Reader, CancellationToken.None), ToolErrorCode.InvalidArgument);
+        Failed(await tools.Tool<KnowledgeSearchTool>().RunAsync(new KnowledgeSearchRequest(new string('a', 301)), TestUser.Reader, CancellationToken.None), ToolErrorCode.InvalidArgument);
     }
 
     [Fact]
@@ -86,7 +87,7 @@ public sealed class ReadToolTests
     {
         using var tools = new ToolFixture(knowledge: new FakeKnowledgeLookup { Throws = new KnowledgeUnavailableException("Search failed.", new HttpRequestException()) });
 
-        Failed(await tools.Tool<KnowledgeSearchTool>().RunAsync(new KnowledgeSearchRequest("cut-off"), Users.Reader, CancellationToken.None), ToolErrorCode.KnowledgeUnavailable);
+        Failed(await tools.Tool<KnowledgeSearchTool>().RunAsync(new KnowledgeSearchRequest("cut-off"), TestUser.Reader, CancellationToken.None), ToolErrorCode.Unavailable);
     }
 
     [Fact]

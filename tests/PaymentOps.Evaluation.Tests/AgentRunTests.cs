@@ -11,7 +11,7 @@ public sealed class AgentRunTests
     private static readonly AgentTask S1 = new("s1", "S1", "general", "Why?", [ToolNames.MerchantProfile, ToolNames.SettlementBatches, ToolNames.KnowledgeSearch]);
 
     private static AgentTaskResult Result(AgentTask task, string outcome, params string[] calls) =>
-        new(task, [.. calls.Select(c => new ToolCallRecord(c, "{}"))], outcome, LatencyMs: 4200, ModelRequests: calls.Length + 1, InputTokens: 9000, OutputTokens: 600);
+        new(task, [.. calls.Select(c => new ToolCallRecord(c, "{}"))], outcome, outcome.StartsWith("assessed", StringComparison.Ordinal), LatencyMs: 4200, ModelRequests: calls.Length + 1, InputTokens: 9000, OutputTokens: 600);
 
     [Fact]
     public void The_seeded_tasks_load_and_name_only_real_tools()
@@ -36,7 +36,7 @@ public sealed class AgentRunTests
     [Fact]
     public void Agreement_counts_the_intended_tools_the_model_chose_and_lists_the_rest()
     {
-        var result = Result(S1, "assessed (assessment, high)", ToolNames.MerchantProfile, ToolNames.SettlementBatches, ToolNames.ErrorEvents, "submit_assessment");
+        var result = Result(S1, "assessed (assessment, high)", ToolNames.MerchantProfile, ToolNames.SettlementBatches, ToolNames.ErrorEvents, ToolNames.SubmitAssessment);
 
         Assert.Equal(2, result.IntendedToolsCalled);
         Assert.Equal([ToolNames.KnowledgeSearch], result.IntendedToolsMissed);
@@ -47,9 +47,9 @@ public sealed class AgentRunTests
     [Fact]
     public void The_guard_needs_a_multi_tool_trajectory_ending_in_a_valid_assessment()
     {
-        var oneTool = Result(S1, "assessed (hypothesis, medium)", ToolNames.MerchantProfile, "submit_assessment");
+        var oneTool = Result(S1, "assessed (hypothesis, medium)", ToolNames.MerchantProfile, ToolNames.SubmitAssessment);
         var unverified = Result(S1, "not assessed: AssessmentUnverified", ToolNames.MerchantProfile, ToolNames.SettlementBatches);
-        var genuine = Result(S1, "assessed (assessment, high)", ToolNames.MerchantProfile, ToolNames.SettlementBatches, "submit_assessment");
+        var genuine = Result(S1, "assessed (assessment, high)", ToolNames.MerchantProfile, ToolNames.SettlementBatches, ToolNames.SubmitAssessment);
 
         Assert.False(new AgentRunReport([oneTool, unverified]).GuardPassed);
         Assert.True(new AgentRunReport([oneTool, genuine]).GuardPassed);
@@ -58,7 +58,7 @@ public sealed class AgentRunTests
     [Fact]
     public void The_report_records_trajectories_latency_and_tokens_without_thresholds()
     {
-        var report = new AgentRunReport([Result(S1, "assessed (assessment, high)", ToolNames.MerchantProfile, ToolNames.SettlementBatches, "submit_assessment")]);
+        var report = new AgentRunReport([Result(S1, "assessed (assessment, high)", ToolNames.MerchantProfile, ToolNames.SettlementBatches, ToolNames.SubmitAssessment)]);
 
         var json = JsonNode.Parse(report.ToJson())!;
         Assert.Equal(ToolNames.SettlementBatches, (string?)json["results"]![0]!["calls"]![1]!["tool"]);

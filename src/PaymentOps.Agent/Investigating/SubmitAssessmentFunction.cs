@@ -13,11 +13,9 @@ namespace PaymentOps.Agent.Investigating;
 /// </summary>
 internal sealed class SubmitAssessmentFunction(TurnState turn) : AIFunction
 {
-    public const string ToolName = "submit_assessment";
-
     private static readonly string Accepted = JsonSerializer.Serialize(new { Status = "accepted" }, ToolJson.Options);
 
-    public override string Name => ToolName;
+    public override string Name => ToolNames.SubmitAssessment;
 
     public override string Description =>
         "Submit the final assessment. Call it exactly once, when the investigation is done; every statement lists the evidence ids and citation ids that support it.";
@@ -27,17 +25,12 @@ internal sealed class SubmitAssessmentFunction(TurnState turn) : AIFunction
     // Strict schema on the wire, so the model can't add or leave out fields; the server checks again anyway.
     public override IReadOnlyDictionary<string, object?> AdditionalProperties { get; } = new Dictionary<string, object?> { ["strict"] = true };
 
-    public AssessmentSubmission? Submission { get; private set; }
-
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        if (FunctionInvokingChatClient.CurrentContext is { } context)
-        {
-            context.Terminate = true;
-        }
+        ToolLoop.End();
 
         // A second call in the same response changes nothing once one was accepted.
-        if (Submission is not null)
+        if (turn.Accepted is not null)
         {
             return new(Accepted);
         }
@@ -48,8 +41,7 @@ internal sealed class SubmitAssessmentFunction(TurnState turn) : AIFunction
             : AssessmentValidator.Check(submission, turn);
         if (failures.Count == 0)
         {
-            Submission = submission;
-            turn.Finish();
+            turn.Accept(submission!);
             return new(Accepted);
         }
 

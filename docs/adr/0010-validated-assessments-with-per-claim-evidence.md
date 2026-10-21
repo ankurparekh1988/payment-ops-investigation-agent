@@ -14,7 +14,7 @@ An investigation's answer mixes three kinds of support: records from systems of 
 **Per-statement evidence lists, checked against evidence only server code registered, with labels, outcome caps and gaps decided by the server.**
 
 - The assessment has a summary, claims, a root cause and next steps. Each statement lists its evidence ids and citation ids; ids never appear in its text.
-- Server code registers evidence as tools return it, from typed results: knowledge sections numbered `S1`… across the investigation, records by type and id, and computed facts with the exact records they came from. A count is supported by the group that counted every event, not by the ids shown under a list cap.
+- Server code registers evidence as tools return it, from typed results: knowledge sections numbered `S1`… across the investigation, records by type and id, and computed facts with the exact records they came from. A count is supported by the group that counted every event: a statement citing some of a group's events must cite the group too, so the ids shown under a list cap can't stand in for it.
 - The summary and every claim need at least one id, and every id must be in the investigation's evidence. A failure goes back to the model, listed by rule, for one correction with only `submit_assessment` available; a second failure shows nothing.
 - A root cause is labelled *assessment* only with both data and knowledge behind it; otherwise *hypothesis*. The model doesn't choose the label.
 - Gaps (a source unavailable or too slow, a list cut short, a check the user wasn't allowed, a limit reached) are recorded as they happen and shown in fixed words. The model doesn't report gaps, so it can't leave one out. Gaps cap confidence, a stopped investigation is incomplete, and with every data source failed there's no root cause, whatever was submitted.
@@ -24,7 +24,7 @@ An investigation's answer mixes three kinds of support: records from systems of 
 - Every statement a person sees traces to something this investigation's tools returned, and the support is shown per statement, not for the answer as a whole.
 - Some correct assessments fail because the model slipped on an id. One correction is allowed because an investigation is expensive to throw away; grounded answers, which are cheap, are never retried.
 - A statement with nothing a tool returned to point at can't be shown. That includes a correct "there's no such merchant", because a lookup that finds nothing registers no evidence.
-- The count rule recognises a count written as digits or as a word up to twenty. A vaguer word, such as "several", isn't checked against the group.
+- A statement that cites some of a counted group's events must cite the group too. The rule doesn't read the text, so it also applies when no count is stated; citing the group costs nothing.
 
 ## Alternatives considered
 

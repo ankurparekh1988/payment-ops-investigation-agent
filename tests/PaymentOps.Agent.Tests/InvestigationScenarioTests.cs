@@ -19,7 +19,7 @@ namespace PaymentOps.Agent.Tests;
 /// </summary>
 public sealed class InvestigationScenarioTests
 {
-    private const string Submit = SubmitAssessmentFunction.ToolName;
+    private const string Submit = ToolNames.SubmitAssessment;
     private const string Fabrikam = "fabrikam-pay";
     private const string MissingFile = "fact:missing-file:fabrikam-pay:2026-11-09";
     private const string Timeouts = "fact:event-group:fabrikam-pay:*:file_transfer_timeout:SFTP-TIMEOUT:2026-11-09:2026-11-10";

@@ -10,7 +10,8 @@ namespace PaymentOps.Evaluation.Agent;
 internal sealed record ToolCallRecord(string Tool, string Arguments);
 
 /// <param name="Outcome">The server's verdict in a few words; model text is never recorded.</param>
-internal sealed record AgentTaskResult(AgentTask Task, IReadOnlyList<ToolCallRecord> Calls, string Outcome, long LatencyMs, int ModelRequests, long InputTokens, long OutputTokens)
+/// <param name="Assessed">The server accepted an assessment that wasn't a refusal.</param>
+internal sealed record AgentTaskResult(AgentTask Task, IReadOnlyList<ToolCallRecord> Calls, string Outcome, bool Assessed, long LatencyMs, int ModelRequests, long InputTokens, long OutputTokens)
 {
     private IReadOnlyList<string> ReadToolsCalled => [.. Calls.Select(c => c.Tool).Where(ToolNames.ReadTools.Contains).Distinct()];
 
@@ -20,7 +21,7 @@ internal sealed record AgentTaskResult(AgentTask Task, IReadOnlyList<ToolCallRec
 
     public IReadOnlyList<string> OtherToolsCalled => [.. ReadToolsCalled.Where(tool => !Task.IntendedTools.Contains(tool))];
 
-    public bool IsGenuineAssessment => ReadToolsCalled.Count >= 2 && Outcome.StartsWith("assessed", StringComparison.Ordinal);
+    public bool IsGenuineAssessment => Assessed && ReadToolsCalled.Count >= 2;
 }
 
 /// <summary>

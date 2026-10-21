@@ -75,14 +75,14 @@ internal sealed class InvestigationAgentRunner(
             await agent.RunAsync(question, session, Run([.. readTools, submit], null), linked.Token);
 
             // One more request either way: to correct a rejected submission, or to submit at all.
-            if (submit.Submission is null)
+            if (turn.Accepted is null)
             {
-                await agent.RunAsync([], session, Run([submit], ChatToolMode.RequireSpecific(SubmitAssessmentFunction.ToolName)), linked.Token);
+                await agent.RunAsync([], session, Run([submit], ChatToolMode.RequireSpecific(ToolNames.SubmitAssessment)), linked.Token);
             }
         }
         catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            turn.Stop("turn");
+            turn.Stop();
         }
         catch (Exception ex) when (ModelFailure.IsServiceFailure(ex))
         {
@@ -96,7 +96,7 @@ internal sealed class InvestigationAgentRunner(
             return new NotAssessed(NotAssessedReason.AssessmentUnverified);
         }
 
-        AssessmentResult result = submit.Submission is { } submission ? AssessmentPolicy.Apply(submission, turn)
+        AssessmentResult result = turn.Accepted is { } submission ? AssessmentPolicy.Apply(submission, turn)
             : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
         InvestigationLog.Completed(logger, result, turn.Gaps.Count, timer.ElapsedMilliseconds);
         return result;

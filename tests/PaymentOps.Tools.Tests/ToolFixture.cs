@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using PaymentOps.Data.Demo;
-using PaymentOps.Domain.Security;
+using PaymentOps.Knowledge.Corpus;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools.Knowledge;
 
@@ -61,17 +61,10 @@ internal sealed class FakeKnowledgeLookup(params RetrievedSection[] sections) : 
     {
         LastAccess = access;
         return Throws is null
-            ? Task.FromResult<IReadOnlyList<RetrievedSection>>([.. sections.Where(s => access.IncludesRestricted || s.Classification == "General")])
+            ? Task.FromResult<IReadOnlyList<RetrievedSection>>([.. sections.Where(s => access.IncludesRestricted || s.Classification == KnowledgeClassification.General)])
             : Task.FromException<IReadOnlyList<RetrievedSection>>(Throws);
     }
 
     public Task<RetrievedSection?> FindAsync(string sectionKey, KnowledgeAccess access, CancellationToken cancellationToken) =>
         Task.FromResult<RetrievedSection?>(null);
-}
-
-internal static class Users
-{
-    public static IUserContext Reader => TestUser.Reader;
-
-    public static IUserContext NoRole => TestUser.General;
 }

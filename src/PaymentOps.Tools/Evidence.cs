@@ -16,6 +16,13 @@ public static class EvidenceIds
 {
     public const string FactPrefix = "fact:";
 
+    private const string EventPrefix = "event:";
+    private const string EventGroupPrefix = FactPrefix + "event-group:";
+
+    /// <summary>Every prefix an evidence id can start with, so text can be checked for ids without repeating the list.</summary>
+    public static IReadOnlyList<string> Prefixes { get; } =
+        ["merchant:", "hold:", "processor:", "payment:", "file:", "payout:", "incident:", EventPrefix, "calendar:", FactPrefix];
+
     public static string Merchant(string id) => $"merchant:{id}";
 
     public static string Hold(string id) => $"hold:{id}";
@@ -30,7 +37,7 @@ public static class EvidenceIds
 
     public static string Incident(string id) => $"incident:{id}";
 
-    public static string Event(string id) => $"event:{id}";
+    public static string Event(string id) => EventPrefix + id;
 
     public static string CalendarDay(DateOnly date) => $"calendar:{Iso(date)}";
 
@@ -49,6 +56,10 @@ public static class EvidenceIds
         Fact("event-group", processorId, merchantId ?? "*", category, code, Iso(range.Start), Iso(range.End));
 
     public static bool IsDerived(string id) => id.StartsWith(FactPrefix, StringComparison.Ordinal);
+
+    public static bool IsEvent(string id) => id.StartsWith(EventPrefix, StringComparison.Ordinal);
+
+    public static bool IsEventGroup(string id) => id.StartsWith(EventGroupPrefix, StringComparison.Ordinal);
 
     private static string Fact(string kind, params string[] key) => $"{FactPrefix}{kind}:{string.Join(':', key)}";
 

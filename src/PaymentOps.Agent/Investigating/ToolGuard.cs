@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 using Microsoft.Extensions.AI;
@@ -20,6 +21,9 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
     private static readonly string AlreadySubmitted = ToolJson.Serialize(new ToolResult.Failed(
         ToolErrorCode.LimitReached, "The assessment has already been submitted."));
 
+    // A request type's schema never changes, and a guard is built for every investigation.
+    private static readonly ConcurrentDictionary<Type, JsonElement> Schemas = new();
+
     private readonly Lock _lock = new();
     private readonly Dictionary<string, int> _repeats = new(StringComparer.Ordinal);
     private int _calls;
@@ -27,26 +31,18 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
 
     public AIFunction Wrap(IInvestigationTool tool) => new GuardedFunction(this, tool);
 
-    private static void EndLoop()
-    {
-        if (FunctionInvokingChatClient.CurrentContext is { } context)
-        {
-            context.Terminate = true;
-        }
-    }
-
     private async Task<string> InvokeAsync(IInvestigationTool tool, AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        if (turn.Finished)
+        if (turn.Accepted is not null)
         {
-            EndLoop();
+            ToolLoop.End();
             return AlreadySubmitted;
         }
 
         if (!Admit(tool.Name, arguments))
         {
-            turn.Stop(tool.Name);
-            EndLoop();
+            turn.Stop();
+            ToolLoop.End();
             return LimitReached;
         }
 
@@ -100,52 +96,42 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
 
     private string Record(IInvestigationTool tool, ToolResult result)
     {
-        var structured = tool.Name != ToolNames.KnowledgeSearch;
-        switch (result)
+        if (result is ToolResult.Ok { Body: KnowledgeSearchResult found })
         {
-            case ToolResult.Ok { Body: KnowledgeSearchResult found }:
-                return ToolJson.Serialize(new ToolResult.Ok(Numbered(found), [], []));
+            return ToolJson.Serialize(new ToolResult.Ok(Numbered(found), [], []));
+        }
 
-            case ToolResult.Ok ok:
-                turn.Register(ok.Evidence);
-                foreach (var truncation in ok.Truncations)
-                {
-                    turn.AddGap(ObservedGap.Truncated(tool.Name, truncation));
-                }
+        var gap = result switch
+        {
+            ToolResult.Failed { Code: ToolErrorCode.Unavailable } failed => ObservedGap.Unavailable(failed.Source ?? tool.Source),
+            ToolResult.Failed { Code: ToolErrorCode.Timeout } => ObservedGap.Timeout(tool.Source),
+            ToolResult.Failed { Code: ToolErrorCode.NotAuthorized } => ObservedGap.NotAuthorized(tool.Name),
+            _ => null,
+        };
+        if (gap is not null)
+        {
+            turn.AddGap(gap);
+        }
 
-                turn.StructuredOutcome(tool.Name, answered: true);
-                break;
+        if (result is ToolResult.Ok ok)
+        {
+            turn.Register(ok.Evidence);
+            foreach (var truncation in ok.Truncations)
+            {
+                turn.AddGap(ObservedGap.Truncated(truncation));
+            }
+        }
 
-            case ToolResult.Failed { Code: ToolErrorCode.Unavailable or ToolErrorCode.KnowledgeUnavailable } failed:
-                turn.AddGap(ObservedGap.Unavailable(tool.Name, failed.Source ?? tool.Source));
-                if (structured)
-                {
-                    turn.StructuredOutcome(tool.Name, answered: false);
-                }
+        // Knowledge failing is a gap, but only the data tools decide whether any structured source answered.
+        if (tool.Source != DataSources.Knowledge && (result is ToolResult.Ok or ToolResult.Failed { Code: ToolErrorCode.NotFound } || gap?.Kind is ObservedGapKind.Unavailable or ObservedGapKind.Timeout))
+        {
+            turn.StructuredOutcome(answered: gap is null);
+        }
 
-                break;
-
-            case ToolResult.Failed { Code: ToolErrorCode.Timeout }:
-                turn.AddGap(ObservedGap.Timeout(tool.Name, tool.Source));
-                if (structured)
-                {
-                    turn.StructuredOutcome(tool.Name, answered: false);
-                }
-
-                break;
-
-            case ToolResult.Failed { Code: ToolErrorCode.NotAuthorized }:
-                turn.AddGap(ObservedGap.NotAuthorized(tool.Name));
-                break;
-
-            case ToolResult.Failed { Code: ToolErrorCode.InvalidArgument or ToolErrorCode.RangeTooLarge } when TooManyCorrections():
-                turn.Stop(tool.Name);
-                EndLoop();
-                break;
-
-            case ToolResult.Failed { Code: ToolErrorCode.NotFound }:
-                turn.StructuredOutcome(tool.Name, answered: true);
-                break;
+        if (result is ToolResult.Failed { Code: ToolErrorCode.InvalidArgument or ToolErrorCode.RangeTooLarge } && TooManyCorrections())
+        {
+            turn.Stop();
+            ToolLoop.End();
         }
 
         return ToolJson.Serialize(result);
@@ -189,7 +175,7 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
 
         public override string Description => tool.Description;
 
-        public override JsonElement JsonSchema { get; } = AIJsonUtilities.CreateJsonSchema(tool.RequestType, serializerOptions: ToolJson.Options);
+        public override JsonElement JsonSchema { get; } = Schemas.GetOrAdd(tool.RequestType, type => AIJsonUtilities.CreateJsonSchema(type, serializerOptions: ToolJson.Options));
 
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
             await guard.InvokeAsync(tool, arguments, cancellationToken);

@@ -53,6 +53,13 @@ public static partial class ToolArguments
         return error is null;
     }
 
+    /// <summary>The id, or a run that ends with the validation message.</summary>
+    internal static string Id(string? value, string name) =>
+        TryId(value, name, out var id, out var error) ? id : throw new ToolFailedException(new(ToolErrorCode.InvalidArgument, error!));
+
+    internal static DateRange Range(string? start, string? end, DateOnly today) =>
+        TryRange(start, end, today, out var range, out var code, out var error) ? range : throw new ToolFailedException(new(code, error!));
+
     private static bool TryDate(string? value, out DateOnly date) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
 

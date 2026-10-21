@@ -10,40 +10,29 @@ internal sealed class InFlightAskGate(IInvestigationService inner) : IInvestigat
 {
     private int _inFlight;
 
-    public async Task<InvestigationResult> AskAsync(string question, CancellationToken cancellationToken)
-    {
-        if (Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
-        {
-            return new InvestigationResult.NotAnswered(NotAnsweredReason.Busy);
-        }
+    public Task<InvestigationResult> AskAsync(string question, CancellationToken cancellationToken) =>
+        GatedAsync(() => inner.AskAsync(question, cancellationToken), new InvestigationResult.NotAnswered(NotAnsweredReason.Busy));
 
-        try
-        {
-            return await inner.AskAsync(question, cancellationToken);
-        }
-        finally
-        {
-            Volatile.Write(ref _inFlight, 0);
-        }
-    }
-
-    public async Task<AssessmentResult> InvestigateAsync(string question, CancellationToken cancellationToken)
-    {
-        if (Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
-        {
-            return new AssessmentResult.NotAssessed(NotAssessedReason.Busy);
-        }
-
-        try
-        {
-            return await inner.InvestigateAsync(question, cancellationToken);
-        }
-        finally
-        {
-            Volatile.Write(ref _inFlight, 0);
-        }
-    }
+    public Task<AssessmentResult> InvestigateAsync(string question, CancellationToken cancellationToken) =>
+        GatedAsync(() => inner.InvestigateAsync(question, cancellationToken), new AssessmentResult.NotAssessed(NotAssessedReason.Busy));
 
     public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) =>
         inner.GetSourceAsync(sectionKey, cancellationToken);
+
+    private async Task<T> GatedAsync<T>(Func<Task<T>> run, T busy)
+    {
+        if (Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
+        {
+            return busy;
+        }
+
+        try
+        {
+            return await run();
+        }
+        finally
+        {
+            Volatile.Write(ref _inFlight, 0);
+        }
+    }
 }

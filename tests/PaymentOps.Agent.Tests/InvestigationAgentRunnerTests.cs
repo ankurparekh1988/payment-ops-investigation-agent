@@ -11,7 +11,7 @@ namespace PaymentOps.Agent.Tests;
 
 public sealed class InvestigationAgentRunnerTests
 {
-    private const string Submit = SubmitAssessmentFunction.ToolName;
+    private const string Submit = ToolNames.SubmitAssessment;
 
     private static Func<IReadOnlyList<ChatMessage>, ChatResponse> Respond(ChatResponse response) => _ => response;
 

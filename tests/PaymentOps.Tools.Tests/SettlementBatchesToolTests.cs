@@ -7,7 +7,7 @@ namespace PaymentOps.Tools.Tests;
 public sealed class SettlementBatchesToolTests
 {
     private static Task<ToolResult> Run(ToolFixture tools, string merchant, string start, string end) =>
-        tools.Tool<SettlementBatchesTool>().RunAsync(new SettlementBatchesRequest(merchant, start, end), Users.Reader, CancellationToken.None);
+        tools.Tool<SettlementBatchesTool>().RunAsync(new SettlementBatchesRequest(merchant, start, end), TestUser.Reader, CancellationToken.None);
 
     // S1: the Fabrikam batch for Monday 9 November never arrived, and the payments that should be in it are the evidence.
     [Fact]
@@ -110,7 +110,7 @@ public sealed class SettlementBatchesToolTests
     {
         using var tools = new ToolFixture(new() { ["DemoData:Faults:Merchants:Mode"] = "Unavailable" });
 
-        Failed(await tools.Tool<SettlementBatchesTool>().RunAsync(new SettlementBatchesRequest("M-1042", "2026-11-09", "2026-11-10"), Users.NoRole, CancellationToken.None), ToolErrorCode.NotAuthorized);
+        Failed(await tools.Tool<SettlementBatchesTool>().RunAsync(new SettlementBatchesRequest("M-1042", "2026-11-09", "2026-11-10"), TestUser.General, CancellationToken.None), ToolErrorCode.NotAuthorized);
     }
 
     [Fact]

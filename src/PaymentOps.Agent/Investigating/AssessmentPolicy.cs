@@ -1,3 +1,4 @@
+using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Tools;
 
@@ -68,7 +69,7 @@ internal static class AssessmentPolicy
     private static Citation Citation(string id, TurnState turn)
     {
         turn.TryGetSection(id, out var section);
-        return new Citation(id, section.Key, section.Title, section.SectionPath);
+        return EvidenceRegistry.Cite(id, section);
     }
 
     private static Confidence Min(Confidence a, Confidence b) => a < b ? a : b;

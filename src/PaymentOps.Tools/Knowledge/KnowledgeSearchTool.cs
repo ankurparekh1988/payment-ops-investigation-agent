@@ -14,7 +14,7 @@ public sealed record KnowledgeSearchRequest(string? Query);
 public sealed record KnowledgeSearchResult(IReadOnlyList<RetrievedSection> Sections);
 
 /// <summary>Runbooks, operating guides and policies the user may read, as the release's retrieval finds them.</summary>
-public sealed class KnowledgeSearchTool(IKnowledgeLookup knowledge, IOptions<ToolOptions> options) : InvestigationTool<KnowledgeSearchRequest>
+public sealed class KnowledgeSearchTool(IKnowledgeLookup knowledge, IOptions<ToolOptions> options) : InvestigationTool<KnowledgeSearchRequest>(options)
 {
     public override string Name => ToolNames.KnowledgeSearch;
 
@@ -27,9 +27,9 @@ public sealed class KnowledgeSearchTool(IKnowledgeLookup knowledge, IOptions<Too
     protected override async Task<ToolResult> RunCoreAsync(KnowledgeSearchRequest request, IUserContext user, CancellationToken cancellationToken)
     {
         var query = request.Query?.Trim() ?? string.Empty;
-        if (query.Length == 0 || query.Length > options.Value.MaxQueryLength)
+        if (query.Length == 0 || query.Length > Options.MaxQueryLength)
         {
-            return Invalid($"query must be 1 to {options.Value.MaxQueryLength} characters.");
+            return new ToolResult.Failed(ToolErrorCode.InvalidArgument, $"query must be 1 to {Options.MaxQueryLength} characters.");
         }
 
         try
@@ -40,7 +40,7 @@ public sealed class KnowledgeSearchTool(IKnowledgeLookup knowledge, IOptions<Too
         }
         catch (KnowledgeUnavailableException)
         {
-            return new ToolResult.Failed(ToolErrorCode.KnowledgeUnavailable, $"{DataSources.Knowledge} is unavailable.", DataSources.Knowledge);
+            return new ToolResult.Failed(ToolErrorCode.Unavailable, $"{DataSources.Knowledge} is unavailable.", DataSources.Knowledge);
         }
     }
 }

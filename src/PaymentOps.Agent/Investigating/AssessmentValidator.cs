@@ -1,5 +1,7 @@
-using System.Globalization;
 using System.Text.RegularExpressions;
+
+using PaymentOps.Agent.Citations;
+using PaymentOps.Tools;
 
 namespace PaymentOps.Agent.Investigating;
 
@@ -7,11 +9,12 @@ namespace PaymentOps.Agent.Investigating;
 /// Decides whether a submission may be shown. Each failure names the rule and the field, never the model's
 /// text, so it can go back to the model for one correction without echoing anything.
 /// </summary>
-internal static partial class AssessmentValidator
+internal static class AssessmentValidator
 {
-    private static readonly string[] CountWords =
-        ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
-         "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
+    // Built from the evidence id prefixes, so a new kind of evidence is checked without editing this.
+    private static readonly Regex IdInText = new(
+        $@"\b({string.Join('|', EvidenceIds.Prefixes.Select(Regex.Escape))})[A-Za-z0-9]",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public static IReadOnlyList<string> Check(AssessmentSubmission submission, TurnState turn)
     {
@@ -68,7 +71,7 @@ internal static partial class AssessmentValidator
         }
 
         Citations(field, statement.CitationIds, turn, failures);
-        CountsCiteTheirAggregate(field, statement, turn, failures);
+        PartialGroupsCiteTheGroup(field, statement, turn, failures);
     }
 
     private static void Text(string field, string text, List<string> failures)
@@ -77,7 +80,7 @@ internal static partial class AssessmentValidator
         {
             failures.Add($"{field}.text: can't be blank.");
         }
-        else if (IdToken().IsMatch(text))
+        else if (IdInText.IsMatch(text) || CitationScanner.Scan(text) is { Citations.Count: > 0 } or { HasMalformedMarker: true })
         {
             failures.Add($"{field}.text: ids and citation markers belong in evidence_ids and citation_ids, not in the text.");
         }
@@ -91,30 +94,19 @@ internal static partial class AssessmentValidator
         }
     }
 
-    // A count is supported by the aggregate that counted every event; the few event ids shown can't stand in for it.
-    private static void CountsCiteTheirAggregate(string field, SubmittedStatement statement, TurnState turn, List<string> failures)
+    // A count is supported by the group that counted every event; citing a few of its events can't stand in for it.
+    private static void PartialGroupsCiteTheGroup(string field, SubmittedStatement statement, TurnState turn, List<string> failures)
     {
         var cited = statement.EvidenceIds.ToHashSet(StringComparer.Ordinal);
-        foreach (var eventId in cited.Where(id => id.StartsWith("event:", StringComparison.Ordinal)))
+        var partial = cited.Where(EvidenceIds.IsEvent)
+            .SelectMany(turn.EventGroupsContaining)
+            .FirstOrDefault(group => !cited.Contains(group.Id) && !group.SourceIds.All(cited.Contains));
+        if (partial is not null)
         {
-            foreach (var group in turn.EventGroupsContaining(eventId))
-            {
-                if (!cited.Contains(group.Id) && !group.SourceIds.All(cited.Contains) && MentionsCount(statement.Text, group.SourceIds.Count))
-                {
-                    failures.Add($"{field}.evidence_ids: a count of these events is supported by '{group.Id}'; cite it.");
-                    return;
-                }
-            }
+            failures.Add($"{field}.evidence_ids: these events are part of '{partial.Id}'; cite it too.");
         }
     }
 
-    private static bool MentionsCount(string text, int count) =>
-        Regex.IsMatch(text, $@"\b{count.ToString(CultureInfo.InvariantCulture)}\b")
-        || (count < CountWords.Length && Regex.IsMatch(text, $@"\b{CountWords[count]}\b", RegexOptions.IgnoreCase));
-
     // Failure text goes back to the model and into logs, so an id it invented is cut short.
     private static string Shown(string id) => id.Length <= 80 ? id : id[..80];
-
-    [GeneratedRegex(@"\[S\d+\]|\b(merchant|hold|processor|payment|file|payout|incident|event|calendar|fact):[A-Za-z0-9]", RegexOptions.CultureInvariant)]
-    private static partial Regex IdToken();
 }

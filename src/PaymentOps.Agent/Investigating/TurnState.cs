@@ -1,3 +1,4 @@
+using PaymentOps.Agent.Answering;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools;
 
@@ -5,25 +6,23 @@ namespace PaymentOps.Agent.Investigating;
 
 /// <summary>
 /// Everything one investigation established, written only by tool and guard code from typed results, never
-/// from model text: knowledge sections numbered S1…Sn, records and derived facts by evidence id, and the gaps
-/// observed. An assessment is checked against this and nothing else.
+/// from model text: knowledge sections numbered S1…Sn, records and derived facts by evidence id, the gaps
+/// observed, and the one accepted assessment. An assessment is checked against this and nothing else.
 /// </summary>
 internal sealed class TurnState
 {
-    private const string EventGroupPrefix = EvidenceIds.FactPrefix + "event-group:";
-
     private readonly Lock _lock = new();
     private readonly Dictionary<string, RetrievedSection> _sectionsById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _idsBySectionKey = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EvidenceItem> _evidence = new(StringComparer.Ordinal);
     private readonly List<ObservedGap> _gaps = [];
-    private readonly HashSet<string> _structuredToolsSucceeded = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _structuredToolsFailed = new(StringComparer.Ordinal);
+    private bool _structuredAnswered;
+    private bool _structuredFailed;
 
     public bool Stopped { get; private set; }
 
-    /// <summary>An assessment was accepted; nothing the model asks for after that runs.</summary>
-    public bool Finished { get; private set; }
+    /// <summary>The validated submission; once set, nothing the model asks for runs.</summary>
+    public AssessmentSubmission? Accepted { get; private set; }
 
     public IReadOnlyList<ObservedGap> Gaps
     {
@@ -43,18 +42,7 @@ internal sealed class TurnState
         {
             lock (_lock)
             {
-                return _structuredToolsFailed.Count > 0 && _structuredToolsSucceeded.Count == 0;
-            }
-        }
-    }
-
-    public bool HasKnowledge
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _sectionsById.Count > 0;
+                return _structuredFailed && !_structuredAnswered;
             }
         }
     }
@@ -66,7 +54,7 @@ internal sealed class TurnState
         {
             if (!_idsBySectionKey.TryGetValue(section.Key, out var id))
             {
-                id = $"S{_sectionsById.Count + 1}";
+                id = EvidenceRegistry.SectionId(_sectionsById.Count + 1);
                 _idsBySectionKey[section.Key] = id;
                 _sectionsById[id] = section;
             }
@@ -100,8 +88,7 @@ internal sealed class TurnState
     {
         lock (_lock)
         {
-            return [.. _evidence.Values.OfType<DerivedEvidence>().Where(fact =>
-                fact.Id.StartsWith(EventGroupPrefix, StringComparison.Ordinal) && fact.SourceIds.Contains(eventId, StringComparer.Ordinal))];
+            return [.. _evidence.Values.OfType<DerivedEvidence>().Where(fact => EvidenceIds.IsEventGroup(fact.Id) && fact.SourceIds.Contains(eventId, StringComparer.Ordinal))];
         }
     }
 
@@ -124,29 +111,20 @@ internal sealed class TurnState
         }
     }
 
-    public void Stop(string tool)
+    public void Stop()
     {
-        lock (_lock)
-        {
-            Stopped = true;
-        }
-
-        AddGap(ObservedGap.LimitReached(tool));
+        Stopped = true;
+        AddGap(ObservedGap.LimitReached);
     }
 
-    public void Finish()
-    {
-        lock (_lock)
-        {
-            Finished = true;
-        }
-    }
+    public void Accept(AssessmentSubmission submission) => Accepted = submission;
 
-    public void StructuredOutcome(string tool, bool answered)
+    public void StructuredOutcome(bool answered)
     {
         lock (_lock)
         {
-            (answered ? _structuredToolsSucceeded : _structuredToolsFailed).Add(tool);
+            _structuredAnswered |= answered;
+            _structuredFailed |= !answered;
         }
     }
 }
