@@ -3,6 +3,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PaymentOps.Domain\PaymentOps.Domain.csproj" />
     <ProjectReference Include="..\..\src\PaymentOps.Data.Demo\PaymentOps.Data.Demo.csproj" />
+    <ProjectReference Include="..\..\src\PaymentOps.Platform\PaymentOps.Platform.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
 </Project>

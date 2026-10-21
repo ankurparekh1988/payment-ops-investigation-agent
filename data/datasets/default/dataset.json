@@ -1,0 +1,1105 @@
+{
+  "asOf": "2026-11-11T06:00:00Z",
+  "processors": [
+    {
+      "id": "fabrikam-pay",
+      "name": "Fabrikam Pay",
+      "configuration": {
+        "cutOff": "16:00:00",
+        "timeZoneId": "America/New_York",
+        "expectedDelivery": "02:00:00",
+        "lateAfter": "02:00:00",
+        "holdingSettlementDays": 0
+      }
+    },
+    {
+      "id": "northwind-acquiring",
+      "name": "Northwind Acquiring",
+      "configuration": {
+        "cutOff": "17:00:00",
+        "timeZoneId": "Europe/London",
+        "expectedDelivery": "03:00:00",
+        "lateAfter": "03:00:00",
+        "holdingSettlementDays": 2
+      }
+    }
+  ],
+  "closureDays": [
+    {
+      "date": "2026-11-06",
+      "reason": "Settlement system closure day"
+    }
+  ],
+  "merchants": [
+    {
+      "id": "M-1042",
+      "name": "Alpine Outfitters",
+      "processorIds": [
+        "fabrikam-pay",
+        "northwind-acquiring"
+      ],
+      "riskHold": null
+    },
+    {
+      "id": "M-2087",
+      "name": "Harbor Lights Gallery",
+      "processorIds": [
+        "northwind-acquiring"
+      ],
+      "riskHold": {
+        "id": "RH-2087",
+        "placedAt": "2026-11-02T10:15:00Z",
+        "ruleId": "RF-37",
+        "reviewBy": "2026-11-20"
+      }
+    },
+    {
+      "id": "M-3310",
+      "name": "Copper Kettle Cafe",
+      "processorIds": [
+        "fabrikam-pay"
+      ],
+      "riskHold": null
+    },
+    {
+      "id": "M-4521",
+      "name": "Meridian Books",
+      "processorIds": [
+        "fabrikam-pay"
+      ],
+      "riskHold": null
+    },
+    {
+      "id": "M-5150",
+      "name": "Bluebird Florist",
+      "processorIds": [
+        "northwind-acquiring"
+      ],
+      "riskHold": null
+    },
+    {
+      "id": "M-6230",
+      "name": "Northgate Cycles",
+      "processorIds": [
+        "northwind-acquiring"
+      ],
+      "riskHold": null
+    }
+  ],
+  "payments": [
+    {
+      "id": "PAY-3310-01",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "amount": 84.20,
+      "currency": "USD",
+      "capturedAt": "2026-11-02T15:10:00Z",
+      "processorCapturedAt": "2026-11-02T15:10:03Z",
+      "batchDate": "2026-11-02"
+    },
+    {
+      "id": "PAY-3310-02",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "amount": 126.75,
+      "currency": "USD",
+      "capturedAt": "2026-11-02T18:40:00Z",
+      "processorCapturedAt": "2026-11-02T18:40:03Z",
+      "batchDate": "2026-11-02"
+    },
+    {
+      "id": "PAY-4521-01",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "amount": 42.00,
+      "currency": "USD",
+      "capturedAt": "2026-11-02T14:05:00Z",
+      "processorCapturedAt": "2026-11-02T14:05:03Z",
+      "batchDate": "2026-11-02"
+    },
+    {
+      "id": "PAY-4521-02",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "amount": 63.40,
+      "currency": "USD",
+      "capturedAt": "2026-11-02T19:30:00Z",
+      "processorCapturedAt": "2026-11-02T19:30:03Z",
+      "batchDate": "2026-11-02"
+    },
+    {
+      "id": "PAY-3310-03",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "amount": 97.10,
+      "currency": "USD",
+      "capturedAt": "2026-11-03T16:20:00Z",
+      "processorCapturedAt": "2026-11-03T16:20:03Z",
+      "batchDate": "2026-11-03"
+    },
+    {
+      "id": "PAY-4521-03",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "amount": 58.90,
+      "currency": "USD",
+      "capturedAt": "2026-11-03T17:45:00Z",
+      "processorCapturedAt": "2026-11-03T17:45:03Z",
+      "batchDate": "2026-11-03"
+    },
+    {
+      "id": "PAY-3310-04",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "amount": 110.00,
+      "currency": "USD",
+      "capturedAt": "2026-11-04T13:00:00Z",
+      "processorCapturedAt": "2026-11-04T13:00:03Z",
+      "batchDate": "2026-11-04"
+    },
+    {
+      "id": "PAY-4521-04",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "amount": 35.25,
+      "currency": "USD",
+      "capturedAt": "2026-11-04T15:00:00Z",
+      "processorCapturedAt": "2026-11-04T15:00:03Z",
+      "batchDate": "2026-11-04"
+    },
+    {
+      "id": "PAY-1042-01",
+      "merchantId": "M-1042",
+      "processorId": "fabrikam-pay",
+      "amount": 240.00,
+      "currency": "USD",
+      "capturedAt": "2026-11-03T15:00:00Z",
+      "processorCapturedAt": "2026-11-03T15:00:03Z",
+      "batchDate": "2026-11-03"
+    },
+    {
+      "id": "PAY-3310-05",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "amount": 72.60,
+      "currency": "USD",
+      "capturedAt": "2026-11-05T18:00:00Z",
+      "processorCapturedAt": "2026-11-05T18:00:03Z",
+      "batchDate": "2026-11-05"
+    },
+    {
+      "id": "PAY-4521-05",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "amount": 49.95,
+      "currency": "USD",
+      "capturedAt": "2026-11-05T20:10:00Z",
+      "processorCapturedAt": "2026-11-05T20:10:03Z",
+      "batchDate": "2026-11-05"
+    },
+    {
+      "id": "PAY-1042-02",
+      "merchantId": "M-1042",
+      "processorId": "fabrikam-pay",
+      "amount": 315.40,
+      "currency": "USD",
+      "capturedAt": "2026-11-09T14:30:00Z",
+      "processorCapturedAt": "2026-11-09T14:30:03Z",
+      "batchDate": null
+    },
+    {
+      "id": "PAY-1042-03",
+      "merchantId": "M-1042",
+      "processorId": "fabrikam-pay",
+      "amount": 188.00,
+      "currency": "USD",
+      "capturedAt": "2026-11-09T17:15:00Z",
+      "processorCapturedAt": "2026-11-09T17:15:03Z",
+      "batchDate": null
+    },
+    {
+      "id": "PAY-1042-04",
+      "merchantId": "M-1042",
+      "processorId": "fabrikam-pay",
+      "amount": 402.75,
+      "currency": "USD",
+      "capturedAt": "2026-11-09T19:40:00Z",
+      "processorCapturedAt": "2026-11-09T19:40:03Z",
+      "batchDate": null
+    },
+    {
+      "id": "PAY-3310-06",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "amount": 91.30,
+      "currency": "USD",
+      "capturedAt": "2026-11-09T15:45:00Z",
+      "processorCapturedAt": "2026-11-09T15:45:03Z",
+      "batchDate": null
+    },
+    {
+      "id": "PAY-4521-06",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "amount": 77.80,
+      "currency": "USD",
+      "capturedAt": "2026-11-09T16:30:00Z",
+      "processorCapturedAt": "2026-11-09T16:30:03Z",
+      "batchDate": null
+    },
+    {
+      "id": "PAY-2087-01",
+      "merchantId": "M-2087",
+      "processorId": "northwind-acquiring",
+      "amount": 1250.00,
+      "currency": "GBP",
+      "capturedAt": "2026-11-02T11:00:00Z",
+      "processorCapturedAt": "2026-11-02T11:00:03Z",
+      "batchDate": "2026-11-02"
+    },
+    {
+      "id": "PAY-5150-01",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "amount": 64.50,
+      "currency": "GBP",
+      "capturedAt": "2026-11-02T12:30:00Z",
+      "processorCapturedAt": "2026-11-02T12:30:03Z",
+      "batchDate": "2026-11-02"
+    },
+    {
+      "id": "PAY-5150-02",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "amount": 88.00,
+      "currency": "GBP",
+      "capturedAt": "2026-11-03T10:00:00Z",
+      "processorCapturedAt": "2026-11-03T10:00:03Z",
+      "batchDate": "2026-11-03"
+    },
+    {
+      "id": "PAY-6230-01",
+      "merchantId": "M-6230",
+      "processorId": "northwind-acquiring",
+      "amount": 420.00,
+      "currency": "GBP",
+      "capturedAt": "2026-11-03T09:30:00Z",
+      "processorCapturedAt": "2026-11-03T09:30:03Z",
+      "batchDate": "2026-11-03"
+    },
+    {
+      "id": "PAY-2087-02",
+      "merchantId": "M-2087",
+      "processorId": "northwind-acquiring",
+      "amount": 2140.00,
+      "currency": "GBP",
+      "capturedAt": "2026-11-04T13:00:00Z",
+      "processorCapturedAt": "2026-11-04T13:00:03Z",
+      "batchDate": "2026-11-04"
+    },
+    {
+      "id": "PAY-5150-03",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "amount": 57.25,
+      "currency": "GBP",
+      "capturedAt": "2026-11-04T15:00:00Z",
+      "processorCapturedAt": "2026-11-04T15:00:03Z",
+      "batchDate": "2026-11-04"
+    },
+    {
+      "id": "PAY-6230-02",
+      "merchantId": "M-6230",
+      "processorId": "northwind-acquiring",
+      "amount": 310.00,
+      "currency": "GBP",
+      "capturedAt": "2026-11-04T23:50:00Z",
+      "processorCapturedAt": "2026-11-04T23:50:03Z",
+      "batchDate": "2026-11-05"
+    },
+    {
+      "id": "PAY-6230-03",
+      "merchantId": "M-6230",
+      "processorId": "northwind-acquiring",
+      "amount": 275.50,
+      "currency": "GBP",
+      "capturedAt": "2026-11-05T16:40:00Z",
+      "processorCapturedAt": "2026-11-05T16:40:03Z",
+      "batchDate": "2026-11-05"
+    },
+    {
+      "id": "PAY-5150-04",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "amount": 92.10,
+      "currency": "GBP",
+      "capturedAt": "2026-11-05T11:00:00Z",
+      "processorCapturedAt": "2026-11-05T11:00:03Z",
+      "batchDate": "2026-11-05"
+    },
+    {
+      "id": "PAY-6230-04",
+      "merchantId": "M-6230",
+      "processorId": "northwind-acquiring",
+      "amount": 1890.00,
+      "currency": "GBP",
+      "capturedAt": "2026-11-05T17:05:00Z",
+      "processorCapturedAt": "2026-11-05T17:05:03Z",
+      "batchDate": "2026-11-09"
+    },
+    {
+      "id": "PAY-1042-05",
+      "merchantId": "M-1042",
+      "processorId": "northwind-acquiring",
+      "amount": 530.00,
+      "currency": "GBP",
+      "capturedAt": "2026-11-09T12:00:00Z",
+      "processorCapturedAt": "2026-11-09T12:00:03Z",
+      "batchDate": "2026-11-09"
+    },
+    {
+      "id": "PAY-5150-05",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "amount": 45.80,
+      "currency": "GBP",
+      "capturedAt": "2026-11-09T10:00:00Z",
+      "processorCapturedAt": "2026-11-09T10:00:03Z",
+      "batchDate": "2026-11-09"
+    }
+  ],
+  "files": [
+    {
+      "id": "SF-FAB-1102-1",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-02",
+      "receivedAt": "2026-11-03T07:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-3310",
+          "paymentIds": [
+            "PAY-3310-01"
+          ],
+          "amount": 84.20,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-4521",
+          "paymentIds": [
+            "PAY-4521-01"
+          ],
+          "amount": 42.00,
+          "currency": "USD"
+        }
+      ]
+    },
+    {
+      "id": "SF-FAB-1102-2",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-02",
+      "receivedAt": "2026-11-03T08:30:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-3310",
+          "paymentIds": [
+            "PAY-3310-02"
+          ],
+          "amount": 126.75,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-4521",
+          "paymentIds": [
+            "PAY-4521-02"
+          ],
+          "amount": 63.40,
+          "currency": "USD"
+        }
+      ]
+    },
+    {
+      "id": "SF-FAB-1103",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-03",
+      "receivedAt": "2026-11-04T07:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-1042",
+          "paymentIds": [
+            "PAY-1042-01"
+          ],
+          "amount": 240.00,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-3310",
+          "paymentIds": [
+            "PAY-3310-03"
+          ],
+          "amount": 97.10,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-4521",
+          "paymentIds": [
+            "PAY-4521-03"
+          ],
+          "amount": 58.90,
+          "currency": "USD"
+        }
+      ]
+    },
+    {
+      "id": "SF-FAB-1104-X",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-04",
+      "receivedAt": "2026-11-05T07:00:00Z",
+      "status": "Rejected",
+      "lines": [
+        {
+          "merchantId": "M-3310",
+          "paymentIds": [
+            "PAY-3310-04"
+          ],
+          "amount": 110.00,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-4521",
+          "paymentIds": [
+            "PAY-4521-04"
+          ],
+          "amount": 35.25,
+          "currency": "USD"
+        }
+      ]
+    },
+    {
+      "id": "SF-FAB-1104",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-04",
+      "receivedAt": "2026-11-05T16:30:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-3310",
+          "paymentIds": [
+            "PAY-3310-04"
+          ],
+          "amount": 110.00,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-4521",
+          "paymentIds": [
+            "PAY-4521-04"
+          ],
+          "amount": 35.25,
+          "currency": "USD"
+        }
+      ]
+    },
+    {
+      "id": "SF-FAB-1105",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-05",
+      "receivedAt": "2026-11-06T07:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-3310",
+          "paymentIds": [
+            "PAY-3310-05"
+          ],
+          "amount": 72.60,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-4521",
+          "paymentIds": [
+            "PAY-4521-05"
+          ],
+          "amount": 49.95,
+          "currency": "USD"
+        }
+      ]
+    },
+    {
+      "id": "SF-FAB-1105-R",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-05",
+      "receivedAt": "2026-11-10T15:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-3310",
+          "paymentIds": [
+            "PAY-3310-05"
+          ],
+          "amount": 72.60,
+          "currency": "USD"
+        },
+        {
+          "merchantId": "M-4521",
+          "paymentIds": [
+            "PAY-4521-05"
+          ],
+          "amount": 49.95,
+          "currency": "USD"
+        }
+      ]
+    },
+    {
+      "id": "SF-NW-1102",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-02",
+      "receivedAt": "2026-11-03T03:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-2087",
+          "paymentIds": [
+            "PAY-2087-01"
+          ],
+          "amount": 1250.00,
+          "currency": "GBP"
+        },
+        {
+          "merchantId": "M-5150",
+          "paymentIds": [
+            "PAY-5150-01"
+          ],
+          "amount": 64.50,
+          "currency": "GBP"
+        }
+      ]
+    },
+    {
+      "id": "SF-NW-1103",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-03",
+      "receivedAt": "2026-11-04T03:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-5150",
+          "paymentIds": [
+            "PAY-5150-02"
+          ],
+          "amount": 88.00,
+          "currency": "GBP"
+        },
+        {
+          "merchantId": "M-6230",
+          "paymentIds": [
+            "PAY-6230-01"
+          ],
+          "amount": 420.00,
+          "currency": "GBP"
+        }
+      ]
+    },
+    {
+      "id": "SF-NW-1104",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-04",
+      "receivedAt": "2026-11-05T03:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-2087",
+          "paymentIds": [
+            "PAY-2087-02"
+          ],
+          "amount": 2140.00,
+          "currency": "GBP"
+        },
+        {
+          "merchantId": "M-5150",
+          "paymentIds": [
+            "PAY-5150-03"
+          ],
+          "amount": 57.25,
+          "currency": "GBP"
+        }
+      ]
+    },
+    {
+      "id": "SF-NW-1105",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-05",
+      "receivedAt": "2026-11-06T03:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-5150",
+          "paymentIds": [
+            "PAY-5150-04"
+          ],
+          "amount": 92.10,
+          "currency": "GBP"
+        },
+        {
+          "merchantId": "M-6230",
+          "paymentIds": [
+            "PAY-6230-02",
+            "PAY-6230-03"
+          ],
+          "amount": 585.50,
+          "currency": "GBP"
+        }
+      ]
+    },
+    {
+      "id": "SF-NW-1109",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-09",
+      "receivedAt": "2026-11-10T03:00:00Z",
+      "status": "Accepted",
+      "lines": [
+        {
+          "merchantId": "M-1042",
+          "paymentIds": [
+            "PAY-1042-05"
+          ],
+          "amount": 530.00,
+          "currency": "GBP"
+        },
+        {
+          "merchantId": "M-5150",
+          "paymentIds": [
+            "PAY-5150-05"
+          ],
+          "amount": 45.80,
+          "currency": "GBP"
+        },
+        {
+          "merchantId": "M-6230",
+          "paymentIds": [
+            "PAY-6230-04"
+          ],
+          "amount": 1890.00,
+          "currency": "GBP"
+        }
+      ]
+    }
+  ],
+  "payouts": [
+    {
+      "id": "PO-3310-FAB-1102",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-02",
+      "sourceFileIds": [
+        "SF-FAB-1102-1",
+        "SF-FAB-1102-2"
+      ],
+      "scheduledFor": "2026-11-03",
+      "amount": 210.95,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-03T14:00:00Z"
+    },
+    {
+      "id": "PO-3310-FAB-1103",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-03",
+      "sourceFileIds": [
+        "SF-FAB-1103"
+      ],
+      "scheduledFor": "2026-11-04",
+      "amount": 97.10,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-04T14:00:00Z"
+    },
+    {
+      "id": "PO-3310-FAB-1104",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-04",
+      "sourceFileIds": [
+        "SF-FAB-1104"
+      ],
+      "scheduledFor": "2026-11-09",
+      "amount": 110.00,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-09T14:00:00Z"
+    },
+    {
+      "id": "PO-3310-FAB-1105",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-05",
+      "sourceFileIds": [
+        "SF-FAB-1105"
+      ],
+      "scheduledFor": "2026-11-09",
+      "amount": 72.60,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-09T14:00:00Z"
+    },
+    {
+      "id": "PO-3310-FAB-1105-R",
+      "merchantId": "M-3310",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-05",
+      "sourceFileIds": [
+        "SF-FAB-1105-R"
+      ],
+      "scheduledFor": "2026-11-11",
+      "amount": 72.60,
+      "currency": "USD",
+      "status": "Scheduled",
+      "paidAt": null
+    },
+    {
+      "id": "PO-4521-FAB-1102",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-02",
+      "sourceFileIds": [
+        "SF-FAB-1102-1",
+        "SF-FAB-1102-2"
+      ],
+      "scheduledFor": "2026-11-03",
+      "amount": 105.40,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-03T14:00:00Z"
+    },
+    {
+      "id": "PO-4521-FAB-1103",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-03",
+      "sourceFileIds": [
+        "SF-FAB-1103"
+      ],
+      "scheduledFor": "2026-11-04",
+      "amount": 58.90,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-04T14:00:00Z"
+    },
+    {
+      "id": "PO-4521-FAB-1104",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-04",
+      "sourceFileIds": [
+        "SF-FAB-1104"
+      ],
+      "scheduledFor": "2026-11-09",
+      "amount": 35.25,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-09T14:00:00Z"
+    },
+    {
+      "id": "PO-4521-FAB-1105",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-05",
+      "sourceFileIds": [
+        "SF-FAB-1105"
+      ],
+      "scheduledFor": "2026-11-09",
+      "amount": 49.95,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-09T14:00:00Z"
+    },
+    {
+      "id": "PO-4521-FAB-1105-R",
+      "merchantId": "M-4521",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-05",
+      "sourceFileIds": [
+        "SF-FAB-1105-R"
+      ],
+      "scheduledFor": "2026-11-11",
+      "amount": 49.95,
+      "currency": "USD",
+      "status": "Scheduled",
+      "paidAt": null
+    },
+    {
+      "id": "PO-1042-FAB-1103",
+      "merchantId": "M-1042",
+      "processorId": "fabrikam-pay",
+      "batchDate": "2026-11-03",
+      "sourceFileIds": [
+        "SF-FAB-1103"
+      ],
+      "scheduledFor": "2026-11-04",
+      "amount": 240.00,
+      "currency": "USD",
+      "status": "Paid",
+      "paidAt": "2026-11-04T14:00:00Z"
+    },
+    {
+      "id": "PO-2087-NW-1102",
+      "merchantId": "M-2087",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-02",
+      "sourceFileIds": [
+        "SF-NW-1102"
+      ],
+      "scheduledFor": "2026-11-04",
+      "amount": 1250.00,
+      "currency": "GBP",
+      "status": "Held",
+      "paidAt": null
+    },
+    {
+      "id": "PO-5150-NW-1102",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-02",
+      "sourceFileIds": [
+        "SF-NW-1102"
+      ],
+      "scheduledFor": "2026-11-04",
+      "amount": 64.50,
+      "currency": "GBP",
+      "status": "Paid",
+      "paidAt": "2026-11-04T09:00:00Z"
+    },
+    {
+      "id": "PO-5150-NW-1103",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-03",
+      "sourceFileIds": [
+        "SF-NW-1103"
+      ],
+      "scheduledFor": "2026-11-05",
+      "amount": 88.00,
+      "currency": "GBP",
+      "status": "Paid",
+      "paidAt": "2026-11-05T09:00:00Z"
+    },
+    {
+      "id": "PO-6230-NW-1103",
+      "merchantId": "M-6230",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-03",
+      "sourceFileIds": [
+        "SF-NW-1103"
+      ],
+      "scheduledFor": "2026-11-05",
+      "amount": 420.00,
+      "currency": "GBP",
+      "status": "Paid",
+      "paidAt": "2026-11-05T09:00:00Z"
+    },
+    {
+      "id": "PO-2087-NW-1104",
+      "merchantId": "M-2087",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-04",
+      "sourceFileIds": [
+        "SF-NW-1104"
+      ],
+      "scheduledFor": "2026-11-09",
+      "amount": 2140.00,
+      "currency": "GBP",
+      "status": "Held",
+      "paidAt": null
+    },
+    {
+      "id": "PO-5150-NW-1104",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-04",
+      "sourceFileIds": [
+        "SF-NW-1104"
+      ],
+      "scheduledFor": "2026-11-09",
+      "amount": 57.25,
+      "currency": "GBP",
+      "status": "Paid",
+      "paidAt": "2026-11-09T09:00:00Z"
+    },
+    {
+      "id": "PO-5150-NW-1105",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-05",
+      "sourceFileIds": [
+        "SF-NW-1105"
+      ],
+      "scheduledFor": "2026-11-10",
+      "amount": 92.10,
+      "currency": "GBP",
+      "status": "Paid",
+      "paidAt": "2026-11-10T09:00:00Z"
+    },
+    {
+      "id": "PO-6230-NW-1105",
+      "merchantId": "M-6230",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-05",
+      "sourceFileIds": [
+        "SF-NW-1105"
+      ],
+      "scheduledFor": "2026-11-10",
+      "amount": 585.50,
+      "currency": "GBP",
+      "status": "Paid",
+      "paidAt": "2026-11-10T09:00:00Z"
+    },
+    {
+      "id": "PO-1042-NW-1109",
+      "merchantId": "M-1042",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-09",
+      "sourceFileIds": [
+        "SF-NW-1109"
+      ],
+      "scheduledFor": "2026-11-11",
+      "amount": 530.00,
+      "currency": "GBP",
+      "status": "Scheduled",
+      "paidAt": null
+    },
+    {
+      "id": "PO-5150-NW-1109",
+      "merchantId": "M-5150",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-09",
+      "sourceFileIds": [
+        "SF-NW-1109"
+      ],
+      "scheduledFor": "2026-11-11",
+      "amount": 45.80,
+      "currency": "GBP",
+      "status": "Scheduled",
+      "paidAt": null
+    },
+    {
+      "id": "PO-6230-NW-1109",
+      "merchantId": "M-6230",
+      "processorId": "northwind-acquiring",
+      "batchDate": "2026-11-09",
+      "sourceFileIds": [
+        "SF-NW-1109"
+      ],
+      "scheduledFor": "2026-11-11",
+      "amount": 1890.00,
+      "currency": "GBP",
+      "status": "Scheduled",
+      "paidAt": null
+    }
+  ],
+  "incidents": [
+    {
+      "id": "INC-FAB-1104",
+      "processorId": "fabrikam-pay",
+      "component": "Authorization",
+      "summary": "Elevated authorization latency",
+      "startedAt": "2026-11-04T14:00:00Z",
+      "resolvedAt": "2026-11-04T15:30:00Z",
+      "processorReference": "FAB-7702"
+    },
+    {
+      "id": "INC-FAB-1109",
+      "processorId": "fabrikam-pay",
+      "component": "Settlement",
+      "summary": "Settlement batch processing unavailable",
+      "startedAt": "2026-11-09T18:30:00Z",
+      "resolvedAt": null,
+      "processorReference": "FAB-7731"
+    }
+  ],
+  "errorEvents": [
+    {
+      "id": "EV-1104-01",
+      "occurredAt": "2026-11-04T14:20:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": "M-1042",
+      "category": "AuthorizationDeclined",
+      "code": "AUTH-TIMEOUT",
+      "fileId": null
+    },
+    {
+      "id": "EV-1104-02",
+      "occurredAt": "2026-11-04T14:50:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": "M-1042",
+      "category": "AuthorizationDeclined",
+      "code": "AUTH-TIMEOUT",
+      "fileId": null
+    },
+    {
+      "id": "EV-1105-01",
+      "occurredAt": "2026-11-05T07:02:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": null,
+      "category": "FileRejected",
+      "code": "TOTALS-MISMATCH",
+      "fileId": "SF-FAB-1104-X"
+    },
+    {
+      "id": "EV-1106-01",
+      "occurredAt": "2026-11-06T07:01:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": null,
+      "category": "AcknowledgementFailed",
+      "code": "ACK-NOT-SENT",
+      "fileId": "SF-FAB-1105"
+    },
+    {
+      "id": "EV-1109-01",
+      "occurredAt": "2026-11-09T19:05:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": null,
+      "category": "FileTransferTimeout",
+      "code": "SFTP-TIMEOUT",
+      "fileId": null
+    },
+    {
+      "id": "EV-1109-02",
+      "occurredAt": "2026-11-09T20:10:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": null,
+      "category": "FileTransferTimeout",
+      "code": "SFTP-TIMEOUT",
+      "fileId": null
+    },
+    {
+      "id": "EV-1109-03",
+      "occurredAt": "2026-11-09T21:20:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": null,
+      "category": "FileTransferTimeout",
+      "code": "SFTP-TIMEOUT",
+      "fileId": null
+    },
+    {
+      "id": "EV-1110-01",
+      "occurredAt": "2026-11-10T07:10:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": null,
+      "category": "FileTransferTimeout",
+      "code": "SFTP-TIMEOUT",
+      "fileId": null
+    },
+    {
+      "id": "EV-1110-02",
+      "occurredAt": "2026-11-10T08:15:00Z",
+      "processorId": "fabrikam-pay",
+      "merchantId": null,
+      "category": "FileTransferTimeout",
+      "code": "SFTP-TIMEOUT",
+      "fileId": null
+    }
+  ]
+}

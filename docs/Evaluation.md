@@ -37,4 +37,15 @@ The workflow recommends; it never changes `ai/manifest.yaml`. Adopting a result 
 
 ### Results
 
-Recorded here after the first run from `main`. Until then the app uses lexical retrieval with no floor.
+First run from `main`, 2026-10-20 ([run](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/39411260027)): **lexical, no floor.** No Restricted section came back for any probe, in either mode.
+
+| | Lexical | Semantic |
+|---|---|---|
+| `critical` cases with an expected section in the top five | 15 of 15 | 15 of 15 |
+| `critical` cases ranked first / second | 13 / 2 | 13 / 2 |
+| `paraphrase` cases with an expected section in the top five | 1 of 5 | 4 of 5 |
+| Mean reciprocal rank | 0.75 | 0.8225 |
+
+Both modes met the critical bar, and semantic ranking's mean reciprocal rank was 0.0725 higher, short of the 0.10 the rule requires, so lexical stays. No floor would have qualified either: semantic ranking found no expected section for one paraphrase case, so no floor could keep one for every answerable case.
+
+The difference is in the paraphrases, where lexical ranking found an expected section for one question in five and semantic ranking for four. These are the cases that chose the strategy, so this isn't held-out evidence of retrieval quality. Paraphrased and differently worded questions will be a held-out slice of their own in the evaluation suite, and a large semantic advantage there would be new evidence for a new decision.
