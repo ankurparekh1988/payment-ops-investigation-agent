@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PaymentOps.Data.Demo.Dataset;
 using PaymentOps.Data.Demo.Faults;
 using PaymentOps.Domain.ErrorEvents;
+using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Merchants;
 using PaymentOps.Domain.Processors;
 using PaymentOps.Domain.Settlement;
@@ -30,7 +31,7 @@ public static class DemoDataServiceCollectionExtensions
     private static readonly TimeSpan MaxFaultDelay = TimeSpan.FromMinutes(10);
 
     /// <summary>
-    /// Registers the data ports over the built-in demo dataset, which is loaded and checked now so a bad
+    /// Registers the data ports and the investigation clock over the built-in demo dataset, which is loaded and checked now so a bad
     /// dataset stops startup. Fault injection runs only when the host passes <paramref name="allowFaultInjection"/>:
     /// configuration alone can't switch it on, so an app setting can't turn it on in a deployment.
     /// </summary>
@@ -46,6 +47,7 @@ public static class DemoDataServiceCollectionExtensions
         services.AddSingleton<ISettlementData>(Decorated<ISettlementData>(new DemoSettlementData(dataset), faults, DemoDataPorts.Settlement, (port, f) => new FaultInjectingSettlementData(port, f)));
         services.AddSingleton<IProcessorData>(Decorated<IProcessorData>(new DemoProcessorData(dataset), faults, DemoDataPorts.Processors, (port, f) => new FaultInjectingProcessorData(port, f)));
         services.AddSingleton<IErrorEventData>(Decorated<IErrorEventData>(new DemoErrorEventData(dataset), faults, DemoDataPorts.ErrorEvents, (port, f) => new FaultInjectingErrorEventData(port, f)));
+        services.AddSingleton<IInvestigationClock>(new DemoInvestigationClock(dataset.AsOf));
         return services;
     }
 
