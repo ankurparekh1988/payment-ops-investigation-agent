@@ -39,21 +39,22 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
             return AlreadySubmitted;
         }
 
-        if (!Admit(tool.Name, arguments))
+        var request = Parse(tool, arguments);
+        if (!Admit(tool, request))
         {
             turn.Stop();
             ToolLoop.End();
             return LimitReached;
         }
 
-        var result = Parse(tool, arguments) is { } request
+        var result = request is not null
             ? await RunAsync(tool, request, cancellationToken)
             : new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.");
         return Record(tool, result);
     }
 
-    // Counts the call and its canonical form; false when this call would break a limit.
-    private bool Admit(string name, AIFunctionArguments arguments)
+    // Counts the call, and the request the tool would run if it parsed; false when this call would break a limit.
+    private bool Admit(IInvestigationTool tool, object? request)
     {
         lock (_lock)
         {
@@ -62,7 +63,12 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
                 return false;
             }
 
-            var key = $"{name}({Canonical(arguments)})";
+            if (request is null)
+            {
+                return true;
+            }
+
+            var key = $"{tool.Name}({Canonical(tool, request)})";
             _repeats[key] = _repeats.GetValueOrDefault(key) + 1;
             return _repeats[key] <= limits.MaxRepeats;
         }
@@ -72,7 +78,7 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
     {
         try
         {
-            return JsonSerializer.SerializeToElement(arguments, ToolJson.Options).Deserialize(tool.RequestType, ToolJson.Options);
+            return JsonSerializer.SerializeToElement(arguments, ToolJson.Options).Deserialize(tool.RequestType, ToolJson.Requests);
         }
         catch (JsonException)
         {
@@ -157,17 +163,14 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
         }).ToList(),
     };
 
-    // Keys sorted, surrounding whitespace dropped; ids keep their case because they're matched exactly.
-    private static string Canonical(AIFunctionArguments arguments) =>
-        string.Join(';', arguments.OrderBy(a => a.Key, StringComparer.Ordinal).Select(a => $"{a.Key}={Text(a.Value)}"));
-
-    private static string Text(object? value) => value switch
-    {
-        null => string.Empty,
-        JsonElement { ValueKind: JsonValueKind.String } element => element.GetString()?.Trim() ?? string.Empty,
-        JsonElement element => element.GetRawText(),
-        _ => value.ToString()?.Trim() ?? string.Empty,
-    };
+    // The parsed request with keys sorted, surrounding whitespace dropped and blanks left out, as tools treat them;
+    // ids keep their case because they're matched exactly.
+    private static string Canonical(IInvestigationTool tool, object request) =>
+        string.Join(';', JsonSerializer.SerializeToElement(request, tool.RequestType, ToolJson.Options).EnumerateObject()
+            .Select(p => (p.Name, Value: p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString()!.Trim() : p.Value.GetRawText()))
+            .Where(p => p.Value.Length > 0)
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .Select(p => $"{p.Name}={p.Value}"));
 
     private sealed class GuardedFunction(ToolGuard guard, IInvestigationTool tool) : AIFunction
     {
@@ -175,7 +178,7 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
 
         public override string Description => tool.Description;
 
-        public override JsonElement JsonSchema { get; } = Schemas.GetOrAdd(tool.RequestType, type => AIJsonUtilities.CreateJsonSchema(type, serializerOptions: ToolJson.Options));
+        public override JsonElement JsonSchema { get; } = Schemas.GetOrAdd(tool.RequestType, type => AIJsonUtilities.CreateJsonSchema(type, serializerOptions: ToolJson.Requests));
 
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
             await guard.InvokeAsync(tool, arguments, cancellationToken);

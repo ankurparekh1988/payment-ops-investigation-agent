@@ -17,6 +17,12 @@ public static class ToolJson
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
+    /// <summary>
+    /// How the model's tool arguments are read: as <see cref="Options"/>, but an argument the request doesn't declare
+    /// is an error, so nothing the tool ignores can vary between otherwise identical calls.
+    /// </summary>
+    public static JsonSerializerOptions Requests { get; } = new(Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+
     /// <summary>An enum value as the model reads it, such as <c>file_transfer_timeout</c>; Domain enums stay out of tool output.</summary>
     public static string Word(Enum value) => JsonNamingPolicy.SnakeCaseLower.ConvertName(value.ToString());
 

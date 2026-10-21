@@ -83,6 +83,46 @@ public sealed class ToolGuardTests
         Assert.True(_turn.Stopped);
     }
 
+    // The server reads arguments strictly whatever the wire schema says: an argument the tool doesn't declare is an error.
+    [Fact]
+    public async Task An_unknown_argument_is_invalid_and_the_tool_doesn_t_run()
+    {
+        var tool = new StubTool();
+
+        var result = (string?)await Guard().Wrap(tool).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1042", ["note"] = "again" });
+
+        Assert.Contains("\"code\":\"invalid_argument\"", result, StringComparison.Ordinal);
+        Assert.Equal(0, tool.Runs);
+    }
+
+    [Fact]
+    public async Task Varying_an_unknown_argument_doesn_t_get_past_the_repeat_limit()
+    {
+        var tool = new StubTool();
+        var calls = Enumerable.Range(0, 4).Select(i => ScriptedChatClient.Call(tool.Name, new { merchant_id = "M-1042", note = $"try {i}" }));
+
+        await RunAsync([Guard().Wrap(tool)], [ScriptedChatClient.Call(tool.Name, new { merchant_id = "M-1042" }), ScriptedChatClient.Call(tool.Name, new { merchant_id = "M-1042" }), .. calls]);
+
+        Assert.Equal(2, tool.Runs);
+        Assert.True(_turn.Stopped);
+    }
+
+    // Repeats are keyed on what the tool would receive, so spelling "not given" another way is the same call.
+    [Fact]
+    public async Task A_null_or_blank_optional_argument_is_the_same_call_as_leaving_it_out()
+    {
+        var tool = new StubTool();
+
+        await RunAsync(
+            [Guard().Wrap(tool)],
+            ScriptedChatClient.Call(tool.Name, new { merchant_id = "M-1042" }),
+            ScriptedChatClient.Call(tool.Name, new { merchant_id = "M-1042", query = (string?)null }),
+            ScriptedChatClient.Call(tool.Name, new { merchant_id = "M-1042", query = " " }));
+
+        Assert.Equal(2, tool.Runs);
+        Assert.True(_turn.Stopped);
+    }
+
     [Fact]
     public async Task A_third_argument_correction_stops_the_turn()
     {
