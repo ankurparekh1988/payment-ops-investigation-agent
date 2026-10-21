@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -11,6 +12,9 @@ public static class ToolJson
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
+
+        // Read by the model, never rendered as HTML, so markers like <untrusted-data> stay legible.
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     /// <summary>An enum value as the model reads it, such as <c>file_transfer_timeout</c>; Domain enums stay out of tool output.</summary>
