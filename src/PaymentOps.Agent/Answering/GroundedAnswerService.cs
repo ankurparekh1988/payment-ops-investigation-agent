@@ -27,7 +27,7 @@ internal sealed class GroundedAnswerService(
     AiRelease release,
     IUserContext user,
     IOptions<AnsweringOptions> options,
-    ILogger<GroundedAnswerService> logger) : IInvestigationService
+    ILogger<GroundedAnswerService> logger)
 {
     private readonly AnsweringOptions _options = options.Value;
 

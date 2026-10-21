@@ -39,6 +39,25 @@ public sealed class InFlightAskGateTests
         Assert.Equal(2, inner.Asks);
     }
 
+    // An investigation and a question share one gate: either running makes the other busy.
+    [Fact]
+    public async Task An_investigation_while_a_question_is_running_is_busy()
+    {
+        var inner = new BlockingService();
+        var gate = new InFlightAskGate(inner);
+
+        var first = gate.AskAsync("one", CancellationToken.None);
+        var second = await gate.InvestigateAsync("two", CancellationToken.None);
+
+        Assert.Equal(NotAssessedReason.Busy, Assert.IsType<AssessmentResult.NotAssessed>(second).Reason);
+        Assert.Equal(0, inner.Investigations);
+
+        inner.Release.SetResult(new InvestigationResult.NotAnswered(NotAnsweredReason.NoEvidence));
+        await first;
+        await gate.InvestigateAsync("three", CancellationToken.None);
+        Assert.Equal(1, inner.Investigations);
+    }
+
     [Fact]
     public async Task Sources_pass_straight_through()
     {
@@ -57,6 +76,14 @@ public sealed class InFlightAskGateTests
         {
             Asks++;
             return Release.Task;
+        }
+
+        public int Investigations { get; private set; }
+
+        public Task<AssessmentResult> InvestigateAsync(string question, CancellationToken cancellationToken)
+        {
+            Investigations++;
+            return Task.FromResult<AssessmentResult>(new AssessmentResult.NotAssessed(NotAssessedReason.LimitReached));
         }
 
         public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) =>

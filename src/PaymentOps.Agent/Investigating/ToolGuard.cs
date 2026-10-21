@@ -17,6 +17,9 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
     private static readonly string LimitReached = ToolJson.Serialize(new ToolResult.Failed(
         ToolErrorCode.LimitReached, "The investigation has reached its step limit. Call submit_assessment with what you have."));
 
+    private static readonly string AlreadySubmitted = ToolJson.Serialize(new ToolResult.Failed(
+        ToolErrorCode.LimitReached, "The assessment has already been submitted."));
+
     private readonly Lock _lock = new();
     private readonly Dictionary<string, int> _repeats = new(StringComparer.Ordinal);
     private int _calls;
@@ -34,6 +37,12 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
 
     private async Task<string> InvokeAsync(IInvestigationTool tool, AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
+        if (turn.Finished)
+        {
+            EndLoop();
+            return AlreadySubmitted;
+        }
+
         if (!Admit(tool.Name, arguments))
         {
             turn.Stop(tool.Name);

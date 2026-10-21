@@ -3,7 +3,7 @@ using PaymentOps.Agent.Contracts;
 namespace PaymentOps.Agent.Answering;
 
 /// <summary>
-/// One question at a time per instance. Registered scoped, so in Blazor Server that's one per
+/// One question or investigation at a time per instance. Registered scoped, so in Blazor Server that's one per
 /// circuit; the disabled button is only the visible half. Per-user quotas are a later concern.
 /// </summary>
 internal sealed class InFlightAskGate(IInvestigationService inner) : IInvestigationService
@@ -20,6 +20,23 @@ internal sealed class InFlightAskGate(IInvestigationService inner) : IInvestigat
         try
         {
             return await inner.AskAsync(question, cancellationToken);
+        }
+        finally
+        {
+            Volatile.Write(ref _inFlight, 0);
+        }
+    }
+
+    public async Task<AssessmentResult> InvestigateAsync(string question, CancellationToken cancellationToken)
+    {
+        if (Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
+        {
+            return new AssessmentResult.NotAssessed(NotAssessedReason.Busy);
+        }
+
+        try
+        {
+            return await inner.InvestigateAsync(question, cancellationToken);
         }
         finally
         {

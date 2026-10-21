@@ -22,6 +22,9 @@ internal sealed class TurnState
 
     public bool Stopped { get; private set; }
 
+    /// <summary>An assessment was accepted; nothing the model asks for after that runs.</summary>
+    public bool Finished { get; private set; }
+
     public IReadOnlyList<ObservedGap> Gaps
     {
         get
@@ -129,6 +132,14 @@ internal sealed class TurnState
         }
 
         AddGap(ObservedGap.LimitReached(tool));
+    }
+
+    public void Finish()
+    {
+        lock (_lock)
+        {
+            Finished = true;
+        }
     }
 
     public void StructuredOutcome(string tool, bool answered)

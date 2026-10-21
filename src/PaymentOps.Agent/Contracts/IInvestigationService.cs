@@ -5,5 +5,8 @@ public interface IInvestigationService
 {
     Task<InvestigationResult> AskAsync(string question, CancellationToken cancellationToken);
 
+    /// <summary>Investigates with the read-only tools and returns an assessment the server has validated.</summary>
+    Task<AssessmentResult> InvestigateAsync(string question, CancellationToken cancellationToken);
+
     Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken);
 }
