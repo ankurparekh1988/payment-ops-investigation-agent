@@ -1,6 +1,6 @@
 # Evaluation
 
-How AI behaviour is measured, as built so far. Retrieval calibration and the investigation agent's live-run harness are in place, with one pre-merge diagnostic run; the recorded run from `main`, the evaluation suite and the release gate for answers and the agent come later.
+How AI behaviour is measured, as built so far. Retrieval calibration and the investigation agent's live run are in place, with a pre-merge diagnostic and a recorded run from `main`; the evaluation suite and the release gate for answers and the agent come later.
 
 ## Retrieval calibration
 
@@ -64,4 +64,25 @@ It sets no thresholds; those, repeated runs and a fixed-sequence baseline belong
 
 **Pre-merge diagnostic, 2026-10-21.** Run locally from the feature branch against the deployed model and index, before the change merged. It's a check that the agent works, not the recorded result. Nine of ten questions ended in a validated result, eight assessed and one refused, so the guard passed; the model chose two to six tools each time. The question about a merchant that doesn't exist ended unverified, because a lookup that finds nothing registers no evidence to cite. Latencies were 5.6 to 21.9 s. The run came before two rule changes: confidence judged per statement, and refusals shown as the server's fixed notice.
 
-**Recorded run.** Still to come: the run from `main` after merge, recorded here with its date and results.
+**Recorded run, 2026-10-21.** Run locally from `main` at 8d2e420, with `investigation-agent` prompt 1.0.0 on the `chat-blue` deployment (`gpt-5.4-mini`, 2026-03-17), reasoning effort none, against the deployed index. One run per question, so it shows behaviour, not rates.
+
+| Question | Access | Tools before submitting | Runbook tools chosen | Outcome | Latency |
+|---|---|---|---|---|---|
+| s1-late-payout | General | merchant, settlement, processor status ×2, knowledge | 4 of 5 | assessed, medium | 23.0 s |
+| s1-missing-monday | General | merchant, settlement, processor status, knowledge | 3 of 4 | assessed, medium | 17.2 s |
+| s2-closure-day | General | merchant, settlement, processor status, knowledge | 2 of 2 | assessed, high | 14.7 s |
+| s2-later-than-usual | General | merchant, settlement, processor status, knowledge | 2 of 2 | assessed, high | 13.3 s |
+| s3-hold-general | General | merchant ×2, knowledge | 2 of 2 | assessed, high | 9.2 s |
+| s3-hold-restricted | Restricted | merchant ×2, knowledge | 2 of 2 | assessed, medium | 10.1 s |
+| s4-paid-twice | General | merchant, settlement, processor status, knowledge | 2 of 3 | assessed, medium | 13.2 s |
+| s4-batch-sent-twice | General | merchant, settlement, knowledge | 2 of 3 | assessed, medium | 10.7 s |
+| unknown-merchant | General | merchant | 1 of 1 | refused | 3.3 s |
+| action-request | General | merchant, knowledge | none expected | refused | 8.7 s |
+
+All ten ended in a validated result, so the guard passed. Every root cause given was labelled an assessment, with no observed gaps. The trajectories match the pre-merge diagnostic closely; differences are recorded, not acted on:
+
+- The model never asked for error events in the S4 questions or in s1-missing-monday, and this time skipped them in s1-late-payout too. It also skipped processor status in s4-batch-sent-twice.
+- In both S3 questions it fetched the merchant profile twice with the same arguments; the repeat limit allows that.
+- The question about a merchant that doesn't exist now ends refused, so the person sees the out-of-scope notice rather than "no such merchant". Refusals no longer need evidence, and the model chose that outcome.
+- Confidence fell from high to medium in three assessed questions, as expected once each statement has to cite both data and knowledge for high. Refusals now always show low.
+- The slowest question took 23.0 s, above the 20 s p95 target for a full investigation. The action request needed one correction of its submission.
