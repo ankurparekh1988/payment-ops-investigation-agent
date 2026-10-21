@@ -10,17 +10,30 @@ namespace PaymentOps.Agent.Investigating;
 /// </summary>
 internal static class AssessmentPolicy
 {
+    // Shown for every refusal in place of the model's words: a refusal is the server's notice, not a finding.
+    public const string RefusalNotice =
+        "This can't be investigated here. An investigation reads merchants' payments, settlement, payouts, processor status and error events, and the operations knowledge; it can't change anything.";
+
     public static AssessmentResult.Assessed Apply(AssessmentSubmission submission, TurnState turn)
     {
         ArgumentNullException.ThrowIfNull(submission);
 
         var outcome = Enum.Parse<AssessmentOutcome>(submission.Outcome, ignoreCase: true);
+        var gaps = turn.Gaps;
+
+        // Asserts nothing about the data, so nothing the turn observed changes it.
+        if (outcome == AssessmentOutcome.Refused)
+        {
+            return new AssessmentResult.Assessed(outcome, new Statement(RefusalNotice, [], []), [], null, Confidence.Low, [], [.. gaps.Select(g => g.Wording)]);
+        }
+
         var confidence = Enum.Parse<Confidence>(submission.Confidence, ignoreCase: true);
         var rootCause = string.IsNullOrWhiteSpace(submission.RootCause.Text) ? null : new RootCause(Resolve(submission.RootCause, turn), Label(submission.RootCause));
 
-        var gaps = turn.Gaps;
-        var statements = submission.Claims.Prepend(submission.Summary).ToList();
-        if (gaps.Count > 0 || statements.All(s => s.CitationIds.Count == 0) || statements.All(s => s.EvidenceIds.Count == 0))
+        // High needs every statement people read to stand on both data and knowledge, each on its own.
+        if (gaps.Count > 0
+            || submission.Claims.Prepend(submission.Summary).Any(s => s.EvidenceIds.Count == 0 || s.CitationIds.Count == 0)
+            || rootCause?.Label == RootCauseLabel.Hypothesis)
         {
             confidence = Min(confidence, Confidence.Medium);
         }
@@ -30,7 +43,7 @@ internal static class AssessmentPolicy
             outcome = AssessmentOutcome.Incomplete;
             rootCause = null;
         }
-        else if (turn.Stopped && outcome != AssessmentOutcome.Refused)
+        else if (turn.Stopped)
         {
             outcome = AssessmentOutcome.Incomplete;
         }

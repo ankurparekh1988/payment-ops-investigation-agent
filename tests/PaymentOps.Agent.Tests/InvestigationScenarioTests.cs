@@ -37,7 +37,7 @@ public sealed class InvestigationScenarioTests
     private static object Assessment(object rootCause, string[] claimEvidence, string[] claimCitations, string confidence = "high", string summaryEvidence = "merchant:M-1042") => new
     {
         outcome = "assessed",
-        summary = Statement("The payout was delayed.", [summaryEvidence], []),
+        summary = Statement("The payout was delayed.", [summaryEvidence], ["S1"]),
         claims = new[] { Statement("What the data and the runbook show.", claimEvidence, claimCitations) },
         root_cause = rootCause,
         confidence,
@@ -146,6 +146,32 @@ public sealed class InvestigationScenarioTests
         Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
         Assert.Null(assessed.RootCause);
         Assert.Equal(Confidence.Low, assessed.Confidence);
+    }
+
+    // A request no read-only tool can serve is refused without manufacturing evidence, and people see the server's notice.
+    [Fact]
+    public async Task A_request_to_change_data_is_refused_with_no_tool_calls_and_the_server_notice()
+    {
+        var refusal = new
+        {
+            outcome = "refused",
+            summary = Statement("I can't issue refunds.", [], []),
+            claims = Array.Empty<object>(),
+            root_cause = Statement(string.Empty, [], []),
+            confidence = "high",
+            next_steps = Array.Empty<object>(),
+        };
+        var model = Model(Call(Submit, refusal));
+        using var fixture = new AgentFixture(null, new CorpusKnowledge(), 20);
+
+        var result = await fixture.Runner(model, null).InvestigateAsync("Refund M-1042's last payout.", CancellationToken.None);
+
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(result);
+        Assert.Equal(AssessmentOutcome.Refused, assessed.Outcome);
+        Assert.Equal(AssessmentPolicy.RefusalNotice, assessed.Summary.Text);
+        Assert.Empty(assessed.Claims);
+        Assert.Null(assessed.RootCause);
+        Assert.Single(model.Requests);
     }
 
     [Fact]

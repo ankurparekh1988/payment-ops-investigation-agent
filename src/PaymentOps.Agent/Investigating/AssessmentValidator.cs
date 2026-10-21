@@ -33,6 +33,17 @@ internal static class AssessmentValidator
             failures.Add("confidence: must be high, medium or low.");
         }
 
+        // A refusal's summary is never shown, so it asks for nothing; the server's notice stands in its place.
+        if (submission.Outcome == "refused")
+        {
+            if (submission.Claims.Count > 0 || !string.IsNullOrWhiteSpace(submission.RootCause.Text) || submission.NextSteps.Count > 0)
+            {
+                failures.Add("outcome: a refusal carries no claims, no root cause and no next steps.");
+            }
+
+            return failures;
+        }
+
         Supported("summary", submission.Summary, turn, failures);
         for (var i = 0; i < submission.Claims.Count; i++)
         {
@@ -46,14 +57,9 @@ internal static class AssessmentValidator
             Citations($"next_steps[{i}]", submission.NextSteps[i].CitationIds, turn, failures);
         }
 
-        switch (submission.Outcome)
+        if (submission.Outcome == "assessed" && submission.Claims.Count == 0)
         {
-            case "assessed" when submission.Claims.Count == 0:
-                failures.Add("claims: an assessed outcome needs at least one claim.");
-                break;
-            case "refused" when submission.Claims.Count > 0 || !string.IsNullOrWhiteSpace(submission.RootCause.Text):
-                failures.Add("outcome: a refusal carries no claims and no root cause.");
-                break;
+            failures.Add("claims: an assessed outcome needs at least one claim.");
         }
 
         return failures;

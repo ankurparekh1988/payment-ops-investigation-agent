@@ -61,4 +61,4 @@ prompts:
     sha256: sha256:efd63ef575ce1ae22f0cca7cc9f6ed840aac2f991f562d335c87c113dab01010
   investigation-agent:
     version: 1.0.0
-    sha256: sha256:ce8f9454ad22a0b0f486144b7775090b8ad76d75122b63870baf21bcde2b9b55
+    sha256: sha256:a277e5ead17eeb6ba450ac99c8db7f93f64443925ad71f6e6061f49efd6c2f83

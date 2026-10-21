@@ -31,7 +31,7 @@ public sealed class AssessmentTests
     private static AssessmentSubmission Valid() => new(
         "assessed",
         Said("Fabrikam's 9 November file never arrived.", ["fact:missing-file:p:2026-11-09"], ["S1"]),
-        [Said("No accepted file arrived for the batch.", ["fact:missing-file:p:2026-11-09"]), Said("The runbook says to raise it with the processor.", citations: ["S1"])],
+        [Said("No file arrived for the batch, which the runbook treats as the processor's to resend.", ["fact:missing-file:p:2026-11-09"], ["S1"])],
         Said("A processor outage stopped the file.", ["fact:missing-file:p:2026-11-09"], ["S1"]),
         "high",
         [new SubmittedNextStep("Raise an incident with Fabrikam.", ["S1"])]);
@@ -61,9 +61,56 @@ public sealed class AssessmentTests
     public void An_assessed_outcome_needs_a_claim() =>
         Assert.Contains("claims: an assessed outcome needs at least one claim.", AssessmentValidator.Check(Valid() with { Claims = [] }, _turn));
 
+    [Theory]
+    [InlineData("claims")]
+    [InlineData("root_cause")]
+    [InlineData("next_steps")]
+    public void A_refusal_carries_no_claims_root_cause_or_next_steps(string field)
+    {
+        var submission = field switch
+        {
+            "claims" => Refusal() with { Claims = [Said("y", ["payment:PAY-1"])] },
+            "root_cause" => Refusal() with { RootCause = Said("Outage.", ["payment:PAY-1"], ["S1"]) },
+            _ => Refusal() with { NextSteps = [new SubmittedNextStep("Raise an incident.", ["S1"])] },
+        };
+
+        Assert.Contains("outcome: a refusal carries no claims, no root cause and no next steps.", AssessmentValidator.Check(submission, _turn));
+    }
+
+    private static AssessmentSubmission Refusal() => new("refused", Said("I can't refund payments."), [], Said(string.Empty), "high", []);
+
+    // Nothing a refusal says is shown, so it needs no evidence: an out-of-scope question has none to give.
     [Fact]
-    public void A_refusal_carries_no_claims_or_root_cause() =>
-        Assert.NotEmpty(AssessmentValidator.Check(Valid() with { Outcome = "refused" }, _turn));
+    public void A_refusal_needs_no_evidence_and_shows_only_the_server_notice()
+    {
+        var submission = Refusal();
+
+        Assert.Empty(AssessmentValidator.Check(submission, new TurnState()));
+        var result = AssessmentPolicy.Apply(submission, new TurnState());
+
+        Assert.Equal(AssessmentOutcome.Refused, result.Outcome);
+        Assert.Equal(AssessmentPolicy.RefusalNotice, result.Summary.Text);
+        Assert.Empty(result.Summary.Evidence);
+        Assert.Empty(result.Summary.Citations);
+        Assert.Empty(result.Claims);
+        Assert.Null(result.RootCause);
+        Assert.Empty(result.NextSteps);
+        Assert.Equal(Confidence.Low, result.Confidence);
+    }
+
+    // A refusal states nothing about the data, so failed sources don't turn it into an incomplete assessment.
+    [Fact]
+    public void A_refusal_stays_a_refusal_when_every_data_source_failed()
+    {
+        var turn = new TurnState();
+        turn.StructuredOutcome(answered: false);
+        turn.AddGap(ObservedGap.Unavailable("Settlement data"));
+
+        var result = AssessmentPolicy.Apply(Refusal(), turn);
+
+        Assert.Equal(AssessmentOutcome.Refused, result.Outcome);
+        Assert.Equal(AssessmentPolicy.RefusalNotice, result.Summary.Text);
+    }
 
     [Theory]
     [InlineData("The file is missing [S1].")]
@@ -158,6 +205,28 @@ public sealed class AssessmentTests
 
         Assert.Equal(Confidence.Medium, result.Confidence);
         Assert.Equal(["Processor data didn't respond in time."], result.Gaps);
+    }
+
+    // Each statement is judged on its own: a data-only claim and a knowledge-only claim don't add up to High.
+    [Fact]
+    public void A_data_only_claim_beside_a_knowledge_only_claim_caps_confidence_at_medium()
+    {
+        var mixed = Valid() with { Claims = [Said("No file arrived.", ["fact:missing-file:p:2026-11-09"]), Said("The runbook says to raise it.", citations: ["S1"])] };
+
+        Assert.Equal(Confidence.Medium, AssessmentPolicy.Apply(mixed, _turn).Confidence);
+    }
+
+    [Fact]
+    public void A_summary_resting_on_one_kind_of_evidence_caps_confidence_at_medium() =>
+        Assert.Equal(Confidence.Medium, AssessmentPolicy.Apply(Valid() with { Summary = Said("x", ["payment:PAY-1"]) }, _turn).Confidence);
+
+    [Fact]
+    public void A_hypothesis_root_cause_caps_confidence_at_medium()
+    {
+        var result = AssessmentPolicy.Apply(Valid() with { RootCause = Said("Outage.", citations: ["S1"]) }, _turn);
+
+        Assert.Equal(RootCauseLabel.Hypothesis, result.RootCause!.Label);
+        Assert.Equal(Confidence.Medium, result.Confidence);
     }
 
     [Fact]
