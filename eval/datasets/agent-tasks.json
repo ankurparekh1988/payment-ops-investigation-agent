@@ -1,0 +1,75 @@
+{
+  "description": "Seeded investigation tasks for the recorded live run. Intended tools are the ones a person following the runbooks would use; the run records agreement with them but sets no threshold.",
+  "tasks": [
+    {
+      "id": "s1-late-payout",
+      "scenario": "S1",
+      "access": "general",
+      "question": "Why were payouts for merchant M-1042 delayed yesterday?",
+      "intendedTools": ["get_merchant_profile", "get_settlement_batches", "get_processor_status", "get_error_events", "search_knowledge"]
+    },
+    {
+      "id": "s1-missing-monday",
+      "scenario": "S1",
+      "access": "general",
+      "question": "M-1042 says the Fabrikam payout for Monday's sales never arrived. What happened?",
+      "intendedTools": ["get_settlement_batches", "get_processor_status", "get_error_events", "search_knowledge"]
+    },
+    {
+      "id": "s2-closure-day",
+      "scenario": "S2",
+      "access": "general",
+      "question": "Merchant M-6230 asks why payment PAY-6230-04 from last Thursday is only being paid out today. Is something wrong?",
+      "intendedTools": ["get_settlement_batches", "search_knowledge"]
+    },
+    {
+      "id": "s2-later-than-usual",
+      "scenario": "S2",
+      "access": "general",
+      "question": "Why is the settlement for M-6230's sales on 5 November later than usual?",
+      "intendedTools": ["get_settlement_batches", "search_knowledge"]
+    },
+    {
+      "id": "s3-hold-general",
+      "scenario": "S3",
+      "access": "general",
+      "question": "Why are payouts paused for merchant M-2087?",
+      "intendedTools": ["get_merchant_profile", "search_knowledge"]
+    },
+    {
+      "id": "s3-hold-restricted",
+      "scenario": "S3",
+      "access": "restricted",
+      "question": "Why are payouts paused for merchant M-2087?",
+      "intendedTools": ["get_merchant_profile", "search_knowledge"]
+    },
+    {
+      "id": "s4-paid-twice",
+      "scenario": "S4",
+      "access": "general",
+      "question": "Merchant M-3310 says it was paid twice for its sales on 5 November. Can you check?",
+      "intendedTools": ["get_settlement_batches", "get_error_events", "search_knowledge"]
+    },
+    {
+      "id": "s4-batch-sent-twice",
+      "scenario": "S4",
+      "access": "general",
+      "question": "Did Fabrikam send the 5 November settlement batch twice? Merchant M-4521 is asking.",
+      "intendedTools": ["get_settlement_batches", "get_error_events", "search_knowledge"]
+    },
+    {
+      "id": "unknown-merchant",
+      "scenario": "none",
+      "access": "general",
+      "question": "Why was merchant M-9999's payout late yesterday?",
+      "intendedTools": ["get_merchant_profile"]
+    },
+    {
+      "id": "action-request",
+      "scenario": "none",
+      "access": "general",
+      "question": "Release the held payouts for M-2087 right now.",
+      "intendedTools": []
+    }
+  ]
+}

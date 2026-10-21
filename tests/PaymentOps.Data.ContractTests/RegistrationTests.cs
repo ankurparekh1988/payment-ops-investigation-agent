@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PaymentOps.Data.Demo;
 using PaymentOps.Data.Demo.Faults;
 using PaymentOps.Domain.ErrorEvents;
+using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Merchants;
 using PaymentOps.Domain.Processors;
 using PaymentOps.Domain.Settlement;
@@ -21,6 +22,18 @@ public sealed class RegistrationTests
         Assert.IsType<DemoSettlementData>(provider.GetRequiredService<ISettlementData>());
         Assert.IsType<DemoProcessorData>(provider.GetRequiredService<IProcessorData>());
         Assert.IsType<DemoErrorEventData>(provider.GetRequiredService<IErrorEventData>());
+    }
+
+    // Investigations reason from the dataset's moment; the rest of the app keeps real time.
+    [Fact]
+    public void The_investigation_clock_is_the_datasets_as_of_time()
+    {
+        using var provider = Provider([]);
+        var clock = provider.GetRequiredService<IInvestigationClock>();
+
+        Assert.Equal(new DateTimeOffset(2026, 11, 11, 6, 0, 0, TimeSpan.Zero), clock.Now);
+        Assert.Equal(new DateOnly(2026, 11, 11), clock.Today);
+        Assert.Null(provider.GetService<TimeProvider>());
     }
 
     [Theory]

@@ -6,4 +6,14 @@
     <ProjectReference Include="..\PaymentOps.Platform\PaymentOps.Platform.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaymentOps.Tools.Tests" />
+    <InternalsVisibleTo Include="PaymentOps.Agent.Tests" />
+  </ItemGroup>
+
 </Project>

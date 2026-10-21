@@ -113,6 +113,17 @@ The model sees only sections the user may see, and the user sees only what the s
 - **Logs hold no content.** Answer logs record reason codes, counts, section keys, timings and token usage, and on failure the dependency, the exception type, status, error code and request id. They never record the question, section text, the prompt or the model's output, nor an exception's message, which can echo the request.
 - **Calibration probes.** The retrieval comparison asks Restricted-only questions as a General user, in both modes, and fails if any Restricted section comes back ([Evaluation](Evaluation.md)).
 
+## Investigation tools and agent
+
+The agent can only read, and only what the user may read; what it says is checked against what its tools actually returned.
+
+- **Tools are read-only, and offered by role.** Every tool needs `Ops.Reader`. The agent is offered only the tools the user's role allows, and each tool checks the role again when it runs, so a tool is neither offered to nor executable by a user without it. Knowledge search uses the user's own access, exactly as grounded answers do: a General user's investigation can't retrieve, register or cite a Restricted section, and isn't told one exists.
+- **Arguments are validated before any data is read.** The server reads them strictly, whatever the schema sent to the model says: an argument the tool doesn't declare is an error and the tool doesn't run. Repeats are counted on the request as parsed, so an extra or blank argument doesn't make a new call. Ids are checked against a fixed pattern and matched exactly; ranges are capped at 31 days and can't end after the investigation's date. Errors go back to the model in fixed wording, never as exception text.
+- **The tool loop fails closed.** Calls run one at a time; an unexpected exception or a call to an unknown tool ends the loop at once, with nothing from the exception sent to the model. Call, repeat, correction and time limits are enforced by our own code ([Architecture](Architecture.md#limits)).
+- **Evidence comes from the server.** Only tool code registers evidence, from typed results; the model can cite an id but can't create one. An assessment citing anything this investigation's tools didn't return is rejected. Labels, outcome and confidence caps are set by the server.
+- **Untrusted text before injection defences.** Incident summaries and knowledge content reach the model marked as untrusted data. The markers are guidance; dedicated injection defences come later. Until then the structural controls hold: there are no write tools, evidence is registered by the server, and every statement shown is validated against it.
+- **Logs hold no content.** Investigation logs record the outcome, confidence, label, counts of claims and gaps, timings and failure classes. They never record the question, tool results, the prompt or the model's output.
+
 ## Content safety
 
 Chat deployments use a strict content filter policy. Anything above "Safe" in the hate, sexual, violence and self-harm categories is blocked, on both prompts and completions, along with jailbreak attempts in user prompts and protected text in completions. Filtering is synchronous, so blocked output is never streamed. The trade-off is that some legitimate operational language may be blocked; that false-positive rate will be measured once the evaluation suite exists.

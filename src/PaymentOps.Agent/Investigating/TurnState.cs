@@ -1,0 +1,130 @@
+using PaymentOps.Agent.Answering;
+using PaymentOps.Knowledge.Retrieval;
+using PaymentOps.Tools;
+
+namespace PaymentOps.Agent.Investigating;
+
+/// <summary>
+/// Everything one investigation established, written only by tool and guard code from typed results, never
+/// from model text: knowledge sections numbered S1…Sn, records and derived facts by evidence id, the gaps
+/// observed, and the one accepted assessment. An assessment is checked against this and nothing else.
+/// </summary>
+internal sealed class TurnState
+{
+    private readonly Lock _lock = new();
+    private readonly Dictionary<string, RetrievedSection> _sectionsById = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _idsBySectionKey = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, EvidenceItem> _evidence = new(StringComparer.Ordinal);
+    private readonly List<ObservedGap> _gaps = [];
+    private bool _structuredAnswered;
+    private bool _structuredFailed;
+
+    public bool Stopped { get; private set; }
+
+    /// <summary>The validated submission; once set, nothing the model asks for runs.</summary>
+    public AssessmentSubmission? Accepted { get; private set; }
+
+    public IReadOnlyList<ObservedGap> Gaps
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _gaps];
+            }
+        }
+    }
+
+    /// <summary>A structured data tool was tried and none answered: the server then forces an incomplete outcome.</summary>
+    public bool EveryStructuredSourceFailed
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _structuredFailed && !_structuredAnswered;
+            }
+        }
+    }
+
+    // A section already registered keeps its id, so the same text never has two citations.
+    public string RegisterSection(RetrievedSection section)
+    {
+        lock (_lock)
+        {
+            if (!_idsBySectionKey.TryGetValue(section.Key, out var id))
+            {
+                id = EvidenceRegistry.SectionId(_sectionsById.Count + 1);
+                _idsBySectionKey[section.Key] = id;
+                _sectionsById[id] = section;
+            }
+
+            return id;
+        }
+    }
+
+    // The data is deterministic, so a fact registered twice is the same fact; the first stays.
+    public void Register(IEnumerable<EvidenceItem> items)
+    {
+        lock (_lock)
+        {
+            foreach (var item in items)
+            {
+                _evidence.TryAdd(item.Id, item);
+            }
+        }
+    }
+
+    public bool TryGetEvidence(string id, out EvidenceItem item)
+    {
+        lock (_lock)
+        {
+            return _evidence.TryGetValue(id, out item!);
+        }
+    }
+
+    /// <summary>The event aggregates that counted this event, so a count can be checked against its aggregate.</summary>
+    public IReadOnlyList<DerivedEvidence> EventGroupsContaining(string eventId)
+    {
+        lock (_lock)
+        {
+            return [.. _evidence.Values.OfType<DerivedEvidence>().Where(fact => EvidenceIds.IsEventGroup(fact.Id) && fact.SourceIds.Contains(eventId, StringComparer.Ordinal))];
+        }
+    }
+
+    public bool TryGetSection(string id, out RetrievedSection section)
+    {
+        lock (_lock)
+        {
+            return _sectionsById.TryGetValue(id, out section!);
+        }
+    }
+
+    public void AddGap(ObservedGap gap)
+    {
+        lock (_lock)
+        {
+            if (!_gaps.Contains(gap))
+            {
+                _gaps.Add(gap);
+            }
+        }
+    }
+
+    public void Stop()
+    {
+        Stopped = true;
+        AddGap(ObservedGap.LimitReached);
+    }
+
+    public void Accept(AssessmentSubmission submission) => Accepted = submission;
+
+    public void StructuredOutcome(bool answered)
+    {
+        lock (_lock)
+        {
+            _structuredAnswered |= answered;
+            _structuredFailed |= !answered;
+        }
+    }
+}

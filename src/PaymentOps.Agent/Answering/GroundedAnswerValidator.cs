@@ -16,12 +16,7 @@ namespace PaymentOps.Agent.Answering;
 /// </summary>
 internal static class GroundedAnswerValidator
 {
-    private static readonly JsonSerializerOptions Strict = new()
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true,
-        RespectNullableAnnotations = true,
-    };
+    private static readonly JsonSerializerOptions Strict = StrictJson.Create();
 
     public static InvestigationResult Validate(ChatResponse response, EvidenceRegistry registry)
     {

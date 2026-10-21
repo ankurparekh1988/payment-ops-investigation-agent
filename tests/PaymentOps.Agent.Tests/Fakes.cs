@@ -6,6 +6,7 @@ using Microsoft.Extensions.AI;
 
 using PaymentOps.Agent.Answering;
 using PaymentOps.Knowledge.Retrieval;
+using PaymentOps.Tools.Knowledge;
 
 namespace PaymentOps.Agent.Tests;
 
