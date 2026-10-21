@@ -9,9 +9,11 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent;
 using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Investigating;
 using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
+using PaymentOps.Tools;
 using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
@@ -39,6 +41,20 @@ builder.Services.AddOptions<AnsweringOptions>()
             && o.SearchTimeout > TimeSpan.Zero && o.SearchTimeout <= TimeSpan.FromMinutes(5)
             && o.ModelTimeout > TimeSpan.Zero && o.ModelTimeout <= TimeSpan.FromMinutes(5),
         $"{AnsweringOptions.SectionName} needs positive limits and timeouts of at most 5 minutes.")
+    .ValidateOnStart();
+builder.Services.AddOptions<InvestigationLimits>()
+    .Bind(builder.Configuration.GetSection(InvestigationLimits.SectionName))
+    .Validate(
+        o => o.MaxToolCalls > 0 && o.MaxCorrections >= 0 && o.MaxRepeats > 0 && o.MaxQuestionLength > 0 && o.MaxOutputTokens > 0
+            && o.ToolTimeout > TimeSpan.Zero && o.ToolTimeout <= TimeSpan.FromMinutes(5)
+            && o.TurnTimeout > TimeSpan.Zero && o.TurnTimeout <= TimeSpan.FromMinutes(5),
+        $"{InvestigationLimits.SectionName} needs positive limits and timeouts of at most 5 minutes.")
+    .ValidateOnStart();
+builder.Services.AddOptions<ToolOptions>()
+    .Bind(builder.Configuration.GetSection(ToolOptions.SectionName))
+    .Validate(
+        o => o.MaxListItems > 0 && o.MaxQueryLength > 0 && o.RetryBackoff >= TimeSpan.Zero && o.RetryBackoff <= TimeSpan.FromSeconds(10),
+        $"{ToolOptions.SectionName} needs positive limits and a retry backoff of at most 10 seconds.")
     .ValidateOnStart();
 builder.Services.AddSingleton(sp => new AnsweringLimits(sp.GetRequiredService<IOptions<AnsweringOptions>>().Value.MaxQuestionLength));
 

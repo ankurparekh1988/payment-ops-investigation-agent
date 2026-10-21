@@ -72,7 +72,14 @@ internal sealed class InvestigationAgentRunner(
         try
         {
             var session = await agent.CreateSessionAsync(linked.Token);
-            await agent.RunAsync(question, session, Run([.. readTools, submit], null), linked.Token);
+            var first = await agent.RunAsync(question, session, Run([.. readTools, submit], null), linked.Token);
+
+            // A call no tool answered (an unknown tool) ends the investigation: fail closed, and that history can't be sent again.
+            if (turn.Accepted is null && HasUnansweredCall(first.Messages))
+            {
+                InvestigationLog.Completed(logger, Unverified, turn.Gaps.Count, timer.ElapsedMilliseconds);
+                return Unverified;
+            }
 
             // One more request either way: to correct a rejected submission, or to submit at all.
             if (turn.Accepted is null)
@@ -83,6 +90,12 @@ internal sealed class InvestigationAgentRunner(
         catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             turn.Stop();
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Cancelled by neither the caller nor our turn timeout: the model or Search client timed out on its own.
+            InvestigationLog.ModelFailed(logger, null, timer.ElapsedMilliseconds, ex);
+            return new NotAssessed(NotAssessedReason.ModelUnavailable);
         }
         catch (Exception ex) when (ModelFailure.IsServiceFailure(ex))
         {
@@ -100,6 +113,14 @@ internal sealed class InvestigationAgentRunner(
             : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
         InvestigationLog.Completed(logger, result, turn.Gaps.Count, timer.ElapsedMilliseconds);
         return result;
+    }
+
+    private static readonly NotAssessed Unverified = new(NotAssessedReason.AssessmentUnverified);
+
+    private static bool HasUnansweredCall(IList<ChatMessage> messages)
+    {
+        var answered = messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Select(r => r.CallId).ToHashSet(StringComparer.Ordinal);
+        return messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Any(call => !answered.Contains(call.CallId));
     }
 
     private static ChatClientAgentRunOptions Run(IList<AITool> runTools, ChatToolMode? mode) =>

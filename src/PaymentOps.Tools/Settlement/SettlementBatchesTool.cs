@@ -64,6 +64,9 @@ public sealed class SettlementBatchesTool(
     // Far enough past the range for a late capture's batch to land after a long run of closures.
     private const int CalendarLookaheadDays = 14;
 
+    // A capture's day in the processor's zone, or by the processor's own clock, can be the day before the range starts.
+    private const int CalendarLookbehindDays = 2;
+
     public override string Name => ToolNames.SettlementBatches;
 
     public override string Description =>
@@ -82,7 +85,7 @@ public sealed class SettlementBatchesTool(
             return NotFound("merchant", merchantId);
         }
 
-        var calendar = (await ReadAsync(token => settlement.GetCalendarAsync(range.Start, range.EndExclusive.AddDays(CalendarLookaheadDays), token), DataSources.Settlement, cancellationToken))
+        var calendar = (await ReadAsync(token => settlement.GetCalendarAsync(range.Start.AddDays(-CalendarLookbehindDays), range.EndExclusive.AddDays(CalendarLookaheadDays), token), DataSources.Settlement, cancellationToken))
             .ToDictionary(day => day.Date);
         var payments = await ReadAsync(token => settlement.GetPaymentsAsync(merchant.Id, range.FromUtc, range.ToUtcExclusive, token), DataSources.Settlement, cancellationToken);
 
@@ -101,15 +104,16 @@ public sealed class SettlementBatchesTool(
             p => routed.Find(r => r.Id == p.ProcessorId) is { } processor ? SettlementTiming.Timing(p, processor.Configuration, call.IsSettlementDay) : null);
         var batchOf = payments.Where(p => timings[p.Id] is not null).ToDictionary(p => p.Id, p => p.BatchDate ?? timings[p.Id]!.ExpectedBatchDate);
 
-        // A late capture's batch can fall after the range, so files and payouts are read up to the last batch seen.
+        // A capture's batch can fall outside the range, so files and payouts are read across every batch seen.
+        var readFrom = batchOf.Values.Append(range.Start).Min();
         var readTo = batchOf.Values.Append(range.End).Max().AddDays(1);
-        var payouts = (await ReadAsync(token => settlement.GetPayoutsAsync(merchant.Id, range.Start, readTo, token), DataSources.Settlement, cancellationToken))
+        var payouts = (await ReadAsync(token => settlement.GetPayoutsAsync(merchant.Id, readFrom, readTo, token), DataSources.Settlement, cancellationToken))
             .ToLookup(p => p.ProcessorId);
 
         var views = new List<ProcessorBatches>();
         foreach (var processor in routed)
         {
-            var files = await ReadAsync(token => settlement.GetFilesAsync(processor.Id, range.Start, readTo, token), DataSources.Settlement, cancellationToken);
+            var files = await ReadAsync(token => settlement.GetFilesAsync(processor.Id, readFrom, readTo, token), DataSources.Settlement, cancellationToken);
             var own = payments.Where(p => p.ProcessorId == processor.Id && batchOf.ContainsKey(p.Id)).ToList();
             views.Add(call.Batches(processor, own, timings, batchOf, files, [.. payouts[processor.Id]]));
         }

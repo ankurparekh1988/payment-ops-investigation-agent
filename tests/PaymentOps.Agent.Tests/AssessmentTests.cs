@@ -96,6 +96,36 @@ public sealed class AssessmentTests
     public void Near_miss_citation_markers_in_text_are_rejected(string text) =>
         Assert.Contains(AssessmentValidator.Check(Valid() with { Claims = [Said(text, ["payment:PAY-1"])] }, _turn), f => f.StartsWith("claims[0].text:", StringComparison.Ordinal));
 
+    // The wire schema is strict, but the server doesn't rely on it: anything else is rejected, never parsed.
+    [Theory]
+    [InlineData("Assessed", "high")]
+    [InlineData("7", "high")]
+    [InlineData("assessed", "very_high")]
+    [InlineData("assessed", "High")]
+    public void Outcome_and_confidence_must_be_exact_allowed_values(string outcome, string confidence) =>
+        Assert.NotEmpty(AssessmentValidator.Check(Valid() with { Outcome = outcome, Confidence = confidence }, _turn));
+
+    // The same events counted over two ranges are two groups; citing either one supports the count.
+    [Fact]
+    public void Citing_one_of_several_groups_holding_the_events_is_enough()
+    {
+        _turn.Register([new DerivedEvidence("fact:event-group:p:*:file_transfer_timeout:T:2026-11-08:2026-11-10", "4 timeouts", ["event:EV-0", "event:EV-1", "event:EV-2", "event:EV-3"])]);
+        var claim = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["event:EV-1", "fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10"])] };
+
+        Assert.Empty(AssessmentValidator.Check(claim, _turn));
+    }
+
+    [Fact]
+    public void A_stopped_investigation_is_incomplete_and_low_whatever_outcome_was_submitted()
+    {
+        _turn.Stop();
+
+        var result = AssessmentPolicy.Apply(Valid() with { Outcome = "escalated" }, _turn);
+
+        Assert.Equal(AssessmentOutcome.Incomplete, result.Outcome);
+        Assert.Equal(Confidence.Low, result.Confidence);
+    }
+
     [Fact]
     public void A_root_cause_with_data_and_knowledge_is_an_assessment()
     {

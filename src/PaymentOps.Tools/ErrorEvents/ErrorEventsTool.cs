@@ -29,13 +29,13 @@ public sealed class ErrorEventsTool(IErrorEventData events, IInvestigationClock 
 
     protected override async Task<ToolResult> RunCoreAsync(ErrorEventsRequest request, IUserContext user, CancellationToken cancellationToken)
     {
-        if (request.ProcessorId is null && request.MerchantId is null)
+        // Models often send an unused optional id as an empty string; that's not given, not invalid.
+        var processorId = string.IsNullOrWhiteSpace(request.ProcessorId) ? null : ToolArguments.Id(request.ProcessorId, "processor_id");
+        var merchantId = string.IsNullOrWhiteSpace(request.MerchantId) ? null : ToolArguments.Id(request.MerchantId, "merchant_id");
+        if (processorId is null && merchantId is null)
         {
             return new ToolResult.Failed(ToolErrorCode.InvalidArgument, "Give a processor_id, a merchant_id, or both.");
         }
-
-        var processorId = request.ProcessorId is null ? null : ToolArguments.Id(request.ProcessorId, "processor_id");
-        var merchantId = request.MerchantId is null ? null : ToolArguments.Id(request.MerchantId, "merchant_id");
         var range = ToolArguments.Range(request.StartDate, request.EndDate, clock.Today);
         var found = await ReadAsync(
             token => events.GetEventsAsync(new ErrorEventQuery(processorId, merchantId, range.FromUtc, range.ToUtcExclusive), token),

@@ -21,6 +21,18 @@ internal static class AssessmentValidator
         ArgumentNullException.ThrowIfNull(submission);
 
         var failures = new List<string>();
+
+        // Checked here, not left to the wire schema: the server never parses a value it hasn't allowed.
+        if (submission.Outcome is not ("assessed" or "incomplete" or "escalated" or "refused"))
+        {
+            failures.Add("outcome: must be assessed, incomplete, escalated or refused.");
+        }
+
+        if (submission.Confidence is not ("high" or "medium" or "low"))
+        {
+            failures.Add("confidence: must be high, medium or low.");
+        }
+
         Supported("summary", submission.Summary, turn, failures);
         for (var i = 0; i < submission.Claims.Count; i++)
         {
@@ -97,13 +109,14 @@ internal static class AssessmentValidator
     // A count is supported by the group that counted every event; citing a few of its events can't stand in for it.
     private static void PartialGroupsCiteTheGroup(string field, SubmittedStatement statement, TurnState turn, List<string> failures)
     {
+        // The same events counted over two ranges are two groups; citing or fully covering either is enough.
         var cited = statement.EvidenceIds.ToHashSet(StringComparer.Ordinal);
-        var partial = cited.Where(EvidenceIds.IsEvent)
-            .SelectMany(turn.EventGroupsContaining)
-            .FirstOrDefault(group => !cited.Contains(group.Id) && !group.SourceIds.All(cited.Contains));
-        if (partial is not null)
+        var uncovered = cited.Where(EvidenceIds.IsEvent)
+            .Select(turn.EventGroupsContaining)
+            .FirstOrDefault(groups => groups.Count > 0 && !groups.Any(group => cited.Contains(group.Id) || group.SourceIds.All(cited.Contains)));
+        if (uncovered is not null)
         {
-            failures.Add($"{field}.evidence_ids: these events are part of '{partial.Id}'; cite it too.");
+            failures.Add($"{field}.evidence_ids: these events are part of '{uncovered[0].Id}'; cite it too.");
         }
     }
 

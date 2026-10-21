@@ -30,7 +30,7 @@ internal static class AssessmentPolicy
             outcome = AssessmentOutcome.Incomplete;
             rootCause = null;
         }
-        else if (turn.Stopped && outcome == AssessmentOutcome.Assessed)
+        else if (turn.Stopped && outcome != AssessmentOutcome.Refused)
         {
             outcome = AssessmentOutcome.Incomplete;
         }

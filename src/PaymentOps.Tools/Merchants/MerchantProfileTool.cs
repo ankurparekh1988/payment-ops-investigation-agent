@@ -10,7 +10,8 @@ public sealed record MerchantProfileRequest(string? MerchantId);
 
 public sealed record MerchantProfile(string Id, string Name, string EvidenceId, IReadOnlyList<RoutedProcessor> Processors, RiskHoldView? RiskHold);
 
-public sealed record RoutedProcessor(string Id, string Name, string EvidenceId);
+/// <param name="EvidenceId">Null when the processor has no record: there's nothing to cite.</param>
+public sealed record RoutedProcessor(string Id, string Name, string? EvidenceId);
 
 /// <param name="RuleId">Null for a manual hold. What the rule means is in Restricted knowledge, not here.</param>
 public sealed record RiskHoldView(string Id, DateTimeOffset PlacedAt, string? RuleId, DateOnly ReviewBy, string EvidenceId);
@@ -39,8 +40,9 @@ public sealed class MerchantProfileTool(IMerchantData merchants, IProcessorData 
         foreach (var processorId in merchant.ProcessorIds)
         {
             var processor = await ReadAsync(token => processors.FindAsync(processorId, token), DataSources.Processors, cancellationToken);
-            var name = processor?.Name ?? processorId;
-            routed.Add(new RoutedProcessor(processorId, name, evidence.Record(EvidenceIds.Processor(processorId), name)));
+            routed.Add(processor is null
+                ? new RoutedProcessor(processorId, processorId, null)
+                : new RoutedProcessor(processorId, processor.Name, evidence.Record(EvidenceIds.Processor(processorId), processor.Name)));
         }
 
         var hold = merchant.RiskHold is { } h

@@ -130,6 +130,33 @@ public sealed class InvestigationAgentRunnerTests
         Assert.Equal(NotAssessedReason.InvalidQuestion, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
     }
 
+    // An HTTP timeout surfaces as cancellation that neither the caller nor our turn timeout asked for.
+    [Fact]
+    public async Task A_model_call_that_times_out_on_its_own_is_reported_as_unavailable()
+    {
+        using var fixture = new AgentFixture();
+        var model = new ScriptedChatClient(_ => throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout."));
+
+        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+
+        Assert.Equal(NotAssessedReason.ModelUnavailable, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
+    }
+
+    // The loop ends with a call no tool answered; sending that history again would be rejected, and fail-closed means stop.
+    [Fact]
+    public async Task A_call_to_an_unknown_tool_ends_the_investigation_without_a_correction()
+    {
+        using var fixture = new AgentFixture();
+        var model = new ScriptedChatClient(
+            Respond(Call("get_payouts", new { merchant_id = "M-1042" })),
+            Respond(Call(Submit, Submission())));
+
+        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+
+        Assert.Equal(NotAssessedReason.AssessmentUnverified, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
+        Assert.Single(model.Requests);
+    }
+
     [Fact]
     public async Task A_model_service_failure_is_reported_as_unavailable()
     {
