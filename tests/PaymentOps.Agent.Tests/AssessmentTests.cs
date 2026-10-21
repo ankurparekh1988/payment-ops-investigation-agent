@@ -1,0 +1,160 @@
+using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Investigating;
+using PaymentOps.Knowledge.Retrieval;
+using PaymentOps.Tools;
+
+namespace PaymentOps.Agent.Tests;
+
+public sealed class AssessmentTests
+{
+    private readonly TurnState _turn = Turn();
+
+    private static TurnState Turn()
+    {
+        var turn = new TurnState();
+        turn.Register([
+            new RecordEvidence("payment:PAY-1", "Payment PAY-1"),
+            new RecordEvidence("processor:p", "Processor"),
+            new RecordEvidence("event:EV-1", "Error event EV-1"),
+            new RecordEvidence("event:EV-2", "Error event EV-2"),
+            new RecordEvidence("event:EV-3", "Error event EV-3"),
+            new DerivedEvidence("fact:missing-file:p:2026-11-09", "No accepted file", ["payment:PAY-1", "processor:p"]),
+            new DerivedEvidence("fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10", "3 timeouts", ["event:EV-1", "event:EV-2", "event:EV-3"]),
+        ]);
+        turn.RegisterSection(new RetrievedSection("k1", "d", "Outage runbook", "Runbook > Outage", "text", "General", null));
+        turn.StructuredOutcome("get_settlement_batches", answered: true);
+        return turn;
+    }
+
+    private static SubmittedStatement Said(string text, string[]? evidence = null, string[]? citations = null) => new(text, evidence ?? [], citations ?? []);
+
+    private static AssessmentSubmission Valid() => new(
+        "assessed",
+        Said("Fabrikam's 9 November file never arrived.", ["fact:missing-file:p:2026-11-09"], ["S1"]),
+        [Said("No accepted file arrived for the batch.", ["fact:missing-file:p:2026-11-09"]), Said("The runbook says to raise it with the processor.", citations: ["S1"])],
+        Said("A processor outage stopped the file.", ["fact:missing-file:p:2026-11-09"], ["S1"]),
+        "high",
+        [new SubmittedNextStep("Raise an incident with Fabrikam.", ["S1"])]);
+
+    [Fact]
+    public void A_fully_supported_assessment_is_valid() =>
+        Assert.Empty(AssessmentValidator.Check(Valid(), _turn));
+
+    [Fact]
+    public void An_evidence_id_no_tool_returned_is_rejected_by_rule_without_echoing_text()
+    {
+        var submission = Valid() with { Claims = [Said("Paid twice.", ["payout:PO-404"])] };
+
+        var failure = Assert.Single(AssessmentValidator.Check(submission, _turn));
+        Assert.Equal("claims[0].evidence_ids: 'payout:PO-404' wasn't returned by a tool in this investigation.", failure);
+    }
+
+    [Fact]
+    public void A_citation_not_retrieved_in_this_turn_is_rejected() =>
+        Assert.Contains("summary.citation_ids: 'S9' wasn't retrieved in this investigation.", AssessmentValidator.Check(Valid() with { Summary = Said("x", citations: ["S9"]) }, _turn));
+
+    [Fact]
+    public void A_summary_with_no_support_is_rejected() =>
+        Assert.Contains("summary: needs at least one evidence id or citation id.", AssessmentValidator.Check(Valid() with { Summary = Said("All good.") }, _turn));
+
+    [Fact]
+    public void An_assessed_outcome_needs_a_claim() =>
+        Assert.Contains("claims: an assessed outcome needs at least one claim.", AssessmentValidator.Check(Valid() with { Claims = [] }, _turn));
+
+    [Fact]
+    public void A_refusal_carries_no_claims_or_root_cause() =>
+        Assert.NotEmpty(AssessmentValidator.Check(Valid() with { Outcome = "refused" }, _turn));
+
+    [Theory]
+    [InlineData("The file is missing [S1].")]
+    [InlineData("See payout:PO-1 for details.")]
+    [InlineData("See fact:missing-file:p:2026-11-09.")]
+    public void Ids_written_into_text_are_rejected(string text) =>
+        Assert.Contains(AssessmentValidator.Check(Valid() with { Claims = [Said(text, ["payment:PAY-1"])] }, _turn), f => f.StartsWith("claims[0].text:", StringComparison.Ordinal));
+
+    [Fact]
+    public void Blank_text_is_rejected() =>
+        Assert.Contains("next_steps[0].text: can't be blank.", AssessmentValidator.Check(Valid() with { NextSteps = [new SubmittedNextStep(" ", [])] }, _turn));
+
+    // A count is supported by the aggregate that counted every event, not by the few event ids shown.
+    [Fact]
+    public void A_count_resting_only_on_shown_event_ids_is_rejected()
+    {
+        var byEvents = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["event:EV-1", "event:EV-2"])] };
+        var byFact = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10"])] };
+        var oneEvent = Valid() with { Claims = [Said("A timeout was recorded at 19:05.", ["event:EV-1"])] };
+
+        Assert.Contains(AssessmentValidator.Check(byEvents, _turn), f => f.Contains("fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10", StringComparison.Ordinal));
+        Assert.Empty(AssessmentValidator.Check(byFact, _turn));
+        Assert.Empty(AssessmentValidator.Check(oneEvent, _turn));
+    }
+
+    [Fact]
+    public void A_root_cause_with_data_and_knowledge_is_an_assessment()
+    {
+        var result = AssessmentPolicy.Apply(Valid(), _turn);
+
+        Assert.Equal(RootCauseLabel.Assessment, result.RootCause!.Label);
+        Assert.Equal(Confidence.High, result.Confidence);
+        Assert.Equal(AssessmentOutcome.Assessed, result.Outcome);
+        Assert.True(Assert.Single(result.RootCause.Statement.Evidence).IsDerived);
+        Assert.Equal("Outage runbook", Assert.Single(result.RootCause.Statement.Citations).Title);
+    }
+
+    [Theory]
+    [InlineData(new string[0], new[] { "S1" })]
+    [InlineData(new[] { "payment:PAY-1" }, new string[0])]
+    public void A_root_cause_missing_either_kind_of_support_is_a_hypothesis(string[] evidence, string[] citations) =>
+        Assert.Equal(RootCauseLabel.Hypothesis, AssessmentPolicy.Apply(Valid() with { RootCause = Said("Outage.", evidence, citations) }, _turn).RootCause!.Label);
+
+    [Fact]
+    public void No_root_cause_text_means_none() =>
+        Assert.Null(AssessmentPolicy.Apply(Valid() with { RootCause = Said(string.Empty) }, _turn).RootCause);
+
+    // The model can't keep high confidence by leaving a failure out: the server saw it.
+    [Fact]
+    public void An_observed_gap_caps_confidence_at_medium_and_is_shown_in_fixed_words()
+    {
+        _turn.AddGap(ObservedGap.Timeout("get_processor_status", "Processor data"));
+
+        var result = AssessmentPolicy.Apply(Valid(), _turn);
+
+        Assert.Equal(Confidence.Medium, result.Confidence);
+        Assert.Equal(["Processor data didn't respond in time."], result.Gaps);
+    }
+
+    [Fact]
+    public void Claims_resting_on_one_kind_of_evidence_cap_confidence_at_medium()
+    {
+        var dataOnly = Valid() with { Summary = Said("x", ["payment:PAY-1"]), Claims = [Said("y", ["payment:PAY-1"])], RootCause = Said(string.Empty), NextSteps = [] };
+
+        Assert.Equal(Confidence.Medium, AssessmentPolicy.Apply(dataOnly, _turn).Confidence);
+    }
+
+    [Fact]
+    public void A_turn_stopped_by_a_limit_is_incomplete_and_low()
+    {
+        _turn.Stop("get_error_events");
+
+        var result = AssessmentPolicy.Apply(Valid(), _turn);
+
+        Assert.Equal(AssessmentOutcome.Incomplete, result.Outcome);
+        Assert.Equal(Confidence.Low, result.Confidence);
+    }
+
+    [Fact]
+    public void When_every_structured_source_failed_the_outcome_is_incomplete_with_no_root_cause()
+    {
+        var turn = new TurnState();
+        turn.Register([new RecordEvidence("payment:PAY-1", "Payment")]);
+        turn.RegisterSection(new RetrievedSection("k1", "d", "Runbook", "R", "t", "General", null));
+        turn.StructuredOutcome("get_settlement_batches", answered: false);
+        turn.AddGap(ObservedGap.Unavailable("get_settlement_batches", "Settlement data"));
+
+        var result = AssessmentPolicy.Apply(Valid() with { Summary = Said("x", citations: ["S1"]), Claims = [Said("y", citations: ["S1"])], RootCause = Said("Outage.", citations: ["S1"]) }, turn);
+
+        Assert.Equal(AssessmentOutcome.Incomplete, result.Outcome);
+        Assert.Null(result.RootCause);
+        Assert.Equal(Confidence.Low, result.Confidence);
+    }
+}

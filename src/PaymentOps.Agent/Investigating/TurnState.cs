@@ -10,6 +10,8 @@ namespace PaymentOps.Agent.Investigating;
 /// </summary>
 internal sealed class TurnState
 {
+    private const string EventGroupPrefix = EvidenceIds.FactPrefix + "event-group:";
+
     private readonly Lock _lock = new();
     private readonly Dictionary<string, RetrievedSection> _sectionsById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _idsBySectionKey = new(StringComparer.Ordinal);
@@ -87,6 +89,16 @@ internal sealed class TurnState
         lock (_lock)
         {
             return _evidence.TryGetValue(id, out item!);
+        }
+    }
+
+    /// <summary>The event aggregates that counted this event, so a count can be checked against its aggregate.</summary>
+    public IReadOnlyList<DerivedEvidence> EventGroupsContaining(string eventId)
+    {
+        lock (_lock)
+        {
+            return [.. _evidence.Values.OfType<DerivedEvidence>().Where(fact =>
+                fact.Id.StartsWith(EventGroupPrefix, StringComparison.Ordinal) && fact.SourceIds.Contains(eventId, StringComparer.Ordinal))];
         }
     }
 
