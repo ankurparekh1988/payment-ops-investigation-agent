@@ -32,6 +32,12 @@ public enum NotAssessedReason
     ModelUnavailable,
     LimitReached,
     AssessmentUnverified,
+
+    /// <summary>The person stopped the investigation; nothing from it is kept.</summary>
+    Cancelled,
+
+    /// <summary>The conversation is full; a new investigation starts a fresh one.</summary>
+    ConversationLimit,
 }
 
 /// <summary>A record or computed fact the server registered this turn, described from its own data.</summary>
@@ -48,6 +54,9 @@ public abstract record AssessmentResult
     private AssessmentResult()
     {
     }
+
+    /// <summary>Ties the result to its logs and anything created from it.</summary>
+    public Guid InvestigationId { get; init; }
 
     /// <param name="Gaps">What the investigation couldn't check, as the server observed it.</param>
     public sealed record Assessed(

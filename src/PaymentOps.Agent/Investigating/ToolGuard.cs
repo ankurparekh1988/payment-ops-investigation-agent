@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Microsoft.Extensions.AI;
 
+using PaymentOps.Agent.Contracts;
 using PaymentOps.Domain.Security;
 using PaymentOps.Tools;
 using PaymentOps.Tools.Knowledge;
@@ -11,9 +12,9 @@ namespace PaymentOps.Agent.Investigating;
 
 /// <summary>
 /// Wraps each read tool for one turn: enforces the call, repeat and correction limits and the per-tool
-/// timeout, and writes what the tool returned into the turn's state before the model sees it.
+/// timeout, writes what the tool returned into the turn's state before the model sees it, and reports progress.
 /// </summary>
-internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, TimeProvider time, IUserContext user)
+internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, TimeProvider time, IUserContext user, IProgress<InvestigationProgress>? progress)
 {
     private static readonly string LimitReached = ToolJson.Serialize(new ToolResult.Failed(
         ToolErrorCode.LimitReached, "The investigation has reached its step limit. Call submit_assessment with what you have."));
@@ -42,16 +43,42 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
         var request = Parse(tool, arguments);
         if (!Admit(tool, request))
         {
-            turn.Stop();
-            ToolLoop.End();
+            Stop();
             return LimitReached;
         }
 
+        var label = ProgressLabels.For(tool.Name, request);
+        progress?.Report(new InvestigationProgress.ToolStarted(tool.Name, label));
         var result = request is not null
             ? await RunAsync(tool, request, cancellationToken)
             : new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.");
-        return Record(tool, result);
+        var (json, gap) = Record(tool, result);
+        progress?.Report(new InvestigationProgress.ToolFinished(tool.Name, label, result is ToolResult.Ok, Records(result), gap?.Wording));
+        if (turn.Stopped)
+        {
+            progress?.Report(new InvestigationProgress.LimitReached());
+        }
+
+        return json;
     }
+
+    private void Stop()
+    {
+        if (!turn.Stopped)
+        {
+            progress?.Report(new InvestigationProgress.LimitReached());
+        }
+
+        turn.Stop();
+        ToolLoop.End();
+    }
+
+    private static int Records(ToolResult result) => result switch
+    {
+        ToolResult.Ok { Body: KnowledgeSearchResult found } => found.Sections.Count,
+        ToolResult.Ok ok => ok.Evidence.Count(e => e is not DerivedEvidence),
+        _ => 0,
+    };
 
     // Counts the call, and the request the tool would run if it parsed; false when this call would break a limit.
     private bool Admit(IInvestigationTool tool, object? request)
@@ -100,11 +127,11 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
         }
     }
 
-    private string Record(IInvestigationTool tool, ToolResult result)
+    private (string Json, ObservedGap? Gap) Record(IInvestigationTool tool, ToolResult result)
     {
         if (result is ToolResult.Ok { Body: KnowledgeSearchResult found })
         {
-            return ToolJson.Serialize(new ToolResult.Ok(Numbered(found), [], []));
+            return (ToolJson.Serialize(new ToolResult.Ok(Numbered(found), [], [])), null);
         }
 
         var gap = result switch
@@ -140,7 +167,7 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
             ToolLoop.End();
         }
 
-        return ToolJson.Serialize(result);
+        return (ToolJson.Serialize(result), gap);
     }
 
     private bool TooManyCorrections()

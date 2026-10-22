@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Microsoft.Extensions.AI;
 
+using PaymentOps.Agent.Contracts;
 using PaymentOps.Tools;
 
 namespace PaymentOps.Agent.Investigating;
@@ -11,7 +12,7 @@ namespace PaymentOps.Agent.Investigating;
 /// back to the model as this tool's result; either way the loop ends, and the runner decides whether the one
 /// correction is still allowed.
 /// </summary>
-internal sealed class SubmitAssessmentFunction(TurnState turn) : AIFunction
+internal sealed class SubmitAssessmentFunction(TurnState turn, IProgress<InvestigationProgress>? progress) : AIFunction
 {
     private static readonly string Accepted = JsonSerializer.Serialize(new { Status = "accepted" }, ToolJson.Options);
 
@@ -22,7 +23,7 @@ internal sealed class SubmitAssessmentFunction(TurnState turn) : AIFunction
 
     public override JsonElement JsonSchema => AssessmentSchema.Parameters;
 
-    // Strict schema on the wire, so the model can't add or leave out fields; the server checks again anyway.
+    // The wire schema is a hint; this deployment doesn't enforce strict, so the server parses strictly.
     public override IReadOnlyDictionary<string, object?> AdditionalProperties { get; } = new Dictionary<string, object?> { ["strict"] = true };
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -35,6 +36,7 @@ internal sealed class SubmitAssessmentFunction(TurnState turn) : AIFunction
             return new(Accepted);
         }
 
+        progress?.Report(new InvestigationProgress.Submitting());
         var submission = AssessmentSubmission.Parse(JsonSerializer.SerializeToElement(arguments, ToolJson.Options));
         IReadOnlyList<string> failures = submission is null
             ? ["The submission doesn't match the submit_assessment parameters."]
@@ -45,6 +47,7 @@ internal sealed class SubmitAssessmentFunction(TurnState turn) : AIFunction
             return new(Accepted);
         }
 
+        progress?.Report(new InvestigationProgress.CorrectionRequested());
         return new(JsonSerializer.Serialize(
             new
             {

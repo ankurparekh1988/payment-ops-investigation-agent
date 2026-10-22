@@ -11,8 +11,8 @@ public sealed class InFlightGateTests
         var inner = new BlockingService();
         var gate = new InFlightGate(inner);
 
-        var first = gate.InvestigateAsync("one", CancellationToken.None);
-        var second = await gate.InvestigateAsync("two", CancellationToken.None);
+        var first = gate.InvestigateAsync("one", null, CancellationToken.None);
+        var second = await gate.InvestigateAsync("two", null, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.Busy, Assert.IsType<AssessmentResult.NotAssessed>(second).Reason);
         Assert.Equal(1, inner.Investigations);
@@ -20,7 +20,7 @@ public sealed class InFlightGateTests
         inner.Release.SetResult(new AssessmentResult.NotAssessed(NotAssessedReason.LimitReached));
         await first;
         inner.Release = new();
-        _ = gate.InvestigateAsync("three", CancellationToken.None);
+        _ = gate.InvestigateAsync("three", null, CancellationToken.None);
         Assert.Equal(2, inner.Investigations);
     }
 
@@ -30,12 +30,12 @@ public sealed class InFlightGateTests
         var inner = new BlockingService();
         var gate = new InFlightGate(inner);
 
-        var first = gate.InvestigateAsync("one", CancellationToken.None);
+        var first = gate.InvestigateAsync("one", null, CancellationToken.None);
         inner.Release.SetException(new InvalidOperationException());
         await Assert.ThrowsAsync<InvalidOperationException>(() => first);
 
         inner.Release = new();
-        _ = gate.InvestigateAsync("two", CancellationToken.None);
+        _ = gate.InvestigateAsync("two", null, CancellationToken.None);
         Assert.Equal(2, inner.Investigations);
     }
 
@@ -53,7 +53,7 @@ public sealed class InFlightGateTests
 
         public int Investigations { get; private set; }
 
-        public Task<AssessmentResult> InvestigateAsync(string question, CancellationToken cancellationToken)
+        public Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken)
         {
             Investigations++;
             return Release.Task;

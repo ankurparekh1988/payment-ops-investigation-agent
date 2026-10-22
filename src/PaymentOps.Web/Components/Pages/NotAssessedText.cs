@@ -15,6 +15,8 @@ internal static class NotAssessedText
         NotAssessedReason.ModelUnavailable => "The investigation service isn't responding right now. Please try again shortly.",
         NotAssessedReason.LimitReached => "The investigation stopped at its limit before reaching an assessment. Please try a narrower question.",
         NotAssessedReason.AssessmentUnverified => "I couldn't produce an assessment I can back with evidence. Please try rephrasing the question.",
+        NotAssessedReason.Cancelled => "Investigation cancelled. Nothing from it was kept.",
+        NotAssessedReason.ConversationLimit => "This conversation is full. Start a new investigation to continue.",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null),
     };
 }

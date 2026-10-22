@@ -10,7 +10,7 @@ internal sealed class InFlightGate(IInvestigationService inner) : IInvestigation
 {
     private int _inFlight;
 
-    public async Task<AssessmentResult> InvestigateAsync(string question, CancellationToken cancellationToken)
+    public async Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken)
     {
         if (Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
         {
@@ -19,7 +19,7 @@ internal sealed class InFlightGate(IInvestigationService inner) : IInvestigation
 
         try
         {
-            return await inner.InvestigateAsync(question, cancellationToken);
+            return await inner.InvestigateAsync(question, progress, cancellationToken);
         }
         finally
         {

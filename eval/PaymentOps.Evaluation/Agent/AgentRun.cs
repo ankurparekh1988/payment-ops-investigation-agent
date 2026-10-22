@@ -35,7 +35,7 @@ internal static class AgentRun
             using var scope = provider.CreateScope();
 
             var timer = Stopwatch.StartNew();
-            var result = await scope.ServiceProvider.GetRequiredService<IInvestigationService>().InvestigateAsync(task.Question, CancellationToken.None);
+            var result = await scope.ServiceProvider.GetRequiredService<IInvestigationService>().InvestigateAsync(task.Question, null, CancellationToken.None);
             results.Add(new AgentTaskResult(task, stats.Calls, Describe(result), result is AssessmentResult.Assessed { Outcome: not AssessmentOutcome.Refused }, timer.ElapsedMilliseconds, stats.Requests, stats.InputTokens, stats.OutputTokens));
         }
 

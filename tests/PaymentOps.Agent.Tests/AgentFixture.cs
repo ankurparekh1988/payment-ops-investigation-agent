@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
+using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Investigation;
@@ -66,4 +67,11 @@ internal sealed class AgentFixture : IDisposable
             confidence,
             next_steps = Array.Empty<object>(),
         };
+}
+
+internal static class RunnerExtensions
+{
+    /// <summary>A first question: no history, nobody watching.</summary>
+    public static Task<AssessmentResult> InvestigateAsync(this InvestigationAgentRunner runner, string question, CancellationToken cancellationToken) =>
+        runner.InvestigateAsync(question, [], null, Guid.NewGuid(), cancellationToken);
 }

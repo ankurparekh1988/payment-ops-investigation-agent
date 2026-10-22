@@ -53,7 +53,7 @@ else if (_result is AssessmentResult.NotAssessed notAssessed)
         _result = null;
         try
         {
-            _result = await Investigation.InvestigateAsync(_question, CancellationToken.None);
+            _result = await Investigation.InvestigateAsync(_question, null, CancellationToken.None);
         }
         finally
         {
