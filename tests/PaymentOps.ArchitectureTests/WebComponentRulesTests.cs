@@ -26,6 +26,18 @@ public sealed partial class WebComponentRulesTests
         Assert.Empty(violations);
     }
 
+    // Tickets are created only by the approval service; no component can reach the store, even by name.
+    [Fact]
+    public void Components_never_reach_the_incident_store()
+    {
+        var root = Path.Combine(RepositoryRoot.FullPath, "src", "PaymentOps.Web", "Components");
+        var violations = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
+            .Where(f => File.ReadAllText(f).Contains("IIncidentStore", StringComparison.Ordinal) || File.ReadAllText(f).Contains("Domain.Incidents", StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(root, f));
+
+        Assert.Empty(violations);
+    }
+
     private static bool IsWithin(string reference, string ns) =>
         reference == ns || reference.StartsWith(ns + ".", StringComparison.Ordinal);
 

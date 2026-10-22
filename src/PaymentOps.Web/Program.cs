@@ -97,6 +97,7 @@ else if (!builder.Environment.IsDevelopment())
 else
 {
     builder.Services.AddScoped<IInvestigationService, UnconfiguredInvestigationService>();
+    builder.Services.AddScoped<IApprovalService, UnconfiguredApprovalService>();
 }
 
 // Readiness depends on Foundry once an endpoint is configured; locally and in tests it isn't.

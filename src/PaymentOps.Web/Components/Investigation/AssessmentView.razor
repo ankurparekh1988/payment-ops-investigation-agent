@@ -51,6 +51,15 @@
             </ul>
         }
 
+        @if (assessed.Proposal is { } proposal)
+        {
+            <TicketCard Proposal="proposal" CanDecide="CanDecide" Deciding="Deciding" RejectedFor="RejectedFor" Approve="Approve" Reject="Reject" />
+        }
+        else if (assessed.ProposalWithheld)
+        {
+            <p role="note">A ticket was proposed but isn't shown, because the investigation is incomplete.</p>
+        }
+
         @if (assessed.Gaps.Count > 0)
         {
             <h3>Not checked</h3>
@@ -69,6 +78,21 @@
 @code {
     [Parameter, EditorRequired]
     public AssessmentResult Result { get; set; } = default!;
+
+    [Parameter]
+    public bool CanDecide { get; set; }
+
+    [Parameter]
+    public bool Deciding { get; set; }
+
+    [Parameter]
+    public RejectionReason? RejectedFor { get; set; }
+
+    [Parameter]
+    public EventCallback Approve { get; set; }
+
+    [Parameter]
+    public EventCallback<(RejectionReason Reason, string? Note)> Reject { get; set; }
 
     private static string Word(Confidence confidence) => confidence.ToString().ToLowerInvariant();
 }

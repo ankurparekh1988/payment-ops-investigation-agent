@@ -4,6 +4,7 @@
 @using PaymentOps.Agent.Contracts
 @using PaymentOps.Web.Components.Investigation
 @inject IInvestigationService Investigation
+@inject IApprovalService Approvals
 @inject IUserContext CurrentUser
 @inject QuestionLimits Limits
 
@@ -46,7 +47,11 @@
         }
         else
         {
-            <AssessmentView Result="_result" />
+            <AssessmentView Result="_result" CanDecide="CanDecide" Deciding="_deciding" RejectedFor="_rejectedFor" Approve="ApproveAsync" Reject="RejectAsync" />
+            @if (_decisionFailed)
+            {
+                <p role="alert">The ticket couldn't be created right now. The proposal is still pending; please try again.</p>
+            }
         }
     </section>
 }
@@ -68,6 +73,12 @@
     private bool _focusResult;
     private AssessmentResult? _result;
     private ElementReference _resultHeading;
+    private bool _deciding;
+    private RejectionReason? _rejectedFor;
+    private bool _decisionFailed;
+
+    // The server decides who may approve; this only hides buttons nobody could use.
+    private bool CanDecide => CurrentUser.IsInRole(OpsRoles.Engineer);
 
     // Owned by the page, so closing the tab or leaving cancels the investigation.
     private CancellationTokenSource? _run;
@@ -83,6 +94,7 @@
 
         _busy = true;
         _result = null;
+        _rejectedFor = null;
         _events.Clear();
         _run = new CancellationTokenSource();
         try
@@ -99,6 +111,48 @@
     }
 
     private void Cancel() => _run?.Cancel();
+
+    private TicketProposal Retry(TicketProposal proposal)
+    {
+        _decisionFailed = true;
+        return proposal;
+    }
+
+    private Task ApproveAsync() => DecideAsync(id => Approvals.ApproveAsync(id, CancellationToken.None), null);
+
+    private Task RejectAsync((RejectionReason Reason, string? Note) rejection) =>
+        DecideAsync(id => Approvals.RejectAsync(id, rejection.Reason, rejection.Note, CancellationToken.None), rejection.Reason);
+
+    // The card shows what the server answered, never what the click hoped for.
+    private async Task DecideAsync(Func<Guid, Task<ApprovalResult>> decide, RejectionReason? reason)
+    {
+        if (_deciding || _result is not AssessmentResult.Assessed { Proposal: { Status: ProposalStatus.Pending, ProposalId: { } id } proposal } assessed)
+        {
+            return;
+        }
+
+        _deciding = true;
+        _decisionFailed = false;
+        try
+        {
+            var status = await decide(id) switch
+            {
+                ApprovalResult.Created created => proposal with { Status = ProposalStatus.Approved, TicketId = created.TicketId },
+                ApprovalResult.Rejected => proposal with { Status = ProposalStatus.Rejected },
+                ApprovalResult.AlreadyDecided decided => proposal with { Status = decided.TicketId is null ? ProposalStatus.Rejected : ProposalStatus.Approved, TicketId = decided.TicketId },
+                ApprovalResult.Expired => proposal with { Status = ProposalStatus.Expired },
+                ApprovalResult.Superseded => proposal with { Status = ProposalStatus.Superseded },
+                ApprovalResult.Unavailable => Retry(proposal),
+                _ => proposal with { Status = ProposalStatus.Unavailable },
+            };
+            _rejectedFor = status.Status == ProposalStatus.Rejected ? reason : null;
+            _result = assessed with { Proposal = status };
+        }
+        finally
+        {
+            _deciding = false;
+        }
+    }
 
     private void StartNew()
     {
