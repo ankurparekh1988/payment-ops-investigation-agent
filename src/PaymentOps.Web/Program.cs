@@ -135,7 +135,8 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check 
 
 app.MapAccountEndpoints();
 app.MapStaticAssets().AllowAnonymous();
+// The page approves tickets, so no site may frame it: a framed page could trick a click.
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode(o => o.ContentSecurityFrameAncestorsPolicy = "'none'");
 
 app.Run();

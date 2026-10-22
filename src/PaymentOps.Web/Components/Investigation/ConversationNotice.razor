@@ -1,0 +1,15 @@
+@using PaymentOps.Agent.Contracts
+
+@if (Status.Ended)
+{
+    <p role="note">This conversation is full. Start a new investigation to continue.</p>
+}
+else if (Status.CarriedQuestions < Status.Questions)
+{
+    <p role="note">The agent sees your last @(Status.CarriedQuestions == 1 ? "question" : $"{Status.CarriedQuestions} questions") as context.</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ConversationStatus Status { get; set; } = default!;
+}

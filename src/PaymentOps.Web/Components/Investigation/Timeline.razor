@@ -1,0 +1,57 @@
+@using System.Globalization
+@using PaymentOps.Agent.Contracts
+
+@* Server-written events only. One polite live line announces the latest step, not every row. *@
+<ol class="timeline">
+    @foreach (var row in Rows())
+    {
+        <li>@row</li>
+    }
+</ol>
+<p class="visually-hidden" aria-live="polite">@Rows().LastOrDefault()</p>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<InvestigationProgress> Events { get; set; } = [];
+
+    // A finished call replaces the row its start opened, so each call is one line.
+    private List<string> Rows()
+    {
+        var rows = new List<string>();
+        foreach (var e in Events)
+        {
+            switch (e)
+            {
+                case InvestigationProgress.ToolStarted started:
+                    rows.Add($"{started.Label} …");
+                    break;
+                case InvestigationProgress.ToolFinished finished:
+                    var text = finished.Succeeded ? $"{finished.Label} · {Records(finished.Records)}" : $"{finished.Label} · {finished.Gap ?? "failed"}";
+                    if (rows.Count > 0 && rows[^1] == $"{finished.Label} …")
+                    {
+                        rows[^1] = text;
+                    }
+                    else
+                    {
+                        rows.Add(text);
+                    }
+
+                    break;
+                case InvestigationProgress.CorrectionRequested:
+                    rows.Add("The assessment didn't check out; the agent is correcting it");
+                    break;
+                case InvestigationProgress.LimitReached:
+                    rows.Add("The investigation reached its limit");
+                    break;
+                case InvestigationProgress.Submitting:
+                    rows.Add("Checking the assessment against the evidence");
+                    break;
+            }
+        }
+
+        return rows;
+    }
+
+    private static string Records(int count) =>
+        string.Create(CultureInfo.InvariantCulture, $"{count} {(count == 1 ? "record" : "records")}");
+}
