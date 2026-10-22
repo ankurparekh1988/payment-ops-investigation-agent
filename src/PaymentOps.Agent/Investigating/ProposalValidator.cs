@@ -11,6 +11,9 @@ internal static class ProposalValidator
     private const string Field = "proposed_ticket";
     private const int MaxTitleLength = 120;
     private const int MaxSummaryLength = 1000;
+    private const int MaxMerchants = 20;
+    private const int MaxEvidence = 20;
+    private const int MaxCitations = 10;
 
     /// <param name="today">The investigation's today, so a ticket's window is judged by the data's dates.</param>
     public static void Check(ProposedTicket ticket, TurnState turn, DateOnly today, List<string> failures)
@@ -31,6 +34,7 @@ internal static class ProposalValidator
             failures.Add($"{Field}.merchant_ids: needs at least one merchant.");
         }
 
+        Capped($"{Field}.merchant_ids", ticket.MerchantIds, MaxMerchants, failures);
         for (var i = 0; i < ticket.MerchantIds.Count; i++)
         {
             if (!turn.TryGetEvidence(EvidenceIds.Merchant(ticket.MerchantIds[i]), out _))
@@ -52,6 +56,7 @@ internal static class ProposalValidator
             failures.Add($"{Field}.evidence_ids: needs at least one record or computed fact.");
         }
 
+        Capped($"{Field}.evidence_ids", ticket.EvidenceIds, MaxEvidence, failures);
         AssessmentValidator.Evidence(Field, ticket.EvidenceIds, turn, failures);
 
         if (ticket.CitationIds.Count == 0)
@@ -59,7 +64,16 @@ internal static class ProposalValidator
             failures.Add($"{Field}.citation_ids: needs at least one knowledge citation.");
         }
 
+        Capped($"{Field}.citation_ids", ticket.CitationIds, MaxCitations, failures);
         AssessmentValidator.Citations(Field, ticket.CitationIds, turn, failures);
+    }
+
+    private static void Capped(string field, IReadOnlyList<string> ids, int max, List<string> failures)
+    {
+        if (ids.Count > max)
+        {
+            failures.Add($"{field}: can list at most {max}.");
+        }
     }
 
     private static void Content(string field, string text, int maxLength, string shownLimit, List<string> failures)

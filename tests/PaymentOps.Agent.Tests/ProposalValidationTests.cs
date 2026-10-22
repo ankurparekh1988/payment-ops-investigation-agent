@@ -85,6 +85,21 @@ public sealed class ProposalValidationTests
     public void A_ticket_names_at_least_one_merchant() =>
         Assert.Contains("proposed_ticket.merchant_ids: needs at least one merchant.", Check(Ticket() with { MerchantIds = [] }));
 
+    [Fact]
+    public void Lists_are_capped()
+    {
+        var failures = Check(Ticket() with
+        {
+            MerchantIds = [.. Enumerable.Repeat("M-1042", 21)],
+            EvidenceIds = [.. Enumerable.Repeat(MissingFile, 21)],
+            CitationIds = [.. Enumerable.Repeat("S1", 11)],
+        });
+
+        Assert.Contains("proposed_ticket.merchant_ids: can list at most 20.", failures);
+        Assert.Contains("proposed_ticket.evidence_ids: can list at most 20.", failures);
+        Assert.Contains("proposed_ticket.citation_ids: can list at most 10.", failures);
+    }
+
     [Theory]
     [InlineData("2026-11-09", "2026-11-12", "proposed_ticket: end_date can't be later than 2026-11-11.")]
     [InlineData("2026-11-10", "2026-11-09", "proposed_ticket: start_date can't be later than end_date.")]
