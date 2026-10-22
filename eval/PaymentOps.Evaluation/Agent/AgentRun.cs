@@ -21,7 +21,8 @@ namespace PaymentOps.Evaluation.Agent;
 
 /// <summary>
 /// Runs each seeded task through the same registration and service seam the app uses, against the deployed
-/// model and index, and records what the model did. Writes nothing anywhere but the report.
+/// model and index, and records what the model did. An engineer task approves its own pending proposal into the
+/// run's in-memory ticket store, which goes with the run; nothing is written anywhere but the report.
 /// </summary>
 internal static class AgentRun
 {
@@ -31,15 +32,49 @@ internal static class AgentRun
         foreach (var task in tasks)
         {
             var stats = new RunStats();
-            using var provider = Services(release, endpoints, credential, new EvaluationUser(task.Access == KnowledgeClassification.Restricted), stats);
+            var user = new EvaluationUser(task.Access == KnowledgeClassification.Restricted, task.Role == AgentTask.Engineer ? OpsRoles.Engineer : OpsRoles.Reader);
+            using var provider = Services(release, endpoints, credential, user, stats);
             using var scope = provider.CreateScope();
 
             var timer = Stopwatch.StartNew();
-            var result = await scope.ServiceProvider.GetRequiredService<IInvestigationService>().InvestigateAsync(task.Question, null, CancellationToken.None);
-            results.Add(new AgentTaskResult(task, stats.Calls, Describe(result), result is AssessmentResult.Assessed { Outcome: not AssessmentOutcome.Refused }, timer.ElapsedMilliseconds, stats.Requests, stats.InputTokens, stats.OutputTokens));
+            var first = new FirstProgress(() => timer.ElapsedMilliseconds);
+            var result = await scope.ServiceProvider.GetRequiredService<IInvestigationService>().InvestigateAsync(task.Question, first, CancellationToken.None);
+            var latency = timer.ElapsedMilliseconds;
+            var proposal = await ProposalAsync(result, scope.ServiceProvider.GetRequiredService<IApprovalService>());
+            results.Add(new AgentTaskResult(task, stats.Calls, Describe(result), result is AssessmentResult.Assessed { Outcome: not AssessmentOutcome.Refused }, latency, stats.Requests, stats.InputTokens, stats.OutputTokens)
+            {
+                TtfpMs = first.FirstMs,
+                Proposal = proposal,
+                TokenEstimates = stats.Estimates,
+            });
         }
 
         return new AgentRunReport(results);
+    }
+
+    // A pending proposal is approved the way its owner would, so the run shows the ticket and its reference.
+    private static async Task<string> ProposalAsync(AssessmentResult result, IApprovalService approvals)
+    {
+        if (result is not AssessmentResult.Assessed assessed)
+        {
+            return "none";
+        }
+
+        if (assessed.Proposal is not { } proposal)
+        {
+            return assessed.ProposalWithheld ? "withheld" : "none";
+        }
+
+        if (proposal is not { Status: ProposalStatus.Pending, ProposalId: { } id })
+        {
+            return ToolJson.Word(proposal.Status);
+        }
+
+        return await approvals.ApproveAsync(id, CancellationToken.None) switch
+        {
+            ApprovalResult.Created created => $"approved: {created.TicketId}, reference {proposal.ProcessorReference ?? "none"}",
+            var other => $"approval failed: {other.GetType().Name}",
+        };
     }
 
     private static string Describe(AssessmentResult result) => result switch
@@ -74,6 +109,8 @@ internal static class AgentRun
         public long InputTokens { get; set; }
 
         public long OutputTokens { get; set; }
+
+        public List<TokenEstimate> Estimates { get; } = [];
     }
 
     private sealed class RecordingChatClient(IChatClient inner, RunStats stats) : DelegatingChatClient(inner)
@@ -81,8 +118,10 @@ internal static class AgentRun
         public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             stats.Requests++;
-            var response = await base.GetResponseAsync(messages, options, cancellationToken);
+            var sent = messages.ToList();
+            var response = await base.GetResponseAsync(sent, options, cancellationToken);
             stats.InputTokens += response.Usage?.InputTokenCount ?? 0;
+            stats.Estimates.Add(new TokenEstimate(EstimatedTokens(sent, options), response.Usage?.InputTokenCount ?? 0));
             stats.OutputTokens += response.Usage?.OutputTokenCount ?? 0;
             stats.Calls.AddRange(response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>()
                 .Select(call => new ToolCallRecord(call.Name, call.Name == ToolNames.SubmitAssessment ? "{}" : JsonSerializer.Serialize(call.Arguments))));
@@ -90,8 +129,25 @@ internal static class AgentRun
         }
     }
 
-    /// <summary>A signed-in Ops Reader, with or without Restricted knowledge access.</summary>
-    private sealed record EvaluationUser(bool CanAccessRestrictedKnowledge) : IUserContext
+    // The same chars ÷ 3 the history budget uses, over everything the request carried, so the two can be compared.
+    private static long EstimatedTokens(IReadOnlyList<ChatMessage> messages, ChatOptions? options)
+    {
+        var chars = (options?.Instructions?.Length ?? 0)
+            + (options?.Tools?.OfType<AIFunction>().Sum(f => f.Name.Length + f.Description.Length + f.JsonSchema.GetRawText().Length) ?? 0)
+            + messages.SelectMany(m => m.Contents).Sum(content => content switch
+            {
+                TextContent text => text.Text.Length,
+                FunctionCallContent call => call.Name.Length + JsonSerializer.Serialize(call.Arguments).Length,
+                FunctionResultContent result => result.Result?.ToString()?.Length ?? 0,
+                _ => 0,
+            });
+        return chars / HistoryCharsPerToken;
+    }
+
+    private const int HistoryCharsPerToken = 3;
+
+    /// <summary>A signed-in Ops Reader or Engineer, with or without Restricted knowledge access.</summary>
+    private sealed record EvaluationUser(bool CanAccessRestrictedKnowledge, string Role) : IUserContext
     {
         public bool IsAuthenticated => true;
 
@@ -99,7 +155,7 @@ internal static class AgentRun
 
         public string DisplayName => "Agent evaluation";
 
-        public IReadOnlySet<string> Roles { get; } = OpsRoles.Effective([OpsRoles.Reader]);
+        public IReadOnlySet<string> Roles { get; } = OpsRoles.Effective([Role]);
 
         public IReadOnlySet<string> GroupIds { get; } = new HashSet<string>();
 
