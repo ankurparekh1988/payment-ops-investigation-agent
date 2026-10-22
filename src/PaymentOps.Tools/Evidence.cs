@@ -8,6 +8,12 @@ public abstract record EvidenceItem(string Id, string Label);
 /// <summary>A record from a system of record, such as <c>payout:PO-1042-NW-1109</c>.</summary>
 public sealed record RecordEvidence(string Id, string Label) : EvidenceItem(Id, Label);
 
+/// <summary>
+/// A processor incident record. The reference is the processor's own, kept from typed data so a ticket can carry it
+/// without anything being read back from model text.
+/// </summary>
+public sealed record IncidentEvidence(string Id, string Label, string ProcessorId, string? ProcessorReference) : EvidenceItem(Id, Label);
+
 /// <summary>A fact computed from records, holding the exact record ids it was computed from.</summary>
 public sealed record DerivedEvidence(string Id, string Label, IReadOnlyList<string> SourceIds) : EvidenceItem(Id, Label);
 

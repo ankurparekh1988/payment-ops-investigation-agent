@@ -66,7 +66,14 @@ public abstract record AssessmentResult
         RootCause? RootCause,
         Confidence Confidence,
         IReadOnlyList<Statement> NextSteps,
-        IReadOnlyList<string> Gaps) : AssessmentResult;
+        IReadOnlyList<string> Gaps) : AssessmentResult
+    {
+        /// <summary>The ticket the agent proposed, if any, with what the server allows done with it.</summary>
+        public TicketProposal? Proposal { get; init; }
+
+        /// <summary>A ticket was proposed but isn't shown, because the investigation ended incomplete.</summary>
+        public bool ProposalWithheld { get; init; }
+    }
 
     public sealed record NotAssessed(NotAssessedReason Reason) : AssessmentResult;
 }

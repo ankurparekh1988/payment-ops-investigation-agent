@@ -1,3 +1,5 @@
+using PaymentOps.Domain.Processors;
+
 namespace PaymentOps.Tools;
 
 /// <summary>
@@ -13,6 +15,13 @@ public sealed class EvidenceCollector(int maxListItems)
     public string Record(string id, string label)
     {
         _evidence.TryAdd(id, new RecordEvidence(id, label));
+        return id;
+    }
+
+    public string Incident(ProcessorIncident incident)
+    {
+        var id = EvidenceIds.Incident(incident.Id);
+        _evidence.TryAdd(id, new IncidentEvidence(id, $"Incident {incident.Id}", incident.ProcessorId, incident.ProcessorReference));
         return id;
     }
 
