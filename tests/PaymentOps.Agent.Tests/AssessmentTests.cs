@@ -7,6 +7,8 @@ namespace PaymentOps.Agent.Tests;
 
 public sealed class AssessmentTests
 {
+    private static readonly DateOnly Today = new(2026, 11, 11);
+
     private readonly TurnState _turn = Turn();
 
     private static TurnState Turn()
@@ -34,32 +36,33 @@ public sealed class AssessmentTests
         [Said("No file arrived for the batch, which the runbook treats as the processor's to resend.", ["fact:missing-file:p:2026-11-09"], ["S1"])],
         Said("A processor outage stopped the file.", ["fact:missing-file:p:2026-11-09"], ["S1"]),
         "high",
-        [new SubmittedNextStep("Raise an incident with Fabrikam.", ["S1"])]);
+        [new SubmittedNextStep("Raise an incident with Fabrikam.", ["S1"])],
+        null);
 
     [Fact]
     public void A_fully_supported_assessment_is_valid() =>
-        Assert.Empty(AssessmentValidator.Check(Valid(), _turn));
+        Assert.Empty(AssessmentValidator.Check(Valid(), _turn, Today));
 
     [Fact]
     public void An_evidence_id_no_tool_returned_is_rejected_by_rule_without_echoing_text()
     {
         var submission = Valid() with { Claims = [Said("Paid twice.", ["payout:PO-404"])] };
 
-        var failure = Assert.Single(AssessmentValidator.Check(submission, _turn));
+        var failure = Assert.Single(AssessmentValidator.Check(submission, _turn, Today));
         Assert.Equal("claims[0].evidence_ids: 'payout:PO-404' wasn't returned by a tool in this investigation.", failure);
     }
 
     [Fact]
     public void A_citation_not_retrieved_in_this_turn_is_rejected() =>
-        Assert.Contains("summary.citation_ids: 'S9' wasn't retrieved in this investigation.", AssessmentValidator.Check(Valid() with { Summary = Said("x", citations: ["S9"]) }, _turn));
+        Assert.Contains("summary.citation_ids: 'S9' wasn't retrieved in this investigation.", AssessmentValidator.Check(Valid() with { Summary = Said("x", citations: ["S9"]) }, _turn, Today));
 
     [Fact]
     public void A_summary_with_no_support_is_rejected() =>
-        Assert.Contains("summary: needs at least one evidence id or citation id.", AssessmentValidator.Check(Valid() with { Summary = Said("All good.") }, _turn));
+        Assert.Contains("summary: needs at least one evidence id or citation id.", AssessmentValidator.Check(Valid() with { Summary = Said("All good.") }, _turn, Today));
 
     [Fact]
     public void An_assessed_outcome_needs_a_claim() =>
-        Assert.Contains("claims: an assessed outcome needs at least one claim.", AssessmentValidator.Check(Valid() with { Claims = [] }, _turn));
+        Assert.Contains("claims: an assessed outcome needs at least one claim.", AssessmentValidator.Check(Valid() with { Claims = [] }, _turn, Today));
 
     [Theory]
     [InlineData("claims")]
@@ -74,10 +77,10 @@ public sealed class AssessmentTests
             _ => Refusal() with { NextSteps = [new SubmittedNextStep("Raise an incident.", ["S1"])] },
         };
 
-        Assert.Contains("outcome: a refusal carries no claims, no root cause and no next steps.", AssessmentValidator.Check(submission, _turn));
+        Assert.Contains("outcome: a refusal carries no claims, no root cause and no next steps.", AssessmentValidator.Check(submission, _turn, Today));
     }
 
-    private static AssessmentSubmission Refusal() => new("refused", Said("I can't refund payments."), [], Said(string.Empty), "high", []);
+    private static AssessmentSubmission Refusal() => new("refused", Said("I can't refund payments."), [], Said(string.Empty), "high", [], null);
 
     // Nothing a refusal says is shown, so it needs no evidence: an out-of-scope question has none to give.
     [Fact]
@@ -85,7 +88,7 @@ public sealed class AssessmentTests
     {
         var submission = Refusal();
 
-        Assert.Empty(AssessmentValidator.Check(submission, new TurnState()));
+        Assert.Empty(AssessmentValidator.Check(submission, new TurnState(), Today));
         var result = AssessmentPolicy.Apply(submission, new TurnState());
 
         Assert.Equal(AssessmentOutcome.Refused, result.Outcome);
@@ -117,11 +120,11 @@ public sealed class AssessmentTests
     [InlineData("See payout:PO-1 for details.")]
     [InlineData("See fact:missing-file:p:2026-11-09.")]
     public void Ids_written_into_text_are_rejected(string text) =>
-        Assert.Contains(AssessmentValidator.Check(Valid() with { Claims = [Said(text, ["payment:PAY-1"])] }, _turn), f => f.StartsWith("claims[0].text:", StringComparison.Ordinal));
+        Assert.Contains(AssessmentValidator.Check(Valid() with { Claims = [Said(text, ["payment:PAY-1"])] }, _turn, Today), f => f.StartsWith("claims[0].text:", StringComparison.Ordinal));
 
     [Fact]
     public void Blank_text_is_rejected() =>
-        Assert.Contains("next_steps[0].text: can't be blank.", AssessmentValidator.Check(Valid() with { NextSteps = [new SubmittedNextStep(" ", [])] }, _turn));
+        Assert.Contains("next_steps[0].text: can't be blank.", AssessmentValidator.Check(Valid() with { NextSteps = [new SubmittedNextStep(" ", [])] }, _turn, Today));
 
     // A count is supported by the group that counted every event, not by the few event ids shown.
     [Fact]
@@ -132,16 +135,16 @@ public sealed class AssessmentTests
         var withGroup = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["event:EV-1", Group])] };
         var whole = Valid() with { Claims = [Said("Timeouts were recorded.", ["event:EV-1", "event:EV-2", "event:EV-3"])] };
 
-        Assert.Contains(AssessmentValidator.Check(partOnly, _turn), f => f.Contains(Group, StringComparison.Ordinal));
-        Assert.Empty(AssessmentValidator.Check(withGroup, _turn));
-        Assert.Empty(AssessmentValidator.Check(whole, _turn));
+        Assert.Contains(AssessmentValidator.Check(partOnly, _turn, Today), f => f.Contains(Group, StringComparison.Ordinal));
+        Assert.Empty(AssessmentValidator.Check(withGroup, _turn, Today));
+        Assert.Empty(AssessmentValidator.Check(whole, _turn, Today));
     }
 
     [Theory]
     [InlineData("The file is missing [s1].")]
     [InlineData("The file is missing [S1, S2].")]
     public void Near_miss_citation_markers_in_text_are_rejected(string text) =>
-        Assert.Contains(AssessmentValidator.Check(Valid() with { Claims = [Said(text, ["payment:PAY-1"])] }, _turn), f => f.StartsWith("claims[0].text:", StringComparison.Ordinal));
+        Assert.Contains(AssessmentValidator.Check(Valid() with { Claims = [Said(text, ["payment:PAY-1"])] }, _turn, Today), f => f.StartsWith("claims[0].text:", StringComparison.Ordinal));
 
     // The wire schema is strict, but the server doesn't rely on it: anything else is rejected, never parsed.
     [Theory]
@@ -150,7 +153,7 @@ public sealed class AssessmentTests
     [InlineData("assessed", "very_high")]
     [InlineData("assessed", "High")]
     public void Outcome_and_confidence_must_be_exact_allowed_values(string outcome, string confidence) =>
-        Assert.NotEmpty(AssessmentValidator.Check(Valid() with { Outcome = outcome, Confidence = confidence }, _turn));
+        Assert.NotEmpty(AssessmentValidator.Check(Valid() with { Outcome = outcome, Confidence = confidence }, _turn, Today));
 
     // The same events counted over two ranges are two groups; citing either one supports the count.
     [Fact]
@@ -159,7 +162,7 @@ public sealed class AssessmentTests
         _turn.Register([new DerivedEvidence("fact:event-group:p:*:file_transfer_timeout:T:2026-11-08:2026-11-10", "4 timeouts", ["event:EV-0", "event:EV-1", "event:EV-2", "event:EV-3"])]);
         var claim = Valid() with { Claims = [Said("There were 3 file transfer timeouts.", ["event:EV-1", "fact:event-group:p:*:file_transfer_timeout:T:2026-11-09:2026-11-10"])] };
 
-        Assert.Empty(AssessmentValidator.Check(claim, _turn));
+        Assert.Empty(AssessmentValidator.Check(claim, _turn, Today));
     }
 
     [Fact]

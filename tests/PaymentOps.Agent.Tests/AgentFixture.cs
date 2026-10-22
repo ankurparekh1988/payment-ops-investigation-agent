@@ -68,6 +68,7 @@ internal sealed class AgentFixture : IDisposable
             root_cause = new { text = rootCause, evidence_ids = rootEvidence ?? [], citation_ids = rootCitations ?? [] },
             confidence,
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
 }
 

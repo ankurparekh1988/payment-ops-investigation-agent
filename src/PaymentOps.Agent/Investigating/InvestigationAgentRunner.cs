@@ -59,7 +59,7 @@ internal sealed class InvestigationAgentRunner(
             return new NotAssessed(NotAssessedReason.NotAuthorized);
         }
 
-        var submit = new SubmitAssessmentFunction(turn, progress);
+        var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);
         var guard = new ToolGuard(turn, _limits, time, user, progress);
         List<AITool> readTools = [.. tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).Select(guard.Wrap)];
 
@@ -142,7 +142,7 @@ internal sealed class InvestigationAgentRunner(
     public int FixedPromptChars()
     {
         var guard = new ToolGuard(new TurnState(), _limits, time, user, null);
-        AIFunction[] definitions = [.. tools.Select(guard.Wrap), new SubmitAssessmentFunction(new TurnState(), null)];
+        AIFunction[] definitions = [.. tools.Select(guard.Wrap), new SubmitAssessmentFunction(new TurnState(), clock.Today, null)];
         return Instructions().Length + definitions.Sum(f => f.Name.Length + f.Description.Length + f.JsonSchema.GetRawText().Length);
     }
 

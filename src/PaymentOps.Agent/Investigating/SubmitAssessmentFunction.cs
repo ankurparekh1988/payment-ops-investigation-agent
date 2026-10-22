@@ -12,7 +12,7 @@ namespace PaymentOps.Agent.Investigating;
 /// back to the model as this tool's result; either way the loop ends, and the runner decides whether the one
 /// correction is still allowed.
 /// </summary>
-internal sealed class SubmitAssessmentFunction(TurnState turn, IProgress<InvestigationProgress>? progress) : AIFunction
+internal sealed class SubmitAssessmentFunction(TurnState turn, DateOnly today, IProgress<InvestigationProgress>? progress) : AIFunction
 {
     private static readonly string Accepted = JsonSerializer.Serialize(new { Status = "accepted" }, ToolJson.Options);
 
@@ -40,7 +40,7 @@ internal sealed class SubmitAssessmentFunction(TurnState turn, IProgress<Investi
         var submission = AssessmentSubmission.Parse(JsonSerializer.SerializeToElement(arguments, ToolJson.Options));
         IReadOnlyList<string> failures = submission is null
             ? ["The submission doesn't match the submit_assessment parameters."]
-            : AssessmentValidator.Check(submission, turn);
+            : AssessmentValidator.Check(submission, turn, today);
         if (failures.Count == 0)
         {
             turn.Accept(submission!);

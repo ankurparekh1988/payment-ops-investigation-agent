@@ -77,6 +77,7 @@ public sealed class ProgressTests
             root_cause = new { text = "", evidence_ids = Array.Empty<string>(), citation_ids = Array.Empty<string>() },
             confidence = "low",
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
         var model = new ScriptedChatClient(Respond(Call(Submit, refusal)));
 

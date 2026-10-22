@@ -92,6 +92,23 @@ internal sealed class TurnState
         }
     }
 
+    /// <summary>Processors with a missing file this turn: more than one points to a platform incident, not a processor's.</summary>
+    public IReadOnlySet<string> ProcessorsWithMissingFiles
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _evidence.Values.OfType<DerivedEvidence>()
+                    .Where(fact => fact.Id.StartsWith(EvidenceIds.MissingFilePrefix, StringComparison.Ordinal))
+                    .SelectMany(fact => fact.SourceIds)
+                    .Where(id => id.StartsWith(EvidenceIds.ProcessorPrefix, StringComparison.Ordinal))
+                    .Select(id => id[EvidenceIds.ProcessorPrefix.Length..])
+                    .ToHashSet(StringComparer.Ordinal);
+            }
+        }
+    }
+
     public bool TryGetSection(string id, out RetrievedSection section)
     {
         lock (_lock)

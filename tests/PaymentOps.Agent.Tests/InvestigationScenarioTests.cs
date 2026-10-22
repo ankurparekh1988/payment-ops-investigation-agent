@@ -42,6 +42,7 @@ public sealed class InvestigationScenarioTests
         root_cause = rootCause,
         confidence,
         next_steps = new[] { new { text = "Follow the runbook.", citation_ids = new[] { "S1" } } },
+        proposed_ticket = (object?)null,
     };
 
     private static ScriptedChatClient Model(params ChatResponse[] responses) =>
@@ -105,6 +106,7 @@ public sealed class InvestigationScenarioTests
             root_cause = Statement(string.Empty, [], []),
             confidence = "medium",
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
         var shownOnly = CountClaim(["event:EV-1109-01", "event:EV-1109-02"]);
         var model = Model([.. S1Trajectory(shownOnly), Call(Submit, shownOnly)]);
@@ -138,6 +140,7 @@ public sealed class InvestigationScenarioTests
             root_cause = Statement("A processor outage.", [], ["S1"]),
             confidence = "high",
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
 
         var result = await RunAsync(Model(S1Trajectory(submission)), AllSourcesDown);
@@ -160,6 +163,7 @@ public sealed class InvestigationScenarioTests
             root_cause = Statement(string.Empty, [], []),
             confidence = "high",
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
         var model = Model(Call(Submit, refusal));
         using var fixture = new AgentFixture(null, new CorpusKnowledge(), 20);

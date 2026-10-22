@@ -57,5 +57,5 @@ retrieval:
 # first uses it.
 prompts:
   investigation-agent:
-    version: 1.0.0
-    sha256: sha256:a277e5ead17eeb6ba450ac99c8db7f93f64443925ad71f6e6061f49efd6c2f83
+    version: 1.1.0
+    sha256: sha256:e7eac04083533bc4112a2354e7ca1ade2809a93a044c4ea5659bc6b12fbf0395

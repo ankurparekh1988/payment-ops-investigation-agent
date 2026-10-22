@@ -16,7 +16,8 @@ internal static class AssessmentValidator
         $@"\b({string.Join('|', EvidenceIds.Prefixes.Select(Regex.Escape))})[A-Za-z0-9]",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    public static IReadOnlyList<string> Check(AssessmentSubmission submission, TurnState turn)
+    /// <param name="today">The investigation's today: a proposed ticket's dates are the data's.</param>
+    public static IReadOnlyList<string> Check(AssessmentSubmission submission, TurnState turn, DateOnly today)
     {
         ArgumentNullException.ThrowIfNull(submission);
 
@@ -41,6 +42,11 @@ internal static class AssessmentValidator
                 failures.Add("outcome: a refusal carries no claims, no root cause and no next steps.");
             }
 
+            if (submission.ProposedTicket is not null)
+            {
+                failures.Add("proposed_ticket: a refusal carries no ticket.");
+            }
+
             return failures;
         }
 
@@ -60,6 +66,11 @@ internal static class AssessmentValidator
         if (submission.Outcome == "assessed" && submission.Claims.Count == 0)
         {
             failures.Add("claims: an assessed outcome needs at least one claim.");
+        }
+
+        if (submission.ProposedTicket is { } ticket)
+        {
+            ProposalValidator.Check(ticket, turn, today, failures);
         }
 
         return failures;
@@ -83,16 +94,20 @@ internal static class AssessmentValidator
             Text(field, statement.Text, failures);
         }
 
-        foreach (var id in statement.EvidenceIds.Where(id => !turn.TryGetEvidence(id, out _)))
-        {
-            failures.Add($"{field}.evidence_ids: '{Shown(id)}' wasn't returned by a tool in this investigation.");
-        }
-
+        Evidence(field, statement.EvidenceIds, turn, failures);
         Citations(field, statement.CitationIds, turn, failures);
         PartialGroupsCiteTheGroup(field, statement, turn, failures);
     }
 
-    private static void Text(string field, string text, List<string> failures)
+    public static void Evidence(string field, IReadOnlyList<string> evidenceIds, TurnState turn, List<string> failures)
+    {
+        foreach (var id in evidenceIds.Where(id => !turn.TryGetEvidence(id, out _)))
+        {
+            failures.Add($"{field}.evidence_ids: '{Shown(id)}' wasn't returned by a tool in this investigation.");
+        }
+    }
+
+    public static void Text(string field, string text, List<string> failures)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -104,7 +119,7 @@ internal static class AssessmentValidator
         }
     }
 
-    private static void Citations(string field, IReadOnlyList<string> citationIds, TurnState turn, List<string> failures)
+    public static void Citations(string field, IReadOnlyList<string> citationIds, TurnState turn, List<string> failures)
     {
         foreach (var id in citationIds.Where(id => !turn.TryGetSection(id, out _)))
         {

@@ -16,18 +16,21 @@ public static class EvidenceIds
 {
     public const string FactPrefix = "fact:";
 
+    public const string ProcessorPrefix = "processor:";
+    public const string MissingFilePrefix = FactPrefix + "missing-file:";
+
     private const string EventPrefix = "event:";
     private const string EventGroupPrefix = FactPrefix + "event-group:";
 
     /// <summary>Every prefix an evidence id can start with, so text can be checked for ids without repeating the list.</summary>
     public static IReadOnlyList<string> Prefixes { get; } =
-        ["merchant:", "hold:", "processor:", "payment:", "file:", "payout:", "incident:", EventPrefix, "calendar:", FactPrefix];
+        ["merchant:", "hold:", ProcessorPrefix, "payment:", "file:", "payout:", "incident:", EventPrefix, "calendar:", FactPrefix];
 
     public static string Merchant(string id) => $"merchant:{id}";
 
     public static string Hold(string id) => $"hold:{id}";
 
-    public static string Processor(string id) => $"processor:{id}";
+    public static string Processor(string id) => ProcessorPrefix + id;
 
     public static string Payment(string id) => $"payment:{id}";
 
