@@ -5,8 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Investigating;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Security;
 using PaymentOps.Platform.Ai;
@@ -25,7 +25,6 @@ public sealed class InvestigationRegistrationTests
         services.AddSingleton<TokenCredential>(new StaticTokenCredential());
         services.AddSingleton<IUserContext>(TestUser.General);
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddOptions<AnsweringOptions>();
         services.AddDemoData(new ConfigurationBuilder().Build());
         services.AddInvestigation(new InvestigationEndpoints(new Uri("https://search.example"), new Uri("https://foundry.example/"), "https://cognitiveservices.azure.com/.default"));
 
@@ -34,8 +33,12 @@ public sealed class InvestigationRegistrationTests
         using var second = provider.CreateScope();
 
         var service = first.ServiceProvider.GetRequiredService<IInvestigationService>();
-        Assert.IsType<InFlightAskGate>(service);
+        Assert.IsType<InFlightGate>(service);
         Assert.Same(service, first.ServiceProvider.GetRequiredService<IInvestigationService>());
         Assert.NotSame(service, second.ServiceProvider.GetRequiredService<IInvestigationService>());
     }
+
+    [Fact]
+    public void The_service_contract_has_no_grounded_answer() =>
+        Assert.Null(typeof(IInvestigationService).GetMethod("AskAsync"));
 }

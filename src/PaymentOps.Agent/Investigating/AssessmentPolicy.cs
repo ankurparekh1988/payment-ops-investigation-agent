@@ -1,4 +1,3 @@
-using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Tools;
 
@@ -70,19 +69,13 @@ internal static class AssessmentPolicy
     private static Statement Resolve(SubmittedStatement statement, TurnState turn) => new(
         statement.Text,
         [.. statement.EvidenceIds.Distinct(StringComparer.Ordinal).Select(id => Evidence(id, turn))],
-        [.. statement.CitationIds.Distinct(StringComparer.Ordinal).Select(id => Citation(id, turn))]);
+        [.. statement.CitationIds.Distinct(StringComparer.Ordinal).Select(turn.CitationFor)]);
 
     // Only called after validation, so every id resolves.
     private static EvidenceReference Evidence(string id, TurnState turn)
     {
         turn.TryGetEvidence(id, out var item);
         return new EvidenceReference(id, item.Label, item is DerivedEvidence);
-    }
-
-    private static Citation Citation(string id, TurnState turn)
-    {
-        turn.TryGetSection(id, out var section);
-        return EvidenceRegistry.Cite(id, section);
     }
 
     private static Confidence Min(Confidence a, Confidence b) => a < b ? a : b;

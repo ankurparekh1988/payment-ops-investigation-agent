@@ -5,8 +5,8 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Model;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
 using PaymentOps.Platform.Ai;

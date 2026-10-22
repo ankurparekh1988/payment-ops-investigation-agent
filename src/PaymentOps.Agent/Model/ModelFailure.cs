@@ -3,7 +3,7 @@ using System.Text.Json;
 
 using Azure.Identity;
 
-namespace PaymentOps.Agent.Answering;
+namespace PaymentOps.Agent.Model;
 
 /// <summary>Classifies model-call failures for the result and for safe diagnostics.</summary>
 internal static class ModelFailure

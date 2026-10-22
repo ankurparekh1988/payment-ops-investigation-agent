@@ -1,4 +1,4 @@
-using PaymentOps.Agent.Answering;
+using PaymentOps.Agent.Contracts;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools;
 
@@ -54,7 +54,7 @@ internal sealed class TurnState
         {
             if (!_idsBySectionKey.TryGetValue(section.Key, out var id))
             {
-                id = EvidenceRegistry.SectionId(_sectionsById.Count + 1);
+                id = $"S{_sectionsById.Count + 1}";
                 _idsBySectionKey[section.Key] = id;
                 _sectionsById[id] = section;
             }
@@ -97,6 +97,16 @@ internal sealed class TurnState
         lock (_lock)
         {
             return _sectionsById.TryGetValue(id, out section!);
+        }
+    }
+
+    /// <summary>How a registered section is shown: from the server's copy, never from what the model wrote.</summary>
+    public Citation CitationFor(string id)
+    {
+        lock (_lock)
+        {
+            var section = _sectionsById[id];
+            return new Citation(id, section.Key, section.Title, section.SectionPath);
         }
     }
 

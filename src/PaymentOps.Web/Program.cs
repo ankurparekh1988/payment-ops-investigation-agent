@@ -7,7 +7,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent;
-using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Data.Demo;
@@ -34,14 +33,6 @@ builder.Services.AddDemoData(builder.Configuration);
 TokenCredential azureCredential = new DefaultAzureCredential();
 builder.Services.AddSingleton(azureCredential);
 
-builder.Services.AddOptions<AnsweringOptions>()
-    .Bind(builder.Configuration.GetSection(AnsweringOptions.SectionName))
-    .Validate(
-        o => o.MaxQuestionLength > 0 && o.MaxOutputTokens > 0
-            && o.SearchTimeout > TimeSpan.Zero && o.SearchTimeout <= TimeSpan.FromMinutes(5)
-            && o.ModelTimeout > TimeSpan.Zero && o.ModelTimeout <= TimeSpan.FromMinutes(5),
-        $"{AnsweringOptions.SectionName} needs positive limits and timeouts of at most 5 minutes.")
-    .ValidateOnStart();
 builder.Services.AddOptions<InvestigationLimits>()
     .Bind(builder.Configuration.GetSection(InvestigationLimits.SectionName))
     .Validate(
@@ -56,7 +47,7 @@ builder.Services.AddOptions<ToolOptions>()
         o => o.MaxListItems > 0 && o.MaxQueryLength > 0 && o.RetryBackoff >= TimeSpan.Zero && o.RetryBackoff <= TimeSpan.FromSeconds(10),
         $"{ToolOptions.SectionName} needs positive limits and a retry backoff of at most 10 seconds.")
     .ValidateOnStart();
-builder.Services.AddSingleton(sp => new AnsweringLimits(sp.GetRequiredService<IOptions<AnsweringOptions>>().Value.MaxQuestionLength));
+builder.Services.AddSingleton(sp => new QuestionLimits(sp.GetRequiredService<IOptions<InvestigationLimits>>().Value.MaxQuestionLength));
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

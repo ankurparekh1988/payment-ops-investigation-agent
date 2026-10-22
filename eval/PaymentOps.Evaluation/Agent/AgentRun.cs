@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent;
-using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Security;
@@ -58,7 +57,6 @@ internal static class AgentRun
         services.AddSingleton(credential);
         services.AddSingleton(user);
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddOptions<AnsweringOptions>();
         services.AddDemoData(new ConfigurationBuilder().Build());
 
         // The model client the app would use, observed from outside so the run sees every request and tool call.

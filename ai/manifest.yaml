@@ -56,9 +56,6 @@ retrieval:
 # version: CI compares this section with the base branch. Each prompt is added with the code that
 # first uses it.
 prompts:
-  grounded-answer:
-    version: 1.0.0
-    sha256: sha256:efd63ef575ce1ae22f0cca7cc9f6ed840aac2f991f562d335c87c113dab01010
   investigation-agent:
     version: 1.0.0
     sha256: sha256:a277e5ead17eeb6ba450ac99c8db7f93f64443925ad71f6e6061f49efd6c2f83

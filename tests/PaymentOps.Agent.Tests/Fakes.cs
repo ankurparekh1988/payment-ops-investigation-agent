@@ -4,7 +4,7 @@ using System.Text;
 
 using Microsoft.Extensions.AI;
 
-using PaymentOps.Agent.Answering;
+using PaymentOps.Agent.Model;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools.Knowledge;
 

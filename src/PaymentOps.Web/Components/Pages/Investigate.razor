@@ -1,0 +1,63 @@
+@page "/"
+@rendermode InteractiveServer
+@using PaymentOps.Agent.Contracts
+@inject IInvestigationService Investigation
+@inject IUserContext CurrentUser
+@inject QuestionLimits Limits
+
+<PageTitle>Payment Ops Investigation Agent</PageTitle>
+
+<h1>Investigate</h1>
+
+<form @onsubmit="InvestigateAsync">
+    <label for="question">Question</label>
+    <textarea id="question" @bind="_question" @bind:event="oninput" rows="3" maxlength="@Limits.MaxQuestionLength" disabled="@_busy"></textarea>
+    <button type="submit" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">Investigate</button>
+</form>
+
+@if (_busy)
+{
+    <p role="status">Investigating…</p>
+}
+else if (_result is AssessmentResult.Assessed assessed)
+{
+    <section aria-labelledby="result-heading">
+        <h2 id="result-heading">Assessment</h2>
+        <p>@assessed.Summary.Text</p>
+    </section>
+}
+else if (_result is AssessmentResult.NotAssessed notAssessed)
+{
+    <p role="status">@NotAssessedText.For(notAssessed.Reason, Limits.MaxQuestionLength)</p>
+}
+
+<section aria-labelledby="access-heading">
+    <h2 id="access-heading">Your access</h2>
+    <dl>
+        <dt>Roles</dt>
+        <dd>@string.Join(", ", CurrentUser.Roles.Order(StringComparer.Ordinal))</dd>
+        <dt>Restricted knowledge</dt>
+        <dd>@(CurrentUser.CanAccessRestrictedKnowledge ? "Yes, through Risk and Compliance" : "No")</dd>
+    </dl>
+</section>
+
+@code {
+    private string _question = string.Empty;
+    private bool _busy;
+    private AssessmentResult? _result;
+
+    // The service applies its own timeouts, so the page doesn't add another.
+    private async Task InvestigateAsync()
+    {
+        _busy = true;
+        _result = null;
+        try
+        {
+            _result = await Investigation.InvestigateAsync(_question, CancellationToken.None);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

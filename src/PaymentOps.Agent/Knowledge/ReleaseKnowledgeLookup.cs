@@ -2,7 +2,7 @@ using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Tools.Knowledge;
 
-namespace PaymentOps.Agent.Answering;
+namespace PaymentOps.Agent.Knowledge;
 
 /// <summary>The release's mode and floor applied to every question; callers can't choose them.</summary>
 internal sealed class ReleaseKnowledgeLookup(KnowledgeRetriever retriever, KnowledgeSectionReader reader, AiRelease release) : IKnowledgeLookup

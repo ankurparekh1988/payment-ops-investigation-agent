@@ -44,8 +44,8 @@ public sealed class ShippedReleaseTests
     }
 
     [Fact]
-    public void The_shipped_release_has_the_grounded_answer_prompt()
+    public void The_shipped_release_has_only_the_investigation_prompt()
     {
-        Assert.Contains("grounded-answer", AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).Prompts.Keys);
+        Assert.Equal(["investigation-agent"], AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).Prompts.Keys);
     }
 }

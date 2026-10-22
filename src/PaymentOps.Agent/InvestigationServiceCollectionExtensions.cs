@@ -4,9 +4,10 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Knowledge;
+using PaymentOps.Agent.Model;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Tools;
@@ -41,10 +42,10 @@ public static class InvestigationServiceCollectionExtensions
         services.AddInvestigationTools();
         services.AddOptions<InvestigationLimits>();
         services.TryAddSingleton(TimeProvider.System);
-        services.AddScoped<GroundedAnswerService>();
+        services.AddScoped<SourceService>();
         services.AddScoped<InvestigationAgentRunner>();
-        services.AddScoped<IInvestigationService>(sp => new InFlightAskGate(new InvestigationService(
-            sp.GetRequiredService<GroundedAnswerService>(), sp.GetRequiredService<InvestigationAgentRunner>())));
+        services.AddScoped<IInvestigationService>(sp => new InFlightGate(new InvestigationService(
+            sp.GetRequiredService<InvestigationAgentRunner>(), sp.GetRequiredService<SourceService>())));
         return services;
     }
 }

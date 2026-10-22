@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 
-using PaymentOps.Agent.Answering;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Model;
 
 namespace PaymentOps.Agent.Investigating;
 

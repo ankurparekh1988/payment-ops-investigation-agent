@@ -7,7 +7,7 @@ using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Chat;
 
-namespace PaymentOps.Agent.Answering;
+namespace PaymentOps.Agent.Model;
 
 /// <summary>
 /// The chat model through Foundry's OpenAI v1 endpoint, signed in with an Entra token. Key
