@@ -1,6 +1,6 @@
 # Evaluation
 
-How AI behaviour is measured, as built so far. Retrieval calibration and the investigation agent's live run are in place, with a pre-merge diagnostic and a recorded run from `main`; the evaluation suite and the release gate for answers and the agent come later.
+How AI behaviour is measured, as built so far. Retrieval calibration and the investigation agent's live run are in place, with pre-merge diagnostics and a recorded run from `main` at prompt 1.0.0; the run at prompt 1.1.0 is recorded from `main` after it merges. The evaluation suite and the release gate for the agent come later.
 
 ## Retrieval calibration
 
@@ -58,7 +58,11 @@ Every assessment is checked before it's shown, deterministically and on every ru
 
 ### Live run
 
-`PaymentOps.Evaluation agent-run` sends about ten seeded questions (`eval/datasets/agent-tasks.json`) through the same service the app uses, against the deployed model and index, each as a simulated Ops Reader with General or Restricted access. It records each trajectory, how many of the tools a person following the runbooks would use the model chose, the validated outcome, latency and token usage.
+`PaymentOps.Evaluation agent-run` sends about ten seeded questions (`eval/datasets/agent-tasks.json`) through the same service the app uses, against the deployed model and index, each as a simulated Ops Reader or Engineer with General or Restricted access. It records each trajectory, how many of the tools a person following the runbooks would use the model chose, the validated outcome, latency and token usage. Since the investigation view it also records:
+
+- **Time to first progress**, per question and as p50 and p95 over the run: from submitting the question to the first event the agent's own choice causes, a read tool starting or, when it submits without one (as an out-of-scope refusal does), the submission. Nothing the server raises on its own counts. The target is p95 ≤ 3 s; a miss is recorded as evidence, never a reason to change the definition.
+- **Proposals.** Each question says whether a runbook calls for an incident (S1 and S4 do), and the run records what became of any proposal: none, a Reader's draft, withheld, unavailable, or for the Engineer question, approved through the approval service with the ticket id and the processor's reference.
+- **The history estimate.** For every model request, the application's three-characters-a-token estimate of the input against the tokens the service counted, which checks the conversation budget's arithmetic.
 
 It sets no thresholds; those, repeated runs and a fixed-sequence baseline belong to the evaluation suite. It has one guard: if no question produces a trajectory of several tools ending in an assessment that passes validation, the agent isn't considered working. It runs locally with the developer's own sign-in, because no pipeline identity has access to the model.
 
@@ -86,3 +90,10 @@ All ten ended in a validated result, so the guard passed. Every root cause given
 - The question about a merchant that doesn't exist now ends refused, so the person sees the out-of-scope notice rather than "no such merchant". Refusals no longer need evidence, and the model chose that outcome.
 - Confidence fell from high to medium in three assessed questions, as expected once each statement has to cite both data and knowledge for high. Refusals now always show low.
 - The slowest observed question took 23.0 s, exceeding the 20 s full-investigation target value. This single run doesn't estimate p95. The action request needed one correction of its submission.
+
+**Pre-merge diagnostic for the investigation view, 2026-10-22.** Run locally from the feature branch with `investigation-agent` prompt 1.1.0, before the change merged, on the same deployment and index. A check that the agent and the approval path work, not the recorded result; one run per question.
+
+- Ten of eleven questions ended in a validated result, nine assessed and the action request refused, so the guard passed. The question about a merchant that doesn't exist ended unverified this time, after one correction; in the recorded run it was refused.
+- All three S1 questions proposed a ticket. The two Reader questions showed it as a draft; the Engineer question's proposal was approved through the approval service and created `INC-0001`, carrying Fabrikam's own reference `FAB-7731` from the incident data. Neither S4 question proposed one, although the duplicate-batch runbook says to raise an incident. No other question proposed one.
+- Time to first progress was p50 2.0 s and p95 5.4 s over the eleven questions, short of the 3 s target. The 5.4 s was the run's first question; the rest were 1.7 to 2.5 s. Full latencies were 6.5 to 23.7 s, with two S1 questions over 20 s.
+- The three-characters-a-token estimate overstated the input the service counted by 1.4 to 1.9 times across 51 model requests, so the history budget errs on the safe side and no tokenizer is added.

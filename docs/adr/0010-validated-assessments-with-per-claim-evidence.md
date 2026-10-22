@@ -24,7 +24,7 @@ An investigation's answer mixes three kinds of support: records from systems of 
 ## Consequences
 
 - Every factual statement the model writes and a person sees traces to something this investigation's tools returned, and the support is shown per statement, not for the answer as a whole. The refusal notice is the server's own text, not model evidence.
-- Some correct assessments fail because the model slipped on an id. One correction is allowed because an investigation is expensive to throw away; grounded answers, which are cheap, are never retried.
+- Some correct assessments fail because the model slipped on an id. One correction is allowed because an investigation is expensive to throw away; grounded answers, which were cheap, were never retried.
 - An out-of-scope question can be refused without calling a tool. A factual statement with nothing a tool returned to point at still can't be shown. That includes a correct "there's no such merchant", because a lookup that finds nothing registers no evidence.
 - A statement that cites some of a counted group's events must cite the group too. The rule doesn't read the text, so it also applies when no count is stated; citing the group costs nothing.
 

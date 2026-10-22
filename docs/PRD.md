@@ -42,15 +42,15 @@ Every tool must be required by at least one scenario.
 2. **Cite evidence.** Every factual claim cites a retrieved knowledge passage or a data evidence id. The server rejects citations that were not retrieved in the current turn.
 3. **Refuse rather than guess.** When evidence is missing or inaccessible, the agent says so and suggests escalation.
 4. **Respect authorization.** Knowledge retrieval is filtered by the user's group membership on the server. The model never sees documents the user may not read, and never learns that they exist.
-5. **Propose, don't act.** The only state-changing tool, creating an incident ticket, is offered only to Ops Engineers and above, requires explicit approval, and re-checks authorization when it executes.
-6. **Show the work.** The UI streams a tool timeline and renders the final assessment only after server-side validation.
+5. **Propose, don't act.** The only state-changing action, creating an incident ticket, is proposed by the agent and executed by the server only after the investigating Ops Engineer approves it; authorization is re-checked when it executes.
+6. **Show the work.** The UI shows a live timeline of the agent's tool calls, written by the server, and renders the final assessment only after server-side validation.
 7. **No financial or risk actions.** Releasing or holding payouts, changing merchant status and retrying settlements have no tool at all.
 
 ## Targets
 
 | Area | Requirement |
 |---|---|
-| Latency | p95 time to first token ≤ 3 s; p95 full investigation ≤ 20 s |
+| Latency | p95 time to first progress ≤ 3 s (from submitting a question to the first tool call or submission the agent makes); p95 full investigation ≤ 20 s |
 | Reliability | Tool error rate < 2% with fault injection off; at most 10 tool calls and 60 s per turn |
 | Security | 0 authorization leaks on the authorization evaluation set; 0 injected actions executed; key-based authentication disabled on every Azure AI and data service |
 | Quality | Groundedness ≥ 4.0/5; retrieval recall@5 ≥ 0.85; citation precision ≥ 0.95; tool selection accuracy ≥ 0.90 |
@@ -60,7 +60,7 @@ Every tool must be required by at least one scenario.
 ## How success is measured
 
 - **Assessment acceptance rate:** assessments that receive positive feedback or lead to an approved ticket.
-- **Proposal acceptance and edit rate:** tickets approved unedited, edited, or rejected.
+- **Proposal approval and rejection rate:** proposed tickets approved, or rejected with a reason. An edit rate needs editing, which doesn't exist yet.
 - **Escalation rate:** investigations that end as escalated. A very low rate can signal overconfidence.
 - **Cost per resolved investigation.**
 
