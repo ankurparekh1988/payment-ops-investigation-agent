@@ -2,6 +2,7 @@ using PaymentOps.Data.ContractTests.Contracts;
 using PaymentOps.Data.Demo;
 using PaymentOps.Data.Demo.Dataset;
 using PaymentOps.Domain.ErrorEvents;
+using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Merchants;
 using PaymentOps.Domain.Processors;
 using PaymentOps.Domain.Settlement;
@@ -75,4 +76,9 @@ internal static class DemoFixture
         data.Payouts,
         data.Incidents,
         data.ErrorEvents));
+}
+
+public sealed class InMemoryIncidentStoreTests : IncidentStoreContract
+{
+    protected override IIncidentStore Create(int maxTickets) => new InMemoryIncidentStore(Time, maxTickets);
 }
