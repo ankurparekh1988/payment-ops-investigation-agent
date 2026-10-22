@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
@@ -40,6 +41,12 @@ builder.Services.AddOptions<InvestigationLimits>()
             && o.ToolTimeout > TimeSpan.Zero && o.ToolTimeout <= TimeSpan.FromMinutes(5)
             && o.TurnTimeout > TimeSpan.Zero && o.TurnTimeout <= TimeSpan.FromMinutes(5),
         $"{InvestigationLimits.SectionName} needs positive limits and timeouts of at most 5 minutes.")
+    .ValidateOnStart();
+builder.Services.AddOptions<ConversationOptions>()
+    .Bind(builder.Configuration.GetSection(ConversationOptions.SectionName))
+    .Validate(
+        o => o.InputBudgetTokens > 0 && o.ToolResultAllowanceTokens > 0 && o.MaxQuestions > 0,
+        $"{ConversationOptions.SectionName} needs a positive input budget, tool result allowance and question limit.")
     .ValidateOnStart();
 builder.Services.AddOptions<ToolOptions>()
     .Bind(builder.Configuration.GetSection(ToolOptions.SectionName))

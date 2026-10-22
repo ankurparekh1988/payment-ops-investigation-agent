@@ -27,6 +27,10 @@ internal sealed class InFlightGate(IInvestigationService inner) : IInvestigation
         }
     }
 
+    public ConversationStatus Conversation => inner.Conversation;
+
+    public void StartNew() => inner.StartNew();
+
     public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) =>
         inner.GetSourceAsync(sectionKey, cancellationToken);
 }

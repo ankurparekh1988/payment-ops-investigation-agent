@@ -59,6 +59,12 @@ public sealed class InFlightGateTests
             return Release.Task;
         }
 
+        public ConversationStatus Conversation { get; } = new(0, 0, false);
+
+        public void StartNew()
+        {
+        }
+
         public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) =>
             Task.FromResult<SourceResult>(new SourceResult.NotFound());
     }

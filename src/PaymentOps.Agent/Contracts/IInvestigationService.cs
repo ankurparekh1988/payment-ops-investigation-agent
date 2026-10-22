@@ -9,5 +9,11 @@ public interface IInvestigationService
     /// </summary>
     Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken);
 
+    /// <summary>Where this conversation stands: what the next question would carry, and whether it can be asked.</summary>
+    ConversationStatus Conversation { get; }
+
+    /// <summary>Starts a new investigation: earlier questions are forgotten, nothing is carried over.</summary>
+    void StartNew();
+
     Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken);
 }

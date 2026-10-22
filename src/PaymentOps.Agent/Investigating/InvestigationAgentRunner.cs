@@ -138,6 +138,14 @@ internal sealed class InvestigationAgentRunner(
             : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
     }
 
+    /// <summary>The instructions and every tool definition, as sent with each request: the fixed part of the input budget.</summary>
+    public int FixedPromptChars()
+    {
+        var guard = new ToolGuard(new TurnState(), _limits, time, user, null);
+        AIFunction[] definitions = [.. tools.Select(guard.Wrap), new SubmitAssessmentFunction(new TurnState(), null)];
+        return Instructions().Length + definitions.Sum(f => f.Name.Length + f.Description.Length + f.JsonSchema.GetRawText().Length);
+    }
+
     private static readonly NotAssessed Unverified = new(NotAssessedReason.AssessmentUnverified);
 
     private static bool HasUnansweredCall(IList<ChatMessage> messages)

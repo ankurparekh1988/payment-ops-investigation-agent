@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
 using PaymentOps.Agent.Model;
@@ -41,11 +42,12 @@ public static class InvestigationServiceCollectionExtensions
         });
         services.AddInvestigationTools();
         services.AddOptions<InvestigationLimits>();
+        services.AddOptions<ConversationOptions>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<SourceService>();
         services.AddScoped<InvestigationAgentRunner>();
-        services.AddScoped<IInvestigationService>(sp => new InFlightGate(new InvestigationService(
-            sp.GetRequiredService<InvestigationAgentRunner>(), sp.GetRequiredService<SourceService>())));
+        services.AddScoped<Conversation>();
+        services.AddScoped<IInvestigationService>(sp => new InFlightGate(ActivatorUtilities.CreateInstance<InvestigationService>(sp)));
         return services;
     }
 }

@@ -8,6 +8,12 @@ internal sealed class UnconfiguredInvestigationService : IInvestigationService
     public Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken) =>
         Task.FromResult<AssessmentResult>(new AssessmentResult.NotAssessed(NotAssessedReason.ModelUnavailable));
 
+    public ConversationStatus Conversation { get; } = new(0, 0, false);
+
+    public void StartNew()
+    {
+    }
+
     public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) =>
         Task.FromResult<SourceResult>(new SourceResult.Unavailable());
 }

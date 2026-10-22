@@ -47,6 +47,8 @@ internal sealed class AgentFixture : IDisposable
         time ?? TimeProvider.System,
         logger ?? NullLogger<InvestigationAgentRunner>.Instance);
 
+    public IInvestigationTool Tool(string name) => _provider.GetServices<IInvestigationTool>().Single(t => t.Name == name);
+
     public void Dispose() => _provider.Dispose();
 
     /// <summary>A <c>submit_assessment</c> call's arguments.</summary>
