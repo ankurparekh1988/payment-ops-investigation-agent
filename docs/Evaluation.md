@@ -85,4 +85,4 @@ All ten ended in a validated result, so the guard passed. Every root cause given
 - In both S3 questions it fetched the merchant profile twice with the same arguments; the repeat limit allows that.
 - The question about a merchant that doesn't exist now ends refused, so the person sees the out-of-scope notice rather than "no such merchant". Refusals no longer need evidence, and the model chose that outcome.
 - Confidence fell from high to medium in three assessed questions, as expected once each statement has to cite both data and knowledge for high. Refusals now always show low.
-- The slowest question took 23.0 s, above the 20 s p95 target for a full investigation. The action request needed one correction of its submission.
+- The slowest observed question took 23.0 s, exceeding the 20 s full-investigation target value. This single run doesn't estimate p95. The action request needed one correction of its submission.
