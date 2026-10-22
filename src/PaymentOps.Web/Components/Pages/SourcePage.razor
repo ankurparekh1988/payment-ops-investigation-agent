@@ -13,7 +13,7 @@
     case SourceResult.Found found:
         <h1>@found.Title</h1>
         <p>@found.SectionPath</p>
-        @((MarkupString)AnswerRenderer.RenderSection(found.Content))
+        @((MarkupString)SectionRenderer.RenderSection(found.Content))
         break;
     case SourceResult.Unavailable:
         <h1>Source unavailable</h1>

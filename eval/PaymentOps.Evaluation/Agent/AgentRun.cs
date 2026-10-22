@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Conversations;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Security;
 using PaymentOps.Knowledge.Corpus;
@@ -129,11 +130,11 @@ internal static class AgentRun
         }
     }
 
-    // The same chars ÷ 3 the history budget uses, over everything the request carried, so the two can be compared.
+    // The app's own estimate, over everything the request carried, so it can be compared with what was counted.
     private static long EstimatedTokens(IReadOnlyList<ChatMessage> messages, ChatOptions? options)
     {
         var chars = (options?.Instructions?.Length ?? 0)
-            + (options?.Tools?.OfType<AIFunction>().Sum(f => f.Name.Length + f.Description.Length + f.JsonSchema.GetRawText().Length) ?? 0)
+            + (options?.Tools?.OfType<AIFunction>().Sum(PromptSize.DefinitionChars) ?? 0)
             + messages.SelectMany(m => m.Contents).Sum(content => content switch
             {
                 TextContent text => text.Text.Length,
@@ -141,10 +142,8 @@ internal static class AgentRun
                 FunctionResultContent result => result.Result?.ToString()?.Length ?? 0,
                 _ => 0,
             });
-        return chars / HistoryCharsPerToken;
+        return PromptSize.Tokens(chars);
     }
-
-    private const int HistoryCharsPerToken = 3;
 
     /// <summary>A signed-in Ops Reader or Engineer, with or without Restricted knowledge access.</summary>
     private sealed record EvaluationUser(bool CanAccessRestrictedKnowledge, string Role) : IUserContext

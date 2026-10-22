@@ -10,23 +10,25 @@ namespace PaymentOps.Agent.Approvals;
 /// The only way a ticket is created: the owning Engineer's decision on a stored proposal. Approval time is the
 /// host's real clock; the data's investigation clock has no say in it.
 /// </summary>
-internal sealed class ApprovalService(ProposalStore proposals, IIncidentStore tickets, IUserContext user, TimeProvider time, ILogger<ApprovalService> logger)
+internal sealed class ApprovalService(ProposalStore proposals, IIncidentStore tickets, IUserContext user, ILogger<ApprovalService> logger)
     : IApprovalService
 {
     private const int MaxNoteLength = 500;
 
     public async Task<ApprovalResult> ApproveAsync(Guid proposalId, CancellationToken cancellationToken)
     {
-        if (Decidable(proposalId) is not { } proposal)
+        // Signed in and an Engineer now, then the owner's pending, unexpired proposal, checked and claimed in one step.
+        if (!MayDecide())
         {
-            return Refusal(proposalId);
+            return new ApprovalResult.NotAuthorized();
         }
 
-        if (!proposals.TryBeginExecute(proposalId))
+        if (!proposals.TryMove(proposalId, user.UserId, ProposalState.Pending, e => e with { State = ProposalState.Executing }, out var entry))
         {
-            return Refusal(proposalId);
+            return Refusal(entry);
         }
 
+        var proposal = entry!.Proposal;
         IncidentTicket ticket;
         try
         {
@@ -35,7 +37,7 @@ internal sealed class ApprovalService(ProposalStore proposals, IIncidentStore ti
         }
         catch (Exception ex)
         {
-            proposals.Revert(proposalId);
+            proposals.TryMove(proposalId, user.UserId, ProposalState.Executing, e => e with { State = ProposalState.Pending }, out _);
             ApprovalLog.StoreFailed(logger, proposal.InvestigationId, proposalId, ex);
             if (ex is OperationCanceledException)
             {
@@ -45,64 +47,41 @@ internal sealed class ApprovalService(ProposalStore proposals, IIncidentStore ti
             return new ApprovalResult.Unavailable();
         }
 
-        proposals.Complete(proposalId, ticket.Id);
+        proposals.TryMove(proposalId, user.UserId, ProposalState.Executing, e => e with { State = ProposalState.Executed, TicketId = ticket.Id }, out _);
         ApprovalLog.Decided(logger, proposal, "approved", null, ticket.Id, user.UserId);
         return new ApprovalResult.Created(ticket.Id);
     }
 
     public Task<ApprovalResult> RejectAsync(Guid proposalId, RejectionReason reason, string? note, CancellationToken cancellationToken)
     {
+        if (!MayDecide())
+        {
+            return Task.FromResult<ApprovalResult>(new ApprovalResult.NotAuthorized());
+        }
+
         // The note is the person's own text: it's never logged, and it's bounded before it's kept.
         var kept = note is { Length: > MaxNoteLength } ? note[..MaxNoteLength] : note;
-        if (!Enum.IsDefined(reason))
+        reason = Enum.IsDefined(reason) ? reason : RejectionReason.Other;
+        if (!proposals.TryMove(proposalId, user.UserId, ProposalState.Pending, e => e with { State = ProposalState.Rejected, Reason = reason, Note = kept }, out var entry))
         {
-            reason = RejectionReason.Other;
+            return Task.FromResult(Refusal(entry));
         }
 
-        if (Decidable(proposalId) is not { } proposal || !proposals.TryReject(proposalId, reason, kept))
-        {
-            return Task.FromResult(Refusal(proposalId));
-        }
-
-        ApprovalLog.Decided(logger, proposal, "rejected", reason, null, user.UserId);
+        ApprovalLog.Decided(logger, entry!.Proposal, "rejected", reason, null, user.UserId);
         return Task.FromResult<ApprovalResult>(new ApprovalResult.Rejected());
     }
 
-    // Checked in this order on every call, so nothing about a proposal leaks to someone who can't decide it.
-    private Proposal? Decidable(Guid proposalId)
+    private bool MayDecide() => user.IsAuthenticated && user.IsInRole(OpsRoles.Engineer);
+
+    // A missing proposal and someone else's are the same answer.
+    private static ApprovalResult Refusal(ProposalEntry? entry) => entry?.State switch
     {
-        if (!user.IsAuthenticated || !user.IsInRole(OpsRoles.Engineer))
-        {
-            return null;
-        }
-
-        return proposals.Find(proposalId) is { State: ProposalState.Pending } entry
-            && entry.Proposal.OwnerId == user.UserId
-            && entry.Proposal.ExpiresAt > time.GetUtcNow()
-            ? entry.Proposal
-            : null;
-    }
-
-    private ApprovalResult Refusal(Guid proposalId)
-    {
-        if (!user.IsAuthenticated || !user.IsInRole(OpsRoles.Engineer))
-        {
-            return new ApprovalResult.NotAuthorized();
-        }
-
-        if (proposals.Find(proposalId) is not { } entry || entry.Proposal.OwnerId != user.UserId)
-        {
-            return new ApprovalResult.NotFound();
-        }
-
-        return entry.State switch
-        {
-            ProposalState.Superseded => new ApprovalResult.Superseded(),
-            ProposalState.Executed => new ApprovalResult.AlreadyDecided(entry.TicketId),
-            ProposalState.Rejected or ProposalState.Executing => new ApprovalResult.AlreadyDecided(null),
-            _ => new ApprovalResult.Expired(),
-        };
-    }
+        null => new ApprovalResult.NotFound(),
+        ProposalState.Superseded => new ApprovalResult.Superseded(),
+        ProposalState.Expired => new ApprovalResult.Expired(),
+        ProposalState.Executed => new ApprovalResult.AlreadyDecided(entry.TicketId),
+        _ => new ApprovalResult.AlreadyDecided(null),
+    };
 
     private IncidentTicketContent Content(Proposal proposal)
     {

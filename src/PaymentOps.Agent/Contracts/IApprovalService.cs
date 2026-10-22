@@ -22,6 +22,19 @@ public enum RejectionReason
     Other,
 }
 
+/// <summary>How a reason reads, the same on the card and in what the agent is told next turn.</summary>
+public static class RejectionReasons
+{
+    public static string Describe(RejectionReason reason) => reason switch
+    {
+        RejectionReason.EvidenceDoesNotSupportIt => "the evidence doesn't support it",
+        RejectionReason.WrongMerchantsOrWindow => "wrong merchants or dates",
+        RejectionReason.NotAnIncident => "not an incident",
+        RejectionReason.AlreadyRaised => "already raised",
+        _ => "other",
+    };
+}
+
 /// <summary>What a decision did. A missing proposal and someone else's are the same <see cref="NotFound"/>.</summary>
 public abstract record ApprovalResult
 {

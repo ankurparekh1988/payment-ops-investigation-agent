@@ -98,7 +98,7 @@ public sealed class ApprovalTests : IDisposable
             _proposals);
     }
 
-    private ApprovalService Approvals(IUserContext user) => new(_proposals, _tickets, user, _time, _log);
+    private ApprovalService Approvals(IUserContext user) => new(_proposals, _tickets, user, _log);
 
     private async Task<TicketProposal> ProposeAsync(IUserContext user, Conversation? conversation = null)
     {
@@ -354,7 +354,7 @@ public sealed class ApprovalTests : IDisposable
     }
 
     private string History(Conversation conversation) =>
-        string.Join("\n", HistoryProjection.Build(conversation.Turns, 100_000, _proposals.NoteFor).Messages.Select(m => m.Text));
+        string.Join("\n", HistoryProjection.Build(conversation.Turns, 100_000, _proposals.NoteFor).Select(m => m.Text));
 
     /// <summary>The real store, failing once on request.</summary>
     private sealed class FlakyIncidentStore(IIncidentStore inner) : IIncidentStore

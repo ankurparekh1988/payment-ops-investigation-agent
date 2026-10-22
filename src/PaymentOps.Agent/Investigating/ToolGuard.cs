@@ -54,9 +54,9 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
             : new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.");
         var (json, gap) = Record(tool, result);
         progress?.Report(new InvestigationProgress.ToolFinished(tool.Name, label, result is ToolResult.Ok, Records(result), gap?.Wording));
-        if (turn.Stopped)
+        if (result is ToolResult.Failed { Code: ToolErrorCode.InvalidArgument or ToolErrorCode.RangeTooLarge } && TooManyCorrections())
         {
-            progress?.Report(new InvestigationProgress.LimitReached());
+            Stop();
         }
 
         return json;
@@ -64,12 +64,11 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
 
     private void Stop()
     {
-        if (!turn.Stopped)
+        if (turn.Stop())
         {
             progress?.Report(new InvestigationProgress.LimitReached());
         }
 
-        turn.Stop();
         ToolLoop.End();
     }
 
@@ -159,12 +158,6 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
         if (tool.Source != DataSources.Knowledge && (result is ToolResult.Ok or ToolResult.Failed { Code: ToolErrorCode.NotFound } || gap?.Kind is ObservedGapKind.Unavailable or ObservedGapKind.Timeout))
         {
             turn.StructuredOutcome(answered: gap is null);
-        }
-
-        if (result is ToolResult.Failed { Code: ToolErrorCode.InvalidArgument or ToolErrorCode.RangeTooLarge } && TooManyCorrections())
-        {
-            turn.Stop();
-            ToolLoop.End();
         }
 
         return (ToolJson.Serialize(result), gap);

@@ -25,8 +25,8 @@ internal sealed class ProposalStore(TimeProvider time, IOptions<ApprovalOptions>
         {
             lock (_lock)
             {
-                Purge();
-                return _entries.Values.Count(e => e.State == ProposalState.Pending);
+                var now = time.GetUtcNow();
+                return _entries.Values.Count(e => State(e, now) == ProposalState.Pending);
             }
         }
     }
@@ -39,10 +39,11 @@ internal sealed class ProposalStore(TimeProvider time, IOptions<ApprovalOptions>
     {
         lock (_lock)
         {
-            Purge();
-            var superseded = _entries.Values.FirstOrDefault(e => e.State == ProposalState.Pending && e.Proposal.ConversationId == conversationId);
-            var pending = _entries.Values.Count(e => e.State == ProposalState.Pending) - (superseded is null ? 0 : 1);
-            if (pending >= _options.MaxPendingProposals)
+            var now = time.GetUtcNow();
+            Purge(now);
+            var pending = _entries.Values.Where(e => State(e, now) == ProposalState.Pending).ToList();
+            var superseded = pending.FirstOrDefault(e => e.Proposal.ConversationId == conversationId);
+            if (pending.Count - (superseded is null ? 0 : 1) >= _options.MaxPendingProposals)
             {
                 return null;
             }
@@ -52,51 +53,53 @@ internal sealed class ProposalStore(TimeProvider time, IOptions<ApprovalOptions>
                 _entries[superseded.Proposal.Id] = superseded with { State = ProposalState.Superseded };
             }
 
-            var now = time.GetUtcNow();
             var id = Guid.NewGuid();
             var shown = draft with { ProposalId = id, Status = ProposalStatus.Pending, ExpiresAt = now + _options.ProposalLifetime };
-            var proposal = new Proposal(id, investigationId, conversationId, ownerId, now, now + _options.ProposalLifetime, _model, shown);
-            _entries[id] = new ProposalEntry(proposal, ProposalState.Pending, null, null, null);
+            _entries[id] = new ProposalEntry(new Proposal(id, investigationId, conversationId, ownerId, now, now + _options.ProposalLifetime, _model, shown), ProposalState.Pending, null, null, null);
             _byInvestigation[investigationId] = id;
             return shown;
         }
     }
 
-    public ProposalEntry? Find(Guid id)
+    /// <summary>
+    /// Moves the owner's proposal from <paramref name="from"/> in one step. On failure, <paramref name="entry"/> is where
+    /// it stands now, or null when there's no such proposal for this owner, so nothing about anyone else's leaks.
+    /// </summary>
+    public bool TryMove(Guid id, string ownerId, ProposalState from, Func<ProposalEntry, ProposalEntry> move, out ProposalEntry? entry)
     {
         lock (_lock)
         {
-            Purge();
-            return _entries.GetValueOrDefault(id);
+            if (!_entries.TryGetValue(id, out var stored) || stored.Proposal.OwnerId != ownerId)
+            {
+                entry = null;
+                return false;
+            }
+
+            entry = stored with { State = State(stored, time.GetUtcNow()) };
+            if (entry.State != from)
+            {
+                return false;
+            }
+
+            _entries[id] = entry = move(entry);
+            return true;
         }
     }
-
-    /// <summary>Pending and unexpired becomes executing; anything else is left as it is.</summary>
-    public bool TryBeginExecute(Guid id) => TryMove(id, ProposalState.Pending, e => e with { State = ProposalState.Executing });
-
-    public void Complete(Guid id, string ticketId) => TryMove(id, ProposalState.Executing, e => e with { State = ProposalState.Executed, TicketId = ticketId });
-
-    /// <summary>The ticket store failed: back to pending, so the same key can be tried again.</summary>
-    public void Revert(Guid id) => TryMove(id, ProposalState.Executing, e => e with { State = ProposalState.Pending });
-
-    public bool TryReject(Guid id, RejectionReason reason, string? note) =>
-        TryMove(id, ProposalState.Pending, e => e with { State = ProposalState.Rejected, Reason = reason, Note = note });
 
     /// <summary>What the agent is told about this investigation's proposal in a later turn, if anything.</summary>
     public string? NoteFor(Guid investigationId)
     {
         lock (_lock)
         {
-            Purge();
             if (!_byInvestigation.TryGetValue(investigationId, out var id) || !_entries.TryGetValue(id, out var entry))
             {
                 return null;
             }
 
-            return entry.State switch
+            return State(entry, time.GetUtcNow()) switch
             {
                 ProposalState.Executed => $"Ticket {entry.TicketId} was created.",
-                ProposalState.Rejected => $"The proposed ticket was rejected: {Words(entry.Reason!.Value)}.",
+                ProposalState.Rejected => $"The proposed ticket was rejected: {RejectionReasons.Describe(entry.Reason!.Value)}.",
                 ProposalState.Expired => "The proposed ticket expired unapproved.",
                 ProposalState.Superseded => "The proposed ticket was replaced by a later one.",
                 _ => "The proposed ticket is awaiting an Operations Engineer's decision.",
@@ -104,48 +107,20 @@ internal sealed class ProposalStore(TimeProvider time, IOptions<ApprovalOptions>
         }
     }
 
-    private bool TryMove(Guid id, ProposalState from, Func<ProposalEntry, ProposalEntry> move)
-    {
-        lock (_lock)
-        {
-            Purge();
-            if (!_entries.TryGetValue(id, out var entry) || entry.State != from)
-            {
-                return false;
-            }
+    // Expiry is judged when read, so a pending proposal stops being approvable the moment its time is up.
+    private static ProposalState State(ProposalEntry entry, DateTimeOffset now) =>
+        entry.State == ProposalState.Pending && now >= entry.Proposal.ExpiresAt ? ProposalState.Expired : entry.State;
 
-            _entries[id] = move(entry);
-            return true;
+    // Under the lock, on each new proposal. Settled entries are kept one more lifetime past expiry, so a late click
+    // or the next turn still learns the outcome, then they go.
+    private void Purge(DateTimeOffset now)
+    {
+        foreach (var entry in _entries.Values.Where(e => e.State != ProposalState.Executing && now >= e.Proposal.ExpiresAt + _options.ProposalLifetime).ToList())
+        {
+            _entries.Remove(entry.Proposal.Id);
+            _byInvestigation.Remove(entry.Proposal.InvestigationId);
         }
     }
-
-    // Under the lock. Pending proposals past their expiry stop counting; decided ones are kept one more lifetime
-    // so a late click or the next turn still learns the outcome, then they go.
-    private void Purge()
-    {
-        var now = time.GetUtcNow();
-        foreach (var entry in _entries.Values.ToList())
-        {
-            if (entry.State == ProposalState.Pending && now >= entry.Proposal.ExpiresAt)
-            {
-                _entries[entry.Proposal.Id] = entry with { State = ProposalState.Expired };
-            }
-            else if (entry.State is not (ProposalState.Pending or ProposalState.Executing) && now >= entry.Proposal.ExpiresAt + _options.ProposalLifetime)
-            {
-                _entries.Remove(entry.Proposal.Id);
-                _byInvestigation.Remove(entry.Proposal.InvestigationId);
-            }
-        }
-    }
-
-    private static string Words(RejectionReason reason) => reason switch
-    {
-        RejectionReason.EvidenceDoesNotSupportIt => "the evidence doesn't support it",
-        RejectionReason.WrongMerchantsOrWindow => "wrong merchants or dates",
-        RejectionReason.NotAnIncident => "not an incident",
-        RejectionReason.AlreadyRaised => "already raised",
-        _ => "other",
-    };
 
     private static string Model(AiRelease release)
     {

@@ -45,10 +45,7 @@ internal static class ProgressLabels
     private static string? Id(string? value) => ToolArguments.TryId(value, "id", out var id, out _) ? id : null;
 
     private static string? Dates(string? start, string? end) =>
-        Date(start) is { } from && Date(end) is { } to
+        ToolArguments.TryDate(start, out var from) && ToolArguments.TryDate(end, out var to)
             ? string.Create(CultureInfo.InvariantCulture, $"{from:d MMM}–{to:d MMM}")
             : null;
-
-    private static DateOnly? Date(string? value) =>
-        DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 }

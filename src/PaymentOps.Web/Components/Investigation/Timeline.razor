@@ -2,13 +2,16 @@
 @using PaymentOps.Agent.Contracts
 
 @* Server-written events only. One polite live line announces the latest step, not every row. *@
+@{
+    var rows = Rows();
+}
 <ol class="timeline">
-    @foreach (var row in Rows())
+    @foreach (var row in rows)
     {
         <li>@row</li>
     }
 </ol>
-<p class="visually-hidden" aria-live="polite">@Rows().LastOrDefault()</p>
+<p class="visually-hidden" aria-live="polite">@rows.LastOrDefault()</p>
 
 @code {
     [Parameter, EditorRequired]

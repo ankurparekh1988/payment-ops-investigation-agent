@@ -25,7 +25,7 @@ internal sealed class InvestigationService(
         get
         {
             var (history, ended) = Plan();
-            return new ConversationStatus(conversation.Turns.Count, history.Carried, ended);
+            return new ConversationStatus(conversation.Turns.Count, history.Count / 2, ended);
         }
     }
 
@@ -38,7 +38,7 @@ internal sealed class InvestigationService(
             return new AssessmentResult.NotAssessed(NotAssessedReason.ConversationLimit) { InvestigationId = investigationId };
         }
 
-        var result = await agent.InvestigateAsync(question, history.Messages, progress, investigationId, cancellationToken);
+        var result = await agent.InvestigateAsync(question, history, progress, investigationId, cancellationToken);
 
         // A cancel that lands after the agent finished still keeps nothing: no proposal, no turn.
         if (cancellationToken.IsCancellationRequested)
@@ -68,12 +68,12 @@ internal sealed class InvestigationService(
     public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) => sources.GetSourceAsync(sectionKey, cancellationToken);
 
     // The history the next question would carry, and whether there can be a next question at all.
-    private ((IReadOnlyList<ChatMessage> Messages, int Carried) History, bool Ended) Plan()
+    private (IReadOnlyList<ChatMessage> History, bool Ended) Plan()
     {
         var turns = conversation.Turns;
-        var budget = HistoryProjection.HistoryBudgetChars(conversationOptions.Value, limits.Value, agent.FixedPromptChars());
+        var budget = HistoryProjection.HistoryBudgetChars(conversationOptions.Value, limits.Value, agent.FixedPromptChars);
         var history = HistoryProjection.Build(turns, budget, proposals.NoteFor);
-        var ended = turns.Count >= conversationOptions.Value.MaxQuestions || (turns.Count > 0 && history.Carried == 0);
+        var ended = turns.Count >= conversationOptions.Value.MaxQuestions || (turns.Count > 0 && history.Count == 0);
         return (history, ended);
     }
 }

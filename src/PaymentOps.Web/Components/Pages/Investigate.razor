@@ -13,12 +13,12 @@
 <h1>Investigate</h1>
 
 <p>Questions in this conversation carry over as context until you start a new investigation or reload the page.</p>
-<ConversationNotice Status="Investigation.Conversation" />
+<ConversationNotice Status="_conversation" MaxQuestionLength="Limits.MaxQuestionLength" />
 
 <form @onsubmit="InvestigateAsync">
     <label for="question">Question</label>
     <textarea id="question" @bind="_question" @bind:event="oninput" rows="3" maxlength="@Limits.MaxQuestionLength" disabled="@_busy"></textarea>
-    <button type="submit" disabled="@(_busy || string.IsNullOrWhiteSpace(_question) || Investigation.Conversation.Ended)">Investigate</button>
+    <button type="submit" disabled="@(_busy || string.IsNullOrWhiteSpace(_question) || _conversation.Ended)">Investigate</button>
     @if (_busy)
     {
         <button type="button" @onclick="Cancel">Cancel</button>
@@ -47,7 +47,7 @@
         }
         else
         {
-            <AssessmentView Result="_result" CanDecide="CanDecide" Deciding="_deciding" RejectedFor="_rejectedFor" Approve="ApproveAsync" Reject="RejectAsync" />
+            <AssessmentView Result="_result" Deciding="_deciding" Approve="ApproveAsync" Reject="RejectAsync" />
             @if (_decisionFailed)
             {
                 <p role="alert">The ticket couldn't be created right now. The proposal is still pending; please try again.</p>
@@ -74,11 +74,10 @@
     private AssessmentResult? _result;
     private ElementReference _resultHeading;
     private bool _deciding;
-    private RejectionReason? _rejectedFor;
     private bool _decisionFailed;
 
-    // The server decides who may approve; this only hides buttons nobody could use.
-    private bool CanDecide => CurrentUser.IsInRole(OpsRoles.Engineer);
+    // Read when it can change, not on every render: each read projects the conversation's history.
+    private ConversationStatus _conversation = new(0, 0, false);
 
     // Owned by the page, so closing the tab or leaving cancels the investigation.
     private CancellationTokenSource? _run;
@@ -87,14 +86,13 @@
     private async Task InvestigateAsync()
     {
         // Re-checked here: a disabled button is only the visible half.
-        if (_busy || string.IsNullOrWhiteSpace(_question) || Investigation.Conversation.Ended)
+        if (_busy || string.IsNullOrWhiteSpace(_question) || _conversation.Ended)
         {
             return;
         }
 
         _busy = true;
         _result = null;
-        _rejectedFor = null;
         _events.Clear();
         _run = new CancellationTokenSource();
         try
@@ -107,16 +105,11 @@
             _run.Dispose();
             _run = null;
             _busy = false;
+            _conversation = Investigation.Conversation;
         }
     }
 
     private void Cancel() => _run?.Cancel();
-
-    private TicketProposal Retry(TicketProposal proposal)
-    {
-        _decisionFailed = true;
-        return proposal;
-    }
 
     private Task ApproveAsync() => DecideAsync(id => Approvals.ApproveAsync(id, CancellationToken.None), null);
 
@@ -135,18 +128,24 @@
         _decisionFailed = false;
         try
         {
-            var status = await decide(id) switch
+            var outcome = await decide(id);
+
+            // The store failed; the proposal is still pending, so the card stays as it is.
+            _decisionFailed = outcome is ApprovalResult.Unavailable;
+            _result = assessed with
             {
-                ApprovalResult.Created created => proposal with { Status = ProposalStatus.Approved, TicketId = created.TicketId },
-                ApprovalResult.Rejected => proposal with { Status = ProposalStatus.Rejected },
-                ApprovalResult.AlreadyDecided decided => proposal with { Status = decided.TicketId is null ? ProposalStatus.Rejected : ProposalStatus.Approved, TicketId = decided.TicketId },
-                ApprovalResult.Expired => proposal with { Status = ProposalStatus.Expired },
-                ApprovalResult.Superseded => proposal with { Status = ProposalStatus.Superseded },
-                ApprovalResult.Unavailable => Retry(proposal),
-                _ => proposal with { Status = ProposalStatus.Unavailable },
+                Proposal = outcome switch
+                {
+                    ApprovalResult.Created created => proposal with { Status = ProposalStatus.Approved, TicketId = created.TicketId },
+                    ApprovalResult.Rejected => proposal with { Status = ProposalStatus.Rejected, Rejection = reason },
+                    ApprovalResult.AlreadyDecided decided => proposal with { Status = decided.TicketId is null ? ProposalStatus.Rejected : ProposalStatus.Approved, TicketId = decided.TicketId },
+                    ApprovalResult.Expired => proposal with { Status = ProposalStatus.Expired },
+                    ApprovalResult.Superseded => proposal with { Status = ProposalStatus.Superseded },
+                    ApprovalResult.Unavailable => proposal,
+                    _ => proposal with { Status = ProposalStatus.Unavailable },
+                },
             };
-            _rejectedFor = status.Status == ProposalStatus.Rejected ? reason : null;
-            _result = assessed with { Proposal = status };
+            _conversation = Investigation.Conversation;
         }
         finally
         {
@@ -162,10 +161,14 @@
         }
 
         Investigation.StartNew();
+        _conversation = Investigation.Conversation;
         _question = string.Empty;
         _result = null;
         _events.Clear();
     }
+
+    // The conversation belongs to the circuit, so coming back to the page finds it as it was.
+    protected override void OnInitialized() => _conversation = Investigation.Conversation;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

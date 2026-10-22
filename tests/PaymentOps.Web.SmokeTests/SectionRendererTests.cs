@@ -2,11 +2,11 @@ using PaymentOps.Web.Rendering;
 
 namespace PaymentOps.Web.SmokeTests;
 
-public sealed class AnswerRendererTests
+public sealed class SectionRendererTests
 {
     [Fact]
     public void A_source_url_escapes_the_key() =>
-        Assert.Equal("/sources/a%2Fb%3Fc", AnswerRenderer.SourceUrl("a/b?c"));
+        Assert.Equal("/sources/a%2Fb%3Fc", SectionRenderer.SourceUrl("a/b?c"));
 
     [Theory]
     [InlineData("<script>alert(1)</script>")]
@@ -19,7 +19,7 @@ public sealed class AnswerRendererTests
     [InlineData("[S1](https://evil.example)")]
     public void Nothing_in_a_section_becomes_markup_beyond_the_allowlist(string markdown)
     {
-        var html = AnswerRenderer.RenderSection(markdown);
+        var html = SectionRenderer.RenderSection(markdown);
 
         Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("<img", html, StringComparison.OrdinalIgnoreCase);
@@ -29,7 +29,7 @@ public sealed class AnswerRendererTests
     [Fact]
     public void Allowed_structure_is_rendered()
     {
-        var html = AnswerRenderer.RenderSection("## Steps\n\n- **one**\n- *two*\n\n1. first\n\n`code`");
+        var html = SectionRenderer.RenderSection("## Steps\n\n- **one**\n- *two*\n\n1. first\n\n`code`");
 
         Assert.Contains("<h3>Steps</h3>", html, StringComparison.Ordinal);
         Assert.Contains("<ul><li><strong>one</strong></li><li><em>two</em></li></ul>", html, StringComparison.Ordinal);
@@ -40,13 +40,13 @@ public sealed class AnswerRendererTests
     [Fact]
     public void Text_is_encoded()
     {
-        Assert.Equal("<p>a &lt; b &amp; c</p>", AnswerRenderer.RenderSection("a < b & c"));
+        Assert.Equal("<p>a &lt; b &amp; c</p>", SectionRenderer.RenderSection("a < b & c"));
     }
 
     [Fact]
     public void Section_content_never_links()
     {
-        var html = AnswerRenderer.RenderSection("See [the guide](https://example.com) and [S1].");
+        var html = SectionRenderer.RenderSection("See [the guide](https://example.com) and [S1].");
 
         Assert.DoesNotContain("<a ", html, StringComparison.Ordinal);
         Assert.Contains("the guide", html, StringComparison.Ordinal);

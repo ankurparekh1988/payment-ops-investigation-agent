@@ -31,4 +31,8 @@ public sealed record TicketProposal(
     IReadOnlyList<Citation> Citations,
     string? ProcessorReference,
     DateTimeOffset? ExpiresAt,
-    string? TicketId);
+    string? TicketId)
+{
+    /// <summary>Why the owner rejected it, once they have.</summary>
+    public RejectionReason? Rejection { get; init; }
+}

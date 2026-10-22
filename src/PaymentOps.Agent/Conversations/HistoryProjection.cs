@@ -5,6 +5,7 @@ using Microsoft.Extensions.AI;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Tools;
 
 namespace PaymentOps.Agent.Conversations;
 
@@ -14,21 +15,18 @@ namespace PaymentOps.Agent.Conversations;
 /// </summary>
 internal static class HistoryProjection
 {
-    /// <summary>A conservative estimate; the live run compares it with the recorded input tokens.</summary>
-    public const int CharsPerToken = 3;
-
     public const string Marker = "Earlier context, not evidence for this question.";
 
     /// <summary>What's left for history after the current turn's instructions, question, tool results and output are reserved.</summary>
     public static int HistoryBudgetChars(ConversationOptions options, InvestigationLimits limits, int fixedPromptChars)
     {
-        var reserved = Tokens(fixedPromptChars) + Tokens(limits.MaxQuestionLength)
+        var reserved = PromptSize.Tokens(fixedPromptChars) + PromptSize.Tokens(limits.MaxQuestionLength)
             + (limits.MaxToolCalls * options.ToolResultAllowanceTokens) + limits.MaxOutputTokens;
-        return Math.Max(0, options.InputBudgetTokens - reserved) * CharsPerToken;
+        return Math.Max(0, options.InputBudgetTokens - reserved) * PromptSize.CharsPerToken;
     }
 
-    /// <summary>The newest turns that fit the budget, oldest first. Stops at the first turn that doesn't fit.</summary>
-    public static (IReadOnlyList<ChatMessage> Messages, int Carried) Build(IReadOnlyList<ConversationTurn> turns, int budgetChars, Func<Guid, string?> approvalNote)
+    /// <summary>The newest turns that fit the budget, oldest first, two messages each. Stops at the first turn that doesn't fit.</summary>
+    public static IReadOnlyList<ChatMessage> Build(IReadOnlyList<ConversationTurn> turns, int budgetChars, Func<Guid, string?> approvalNote)
     {
         var carried = new List<ChatMessage>();
         var used = 0;
@@ -45,7 +43,7 @@ internal static class HistoryProjection
             carried.InsertRange(0, [new ChatMessage(ChatRole.User, turn.Question), new ChatMessage(ChatRole.Assistant, answer)]);
         }
 
-        return (carried, carried.Count / 2);
+        return carried;
     }
 
     private static string Answer(AssessmentResult result, string? note)
@@ -57,7 +55,7 @@ internal static class HistoryProjection
                 text.AppendLine("The question was refused as outside what this agent investigates.");
                 break;
             case AssessmentResult.Assessed a:
-                text.AppendLine(CultureInfo.InvariantCulture, $"Outcome: {Word(a.Outcome)}. Confidence: {Word(a.Confidence)}.");
+                text.AppendLine(CultureInfo.InvariantCulture, $"Outcome: {ToolJson.Word(a.Outcome)}. Confidence: {ToolJson.Word(a.Confidence)}.");
                 text.Append("Summary: ").AppendLine(Line(a.Summary));
                 foreach (var claim in a.Claims)
                 {
@@ -66,7 +64,7 @@ internal static class HistoryProjection
 
                 if (a.RootCause is { } root)
                 {
-                    text.Append(CultureInfo.InvariantCulture, $"Root cause ({Word(root.Label)}): ").AppendLine(Line(root.Statement));
+                    text.Append(CultureInfo.InvariantCulture, $"Root cause ({ToolJson.Word(root.Label)}): ").AppendLine(Line(root.Statement));
                 }
 
                 foreach (var gap in a.Gaps)
@@ -103,9 +101,4 @@ internal static class HistoryProjection
 
         return line.ToString();
     }
-
-    private static string Word<T>(T value)
-        where T : struct, Enum => value.ToString().ToLowerInvariant();
-
-    private static int Tokens(int chars) => (chars + CharsPerToken - 1) / CharsPerToken;
 }

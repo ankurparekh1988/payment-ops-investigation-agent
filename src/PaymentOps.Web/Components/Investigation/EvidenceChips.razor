@@ -11,7 +11,7 @@
         }
         @foreach (var citation in Statement.Citations)
         {
-            <li class="chip chip-source"><a href="@AnswerRenderer.SourceUrl(citation.SectionKey)">@citation.Title</a></li>
+            <li class="chip chip-source"><a href="@SectionRenderer.SourceUrl(citation.SectionKey)">@citation.Title</a></li>
         }
     </ul>
 }

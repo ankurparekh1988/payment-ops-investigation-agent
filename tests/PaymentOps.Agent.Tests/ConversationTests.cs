@@ -41,7 +41,7 @@ public sealed partial class ConversationTests
     [Fact]
     public void Projection_never_contains_tool_messages_or_section_ids()
     {
-        var (messages, _) = HistoryProjection.Build([Turn(1), Turn(2, new AssessmentResult.NotAssessed(NotAssessedReason.LimitReached))], 100_000, _ => null);
+        var messages = HistoryProjection.Build([Turn(1), Turn(2, new AssessmentResult.NotAssessed(NotAssessedReason.LimitReached))], 100_000, _ => null);
 
         Assert.All(messages, m => Assert.Contains(m.Role, new[] { ChatRole.User, ChatRole.Assistant }));
         Assert.All(messages, m => Assert.All(m.Contents, c => Assert.IsType<TextContent>(c)));
@@ -54,7 +54,7 @@ public sealed partial class ConversationTests
     [Fact]
     public void Each_earlier_turn_is_marked_as_context_not_evidence()
     {
-        var (messages, _) = HistoryProjection.Build([Turn(1), Turn(2, new AssessmentResult.NotAssessed(NotAssessedReason.LimitReached))], 100_000, _ => null);
+        var messages = HistoryProjection.Build([Turn(1), Turn(2, new AssessmentResult.NotAssessed(NotAssessedReason.LimitReached))], 100_000, _ => null);
 
         Assert.Equal(["Question 1?", "Question 2?"], messages.Where(m => m.Role == ChatRole.User).Select(m => m.Text));
         Assert.All(messages.Where(m => m.Role == ChatRole.Assistant), m => Assert.StartsWith("Earlier context, not evidence for this question.", m.Text, StringComparison.Ordinal));
@@ -64,11 +64,11 @@ public sealed partial class ConversationTests
     public void Only_the_newest_turns_that_fit_are_carried()
     {
         var turns = Enumerable.Range(1, 5).Select(i => Turn(i)).ToList();
-        var oneTurn = HistoryProjection.Build([turns[0]], 100_000, _ => null).Messages.Sum(m => m.Text.Length);
+        var oneTurn = HistoryProjection.Build([turns[0]], 100_000, _ => null).Sum(m => m.Text.Length);
 
-        var (messages, carried) = HistoryProjection.Build(turns, (2 * oneTurn) + 10, _ => null);
+        var messages = HistoryProjection.Build(turns, (2 * oneTurn) + 10, _ => null);
 
-        Assert.Equal(2, carried);
+        Assert.Equal(4, messages.Count);
         Assert.Equal(["Question 4?", "Question 5?"], messages.Where(m => m.Role == ChatRole.User).Select(m => m.Text));
     }
 
@@ -77,7 +77,7 @@ public sealed partial class ConversationTests
     {
         var turn = Turn(1);
 
-        var (messages, _) = HistoryProjection.Build([turn], 100_000, id => id == turn.Result.InvestigationId ? "Ticket INC-0001 was created." : null);
+        var messages = HistoryProjection.Build([turn], 100_000, id => id == turn.Result.InvestigationId ? "Ticket INC-0001 was created." : null);
 
         Assert.EndsWith("Ticket INC-0001 was created.", messages[1].Text, StringComparison.Ordinal);
     }
@@ -201,7 +201,7 @@ public sealed partial class ConversationTests
             .. processors.Select(p => (ToolNames.ErrorEvents, new Dictionary<string, object?> { ["processor_id"] = p, ["start_date"] = Start, ["end_date"] = End })),
             (ToolNames.KnowledgeSearch, new Dictionary<string, object?> { ["query"] = "settlement" }),
         ];
-        var allowanceChars = new ConversationOptions().ToolResultAllowanceTokens * HistoryProjection.CharsPerToken;
+        var allowanceChars = new ConversationOptions().ToolResultAllowanceTokens * PromptSize.CharsPerToken;
 
         foreach (var (tool, arguments) in calls)
         {

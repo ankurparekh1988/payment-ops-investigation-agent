@@ -53,7 +53,7 @@
 
         @if (assessed.Proposal is { } proposal)
         {
-            <TicketCard Proposal="proposal" CanDecide="CanDecide" Deciding="Deciding" RejectedFor="RejectedFor" Approve="Approve" Reject="Reject" />
+            <TicketCard Proposal="proposal" Deciding="Deciding" Approve="Approve" Reject="Reject" />
         }
         else if (assessed.ProposalWithheld)
         {
@@ -80,13 +80,7 @@
     public AssessmentResult Result { get; set; } = default!;
 
     [Parameter]
-    public bool CanDecide { get; set; }
-
-    [Parameter]
     public bool Deciding { get; set; }
-
-    [Parameter]
-    public RejectionReason? RejectedFor { get; set; }
 
     [Parameter]
     public EventCallback Approve { get; set; }

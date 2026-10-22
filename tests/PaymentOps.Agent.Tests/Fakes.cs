@@ -10,63 +10,18 @@ using PaymentOps.Tools.Knowledge;
 
 namespace PaymentOps.Agent.Tests;
 
-internal sealed class FakeChatClient(Func<IList<ChatMessage>, ChatOptions?, CancellationToken, Task<ChatResponse>> respond) : IChatClient
-{
-    public int Calls { get; private set; }
-
-    public ChatOptions? LastOptions { get; private set; }
-
-    public static FakeChatClient Returning(ChatResponse response) => new((_, _, _) => Task.FromResult(response));
-
-    public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        Calls++;
-        LastOptions = options;
-        return await respond([.. messages], options, cancellationToken);
-    }
-
-    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
-
-    public object? GetService(Type serviceType, object? serviceKey = null) => null;
-
-    public void Dispose()
-    {
-    }
-}
-
 internal sealed class FakeKnowledgeLookup(Func<KnowledgeAccess, CancellationToken, Task<IReadOnlyList<RetrievedSection>>> retrieve) : IKnowledgeLookup
 {
-    public int Retrievals { get; private set; }
-
-    public KnowledgeAccess? LastAccess { get; private set; }
-
     public Func<string, KnowledgeAccess, CancellationToken, Task<RetrievedSection?>> Find { get; init; } = (_, _, _) => Task.FromResult<RetrievedSection?>(null);
 
     public static FakeKnowledgeLookup Returning(params RetrievedSection[] sections) =>
         new((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>(sections));
 
-    public Task<IReadOnlyList<RetrievedSection>> RetrieveAsync(string question, KnowledgeAccess access, CancellationToken cancellationToken)
-    {
-        Retrievals++;
-        LastAccess = access;
-        return retrieve(access, cancellationToken);
-    }
+    public Task<IReadOnlyList<RetrievedSection>> RetrieveAsync(string question, KnowledgeAccess access, CancellationToken cancellationToken) =>
+        retrieve(access, cancellationToken);
 
     public Task<RetrievedSection?> FindAsync(string sectionKey, KnowledgeAccess access, CancellationToken cancellationToken) =>
         Find(sectionKey, access, cancellationToken);
-}
-
-/// <summary>Stands in for the model endpoint over HTTP: records the request and answers with canned JSON.</summary>
-internal sealed class StubModelHandler(HttpStatusCode status, string body) : HttpMessageHandler
-{
-    public List<(HttpRequestMessage Request, string Body)> Requests { get; } = [];
-
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        Requests.Add((request, request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken)));
-        return new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-    }
 }
 
 internal sealed class FakePipelineResponse(int status, string body) : PipelineResponse

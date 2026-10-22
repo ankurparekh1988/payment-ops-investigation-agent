@@ -13,7 +13,7 @@ namespace PaymentOps.Web.Rendering;
 /// Turns corpus Markdown into HTML from an explicit allowlist. Text is always encoded, and there are
 /// no links, images, raw HTML or targets: the corpus never chooses markup.
 /// </summary>
-internal static class AnswerRenderer
+internal static class SectionRenderer
 {
     private static readonly HtmlEncoder Encoder = HtmlEncoder.Default;
 

@@ -138,10 +138,17 @@ internal sealed class TurnState
         }
     }
 
-    public void Stop()
+    /// <summary>Stops the turn; true only the first time, so the stop is reported once however it was reached.</summary>
+    public bool Stop()
     {
+        if (Stopped)
+        {
+            return false;
+        }
+
         Stopped = true;
         AddGap(ObservedGap.LimitReached);
+        return true;
     }
 
     public void Accept(AssessmentSubmission submission) => Accepted = submission;

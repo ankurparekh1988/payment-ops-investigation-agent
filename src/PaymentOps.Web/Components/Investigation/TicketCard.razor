@@ -1,6 +1,7 @@
 @using PaymentOps.Agent.Contracts
 
-@* The proposal as the server stored it. Model-written title and summary are bound as text. *@
+@* The proposal as the server stored it. Only its owning Engineer ever sees it pending; the server checks again on
+   every decision. Model-written title and summary are bound as text. *@
 <section class="ticket-card" aria-labelledby="ticket-heading">
     <h3 id="ticket-heading">Proposed incident ticket</h3>
     <p class="ticket-title">@Proposal.Title</p>
@@ -20,13 +21,13 @@
         case ProposalStatus.Draft:
             <p role="note">Draft prepared. An Operations Engineer must run their own investigation before a ticket can be created.</p>
             break;
-        case ProposalStatus.Pending when CanDecide:
+        case ProposalStatus.Pending:
             <p>Can be approved until @Proposal.ExpiresAt?.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) UTC. Approving creates the ticket as shown.</p>
             <label for="reject-reason">Reason to reject</label>
             <select id="reject-reason" @bind="_reason" disabled="@Deciding">
                 @foreach (var reason in Enum.GetValues<RejectionReason>())
                 {
-                    <option value="@reason">@Words(reason)</option>
+                    <option value="@reason">@RejectionReasons.Describe(reason)</option>
                 }
             </select>
             <label for="reject-note">Note (optional)</label>
@@ -34,14 +35,11 @@
             <button type="button" @onclick="Approve" disabled="@Deciding">Approve</button>
             <button type="button" @onclick="RejectAsync" disabled="@Deciding">Reject</button>
             break;
-        case ProposalStatus.Pending:
-            <p role="note">Awaiting the owning Operations Engineer's decision.</p>
-            break;
         case ProposalStatus.Approved:
             <p role="status">Ticket @Proposal.TicketId created.</p>
             break;
         case ProposalStatus.Rejected:
-            <p role="status">Rejected@(RejectedFor is { } why ? $": {Words(why)}" : string.Empty).</p>
+            <p role="status">Rejected@(Proposal.Rejection is { } why ? $": {RejectionReasons.Describe(why)}" : string.Empty).</p>
             break;
         case ProposalStatus.Unavailable:
             <p role="note">This proposal can't be approved right now. Run the investigation again later to propose it again.</p>
@@ -62,15 +60,8 @@
     [Parameter, EditorRequired]
     public TicketProposal Proposal { get; set; } = default!;
 
-    /// <summary>The viewer owns a pending proposal; the server checks again on every decision.</summary>
-    [Parameter]
-    public bool CanDecide { get; set; }
-
     [Parameter]
     public bool Deciding { get; set; }
-
-    [Parameter]
-    public RejectionReason? RejectedFor { get; set; }
 
     [Parameter]
     public EventCallback Approve { get; set; }
@@ -83,13 +74,4 @@
     private string Dates() => Proposal.StartDate == Proposal.EndDate
         ? Proposal.StartDate.ToString("d MMM yyyy", CultureInfo.InvariantCulture)
         : $"{Proposal.StartDate.ToString("d MMM", CultureInfo.InvariantCulture)} to {Proposal.EndDate.ToString("d MMM yyyy", CultureInfo.InvariantCulture)}";
-
-    private static string Words(RejectionReason reason) => reason switch
-    {
-        RejectionReason.EvidenceDoesNotSupportIt => "the evidence doesn't support it",
-        RejectionReason.WrongMerchantsOrWindow => "wrong merchants or dates",
-        RejectionReason.NotAnIncident => "not an incident",
-        RejectionReason.AlreadyRaised => "already raised",
-        _ => "other",
-    };
 }

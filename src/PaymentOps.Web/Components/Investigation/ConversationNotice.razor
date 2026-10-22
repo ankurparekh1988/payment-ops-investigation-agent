@@ -1,8 +1,9 @@
 @using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Components.Pages
 
 @if (Status.Ended)
 {
-    <p role="note">This conversation is full. Start a new investigation to continue.</p>
+    <p role="note">@NotAssessedText.For(NotAssessedReason.ConversationLimit, MaxQuestionLength)</p>
 }
 else if (Status.CarriedQuestions < Status.Questions)
 {
@@ -12,4 +13,7 @@ else if (Status.CarriedQuestions < Status.Questions)
 @code {
     [Parameter, EditorRequired]
     public ConversationStatus Status { get; set; } = default!;
+
+    [Parameter]
+    public int MaxQuestionLength { get; set; }
 }

@@ -22,18 +22,13 @@ public sealed class TicketCardTests
         status == ProposalStatus.Pending ? new DateTimeOffset(2026, 10, 22, 14, 32, 0, TimeSpan.Zero) : null,
         status == ProposalStatus.Approved ? "INC-0001" : null);
 
-    private static Task<string> Render(TicketProposal proposal, bool canDecide = true, RejectionReason? rejectedFor = null) =>
-        ComponentHtml.RenderAsync<TicketCard>(new()
-        {
-            [nameof(TicketCard.Proposal)] = proposal,
-            [nameof(TicketCard.CanDecide)] = canDecide,
-            [nameof(TicketCard.RejectedFor)] = rejectedFor,
-        });
+    private static Task<string> Render(TicketProposal proposal) =>
+        ComponentHtml.RenderAsync<TicketCard>(new() { [nameof(TicketCard.Proposal)] = proposal });
 
     [Fact]
     public async Task A_draft_shows_the_reader_wording_and_no_buttons()
     {
-        var html = await Render(Proposal(ProposalStatus.Draft), canDecide: false);
+        var html = await Render(Proposal(ProposalStatus.Draft));
 
         Assert.Contains("Draft prepared. An Operations Engineer must run their own investigation before a ticket can be created.", html, StringComparison.Ordinal);
         Assert.Contains("Fabrikam Pay settlement file missing for 9 November", html, StringComparison.Ordinal);
@@ -57,7 +52,7 @@ public sealed class TicketCardTests
     public async Task A_decided_proposal_is_read_only()
     {
         var approved = await Render(Proposal(ProposalStatus.Approved));
-        var rejected = await Render(Proposal(ProposalStatus.Rejected), rejectedFor: RejectionReason.NotAnIncident);
+        var rejected = await Render(Proposal(ProposalStatus.Rejected) with { Rejection = RejectionReason.NotAnIncident });
 
         Assert.Contains("Ticket INC-0001 created", approved, StringComparison.Ordinal);
         Assert.DoesNotContain("<button", approved, StringComparison.Ordinal);

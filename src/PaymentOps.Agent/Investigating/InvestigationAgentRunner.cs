@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Model;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
@@ -34,6 +35,7 @@ internal sealed class InvestigationAgentRunner(
 
     private static readonly Dictionary<string, string> NoValues = [];
     private readonly InvestigationLimits _limits = options.Value;
+    private int? _fixedPromptChars;
 
     /// <param name="history">Earlier turns as plain text: context for the question, never evidence for it.</param>
     public async Task<AssessmentResult> InvestigateAsync(
@@ -103,12 +105,10 @@ internal sealed class InvestigationAgentRunner(
         }
         catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested)
         {
-            if (!turn.Stopped)
+            if (turn.Stop())
             {
                 progress?.Report(new InvestigationProgress.LimitReached());
             }
-
-            turn.Stop();
         }
         catch (OperationCanceledException ex)
         {
@@ -128,22 +128,18 @@ internal sealed class InvestigationAgentRunner(
             return new NotAssessed(NotAssessedReason.AssessmentUnverified);
         }
 
-        // Cancelled after the submission was accepted but before we got here: still nothing is kept.
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return new NotAssessed(NotAssessedReason.Cancelled);
-        }
-
         return turn.Accepted is { } submission ? AssessmentPolicy.Apply(submission, turn)
             : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
     }
 
     /// <summary>The instructions and every tool definition, as sent with each request: the fixed part of the input budget.</summary>
-    public int FixedPromptChars()
+    public int FixedPromptChars => _fixedPromptChars ??= MeasureFixedPrompt();
+
+    private int MeasureFixedPrompt()
     {
         var guard = new ToolGuard(new TurnState(), _limits, time, user, null);
         AIFunction[] definitions = [.. tools.Select(guard.Wrap), new SubmitAssessmentFunction(new TurnState(), clock.Today, null)];
-        return Instructions().Length + definitions.Sum(f => f.Name.Length + f.Description.Length + f.JsonSchema.GetRawText().Length);
+        return Instructions().Length + definitions.Sum(PromptSize.DefinitionChars);
     }
 
     private static readonly NotAssessed Unverified = new(NotAssessedReason.AssessmentUnverified);
