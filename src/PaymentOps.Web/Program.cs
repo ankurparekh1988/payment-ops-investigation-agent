@@ -7,6 +7,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent;
+using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
@@ -47,6 +48,12 @@ builder.Services.AddOptions<ConversationOptions>()
     .Validate(
         o => o.InputBudgetTokens > 0 && o.ToolResultAllowanceTokens > 0 && o.MaxQuestions > 0,
         $"{ConversationOptions.SectionName} needs a positive input budget, tool result allowance and question limit.")
+    .ValidateOnStart();
+builder.Services.AddOptions<ApprovalOptions>()
+    .Bind(builder.Configuration.GetSection(ApprovalOptions.SectionName))
+    .Validate(
+        o => o.ProposalLifetime > TimeSpan.Zero && o.ProposalLifetime <= TimeSpan.FromHours(1) && o.MaxPendingProposals > 0,
+        $"{ApprovalOptions.SectionName} needs a proposal lifetime of at most an hour and a positive pending limit.")
     .ValidateOnStart();
 builder.Services.AddOptions<ToolOptions>()
     .Bind(builder.Configuration.GetSection(ToolOptions.SectionName))

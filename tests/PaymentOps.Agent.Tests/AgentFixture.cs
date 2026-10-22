@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Data.Demo;
+using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
 using PaymentOps.Knowledge.Retrieval;
@@ -23,10 +24,12 @@ internal sealed class AgentFixture : IDisposable
     private static readonly AiRelease Release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
     private readonly ServiceProvider _provider;
 
-    public AgentFixture(Dictionary<string, string?>? faults = null, IKnowledgeLookup? knowledge = null, int maxListItems = 20)
+    /// <param name="time">The host's real clock, which the incident store stamps tickets with.</param>
+    public AgentFixture(Dictionary<string, string?>? faults = null, IKnowledgeLookup? knowledge = null, int maxListItems = 20, TimeProvider? time = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(faults ?? []).Build();
         _provider = new ServiceCollection()
+            .AddSingleton(time ?? TimeProvider.System)
             .AddDemoData(configuration, allowFaultInjection: faults is not null)
             .AddSingleton(knowledge ?? new FakeKnowledgeLookup((_, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([])))
             .AddInvestigationTools(options =>
@@ -46,6 +49,8 @@ internal sealed class AgentFixture : IDisposable
         Options.Create(new InvestigationLimits()),
         time ?? TimeProvider.System,
         logger ?? NullLogger<InvestigationAgentRunner>.Instance);
+
+    public IIncidentStore IncidentStore => _provider.GetRequiredService<IIncidentStore>();
 
     public IInvestigationTool Tool(string name) => _provider.GetServices<IInvestigationTool>().Single(t => t.Name == name);
 

@@ -1,9 +1,12 @@
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 
+using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
+using PaymentOps.Domain.Security;
 
 namespace PaymentOps.Agent;
 
@@ -13,14 +16,16 @@ internal sealed class InvestigationService(
     SourceService sources,
     Conversation conversation,
     IOptions<ConversationOptions> conversationOptions,
-    IOptions<InvestigationLimits> limits) : IInvestigationService
+    IOptions<InvestigationLimits> limits,
+    IUserContext user,
+    ProposalStore proposals) : IInvestigationService
 {
     public ConversationStatus Conversation
     {
         get
         {
-            var (carried, ended) = Plan();
-            return new ConversationStatus(conversation.Turns.Count, carried.Carried, ended);
+            var (history, ended) = Plan();
+            return new ConversationStatus(conversation.Turns.Count, history.Carried, ended);
         }
     }
 
@@ -34,6 +39,22 @@ internal sealed class InvestigationService(
         }
 
         var result = await agent.InvestigateAsync(question, history.Messages, progress, investigationId, cancellationToken);
+
+        // A cancel that lands after the agent finished still keeps nothing: no proposal, no turn.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled) { InvestigationId = investigationId };
+        }
+
+        if (result is AssessmentResult.Assessed { Proposal: { } draft } assessed && user.IsInRole(OpsRoles.Engineer))
+        {
+            // Only an Engineer can approve, so only an Engineer's proposal is kept; a Reader's stays a draft on the page.
+            result = assessed with
+            {
+                Proposal = proposals.Open(draft, investigationId, conversation.Id, user.UserId) ?? draft with { Status = ProposalStatus.Unavailable },
+            };
+        }
+
         if (result is not AssessmentResult.NotAssessed { Reason: NotAssessedReason.Cancelled or NotAssessedReason.InvalidQuestion or NotAssessedReason.NotAuthorized })
         {
             conversation.Add(new ConversationTurn(question, result));
@@ -47,11 +68,11 @@ internal sealed class InvestigationService(
     public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) => sources.GetSourceAsync(sectionKey, cancellationToken);
 
     // The history the next question would carry, and whether there can be a next question at all.
-    private ((IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> Messages, int Carried) History, bool Ended) Plan()
+    private ((IReadOnlyList<ChatMessage> Messages, int Carried) History, bool Ended) Plan()
     {
         var turns = conversation.Turns;
         var budget = HistoryProjection.HistoryBudgetChars(conversationOptions.Value, limits.Value, agent.FixedPromptChars());
-        var history = HistoryProjection.Build(turns, budget, _ => null);
+        var history = HistoryProjection.Build(turns, budget, proposals.NoteFor);
         var ended = turns.Count >= conversationOptions.Value.MaxQuestions || (turns.Count > 0 && history.Carried == 0);
         return (history, ended);
     }

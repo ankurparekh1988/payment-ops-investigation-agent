@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
@@ -23,9 +24,10 @@ public sealed record InvestigationEndpoints(Uri SearchEndpoint, Uri FoundryEndpo
 public static class InvestigationServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the investigation behind <see cref="IInvestigationService"/>. Needs <see cref="AiRelease"/>,
-    /// <see cref="IPromptProvider"/>, <see cref="TokenCredential"/>, a scoped <see cref="Domain.Security.IUserContext"/>,
-    /// and the data ports with an <see cref="Domain.Investigation.IInvestigationClock"/> for the tools.
+    /// Registers the investigation behind <see cref="IInvestigationService"/> and ticket decisions behind <see cref="IApprovalService"/>.
+    /// Needs <see cref="AiRelease"/>, <see cref="IPromptProvider"/>, <see cref="TokenCredential"/>, a scoped
+    /// <see cref="Domain.Security.IUserContext"/>, the data ports with an <see cref="Domain.Investigation.IInvestigationClock"/>
+    /// for the tools, and an <see cref="Domain.Incidents.IIncidentStore"/>.
     /// </summary>
     /// <param name="observeModel">Wraps the model client, for an evaluation run that records every request.</param>
     public static IServiceCollection AddInvestigation(this IServiceCollection services, InvestigationEndpoints endpoints, Func<IChatClient, IChatClient>? observeModel = null)
@@ -43,10 +45,15 @@ public static class InvestigationServiceCollectionExtensions
         services.AddInvestigationTools();
         services.AddOptions<InvestigationLimits>();
         services.AddOptions<ConversationOptions>();
+        services.AddOptions<ApprovalOptions>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<SourceService>();
         services.AddScoped<InvestigationAgentRunner>();
         services.AddScoped<Conversation>();
+
+        // Proposals outlive a circuit only until they expire; the approval service is per circuit, like its user.
+        services.AddSingleton<ProposalStore>();
+        services.AddScoped<IApprovalService, ApprovalService>();
         services.AddScoped<IInvestigationService>(sp => new InFlightGate(ActivatorUtilities.CreateInstance<InvestigationService>(sp)));
         return services;
     }

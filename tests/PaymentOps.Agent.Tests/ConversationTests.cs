@@ -5,12 +5,14 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
+using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
 using PaymentOps.Knowledge.Indexing;
 using PaymentOps.Knowledge.Retrieval;
+using PaymentOps.Platform.Ai;
 using PaymentOps.Tools;
 
 using static PaymentOps.Agent.Tests.AgentFixture;
@@ -220,7 +222,9 @@ public sealed partial class ConversationTests
             new SourceService(FakeKnowledgeLookup.Returning(), TestUser.Reader, limits, NullLogger<SourceService>.Instance),
             conversation,
             Options.Create(new ConversationOptions()),
-            limits);
+            limits,
+            TestUser.Reader,
+            new ProposalStore(TimeProvider.System, Options.Create(new ApprovalOptions()), AiReleaseLoader.Load(new EmbeddedAiReleaseSource())));
         return (service, conversation);
     }
 

@@ -17,7 +17,19 @@ internal sealed record TestUser(bool IsAuthenticated, bool CanAccessRestrictedKn
     /// <summary>An Ops Reader who may also read Restricted knowledge.</summary>
     public static TestUser RestrictedReader { get; } = Restricted with { Roles = OpsRoles.Effective([OpsRoles.Reader]) };
 
-    public string UserId => IsAuthenticated ? "00000000-0000-0000-0000-000000000001" : string.Empty;
+    /// <summary>An Operations Engineer, who may approve tickets from their own investigations.</summary>
+    public static TestUser Engineer { get; } = General with { Roles = OpsRoles.Effective([OpsRoles.Engineer]), UserId = "00000000-0000-0000-0000-000000000002" };
+
+    /// <summary>A second Engineer, who owns none of the first one's proposals.</summary>
+    public static TestUser OtherEngineer { get; } = Engineer with { UserId = "00000000-0000-0000-0000-000000000003" };
+
+    private readonly string? _userId;
+
+    public string UserId
+    {
+        get => _userId ?? (IsAuthenticated ? "00000000-0000-0000-0000-000000000001" : string.Empty);
+        init => _userId = value;
+    }
 
     public string DisplayName => "Test";
 
