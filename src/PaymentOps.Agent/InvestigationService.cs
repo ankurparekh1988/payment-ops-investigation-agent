@@ -63,7 +63,11 @@ internal sealed class InvestigationService(
         return result;
     }
 
-    public void StartNew() => conversation.Reset();
+    public void StartNew()
+    {
+        proposals.Supersede(conversation.Id);
+        conversation.Reset();
+    }
 
     public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) => sources.GetSourceAsync(sectionKey, cancellationToken);
 

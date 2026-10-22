@@ -49,6 +49,12 @@ builder.Services.AddOptions<ConversationOptions>()
         o => o.InputBudgetTokens > 0 && o.ToolResultAllowanceTokens > 0 && o.MaxQuestions > 0,
         $"{ConversationOptions.SectionName} needs a positive input budget, tool result allowance and question limit.")
     .ValidateOnStart();
+// The current turn's reservations must leave room for history, or every conversation would end after one question.
+builder.Services.AddOptions<ConversationOptions>()
+    .Validate<IOptions<InvestigationLimits>>(
+        (o, limits) => o.InputBudgetTokens > (limits.Value.MaxToolCalls * o.ToolResultAllowanceTokens) + limits.Value.MaxOutputTokens + limits.Value.MaxQuestionLength,
+        $"{ConversationOptions.SectionName}:InputBudgetTokens must exceed the tool results, output and question each turn reserves.")
+    .ValidateOnStart();
 builder.Services.AddOptions<ApprovalOptions>()
     .Bind(builder.Configuration.GetSection(ApprovalOptions.SectionName))
     .Validate(

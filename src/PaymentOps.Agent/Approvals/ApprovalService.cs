@@ -73,13 +73,14 @@ internal sealed class ApprovalService(ProposalStore proposals, IIncidentStore ti
 
     private bool MayDecide() => user.IsAuthenticated && user.IsInRole(OpsRoles.Engineer);
 
-    // A missing proposal and someone else's are the same answer.
+    // A missing proposal and someone else's are the same answer. One still being created isn't decided yet.
     private static ApprovalResult Refusal(ProposalEntry? entry) => entry?.State switch
     {
         null => new ApprovalResult.NotFound(),
         ProposalState.Superseded => new ApprovalResult.Superseded(),
         ProposalState.Expired => new ApprovalResult.Expired(),
         ProposalState.Executed => new ApprovalResult.AlreadyDecided(entry.TicketId),
+        ProposalState.Executing => new ApprovalResult.Unavailable(),
         _ => new ApprovalResult.AlreadyDecided(null),
     };
 

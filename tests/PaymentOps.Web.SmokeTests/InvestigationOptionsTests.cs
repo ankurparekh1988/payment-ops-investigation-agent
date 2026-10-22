@@ -9,6 +9,8 @@ public sealed class InvestigationOptionsTests
     [InlineData("PaymentOps:Investigation:MaxCorrections", "-1")]
     [InlineData("PaymentOps:Tools:MaxListItems", "0")]
     [InlineData("PaymentOps:Tools:MaxQueryLength", "0")]
+    [InlineData("PaymentOps:Conversation:InputBudgetTokens", "24000")]
+    [InlineData("PaymentOps:Investigation:MaxToolCalls", "14")]
     public void Invalid_investigation_limits_stop_the_host(string key, string value)
     {
         using var factory = new PaymentOpsWebApplicationFactory();

@@ -33,6 +33,7 @@ internal static partial class TicketContentPolicy
     [GeneratedRegex(@"\d{8,}")]
     private static partial Regex LongDigitRun();
 
-    [GeneratedRegex(@"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")]
+    // Written whole or in groups of four, in either case.
+    [GeneratedRegex(@"\b[A-Za-z]{2}\d{2}(?: ?[A-Za-z0-9]){11,30}\b")]
     private static partial Regex Iban();
 }

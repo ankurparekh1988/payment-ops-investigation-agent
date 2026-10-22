@@ -178,7 +178,7 @@ public sealed class ApprovalTests : IDisposable
         var results = await Task.WhenAll(Enumerable.Range(0, 50).Select(_ => Task.Run(() => Approvals(TestUser.Engineer).ApproveAsync(id, CancellationToken.None))));
 
         Assert.Single(results.OfType<ApprovalResult.Created>());
-        Assert.All(results, r => Assert.True(r is ApprovalResult.Created or ApprovalResult.AlreadyDecided));
+        Assert.All(results, r => Assert.True(r is ApprovalResult.Created or ApprovalResult.AlreadyDecided or ApprovalResult.Unavailable));
         Assert.NotNull(await Ticket(1));
         Assert.Null(await Ticket(2));
     }
@@ -195,6 +195,34 @@ public sealed class ApprovalTests : IDisposable
         Assert.Equal(new ApprovalResult.AlreadyDecided(null), await Approvals(TestUser.Engineer).ApproveAsync(rejected, CancellationToken.None));
         Assert.Equal(new ApprovalResult.AlreadyDecided("INC-0001"), await Approvals(TestUser.Engineer).RejectAsync(approved, RejectionReason.Other, null, CancellationToken.None));
         Assert.Null(await Ticket(2));
+    }
+
+    // A click while the first is still creating the ticket hasn't been decided either way.
+    [Fact]
+    public async Task A_second_approval_while_the_first_runs_is_unavailable_not_rejected()
+    {
+        var id = (await ProposeAsync(TestUser.Engineer)).ProposalId!.Value;
+        _tickets.Hold = new TaskCompletionSource();
+
+        var first = Approvals(TestUser.Engineer).ApproveAsync(id, CancellationToken.None);
+        var second = await Approvals(TestUser.Engineer).ApproveAsync(id, CancellationToken.None);
+        _tickets.Hold.SetResult();
+
+        Assert.IsType<ApprovalResult.Unavailable>(second);
+        Assert.IsType<ApprovalResult.Created>(await first);
+    }
+
+    // A new investigation leaves the old card behind, so its proposal stops holding a place in the store.
+    [Fact]
+    public async Task Starting_a_new_investigation_supersedes_the_pending_proposal()
+    {
+        var conversation = new Conversation();
+        var id = (await ProposeAsync(TestUser.Engineer, conversation)).ProposalId!.Value;
+
+        Investigation(TestUser.Engineer, Model(), conversation).StartNew();
+
+        Assert.Equal(0, _proposals.PendingCount);
+        Assert.IsType<ApprovalResult.Superseded>(await Approvals(TestUser.Engineer).ApproveAsync(id, CancellationToken.None));
     }
 
     [Fact]
@@ -361,7 +389,9 @@ public sealed class ApprovalTests : IDisposable
     {
         public bool FailNext { get; set; }
 
-        public Task<IncidentTicket> CreateAsync(string idempotencyKey, IncidentTicketContent content, CancellationToken cancellationToken)
+        public TaskCompletionSource? Hold { get; set; }
+
+        public async Task<IncidentTicket> CreateAsync(string idempotencyKey, IncidentTicketContent content, CancellationToken cancellationToken)
         {
             if (FailNext)
             {
@@ -369,7 +399,12 @@ public sealed class ApprovalTests : IDisposable
                 throw new IncidentStoreFullException();
             }
 
-            return inner.CreateAsync(idempotencyKey, content, cancellationToken);
+            if (Hold is { } hold)
+            {
+                await hold.Task;
+            }
+
+            return await inner.CreateAsync(idempotencyKey, content, cancellationToken);
         }
 
         public Task<IncidentTicket?> FindAsync(string ticketId, CancellationToken cancellationToken) => inner.FindAsync(ticketId, cancellationToken);

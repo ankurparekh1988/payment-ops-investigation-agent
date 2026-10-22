@@ -59,7 +59,7 @@ internal static class AssessmentValidator
         Statement("root_cause", submission.RootCause, turn, failures, blankAllowed: true);
         for (var i = 0; i < submission.NextSteps.Count; i++)
         {
-            Text($"next_steps[{i}]", submission.NextSteps[i].Text, failures);
+            Text($"next_steps[{i}].text", submission.NextSteps[i].Text, failures);
             Citations($"next_steps[{i}]", submission.NextSteps[i].CitationIds, turn, failures);
         }
 
@@ -68,7 +68,8 @@ internal static class AssessmentValidator
             failures.Add("claims: an assessed outcome needs at least one claim.");
         }
 
-        if (submission.ProposedTicket is { } ticket)
+        // An incomplete outcome's ticket is withheld whatever it says, so it isn't checked and can't cost the correction.
+        if (submission.ProposedTicket is { } ticket && submission.Outcome != "incomplete")
         {
             ProposalValidator.Check(ticket, turn, today, failures);
         }
@@ -91,7 +92,7 @@ internal static class AssessmentValidator
     {
         if (!(blankAllowed && string.IsNullOrWhiteSpace(statement.Text)))
         {
-            Text(field, statement.Text, failures);
+            Text($"{field}.text", statement.Text, failures);
         }
 
         Evidence(field, statement.EvidenceIds, turn, failures);
@@ -107,15 +108,16 @@ internal static class AssessmentValidator
         }
     }
 
+    /// <param name="field">The field as the schema names it, such as <c>claims[0].text</c>.</param>
     public static void Text(string field, string text, List<string> failures)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            failures.Add($"{field}.text: can't be blank.");
+            failures.Add($"{field}: can't be blank.");
         }
         else if (IdInText.IsMatch(text) || CitationScanner.Scan(text) is { Citations.Count: > 0 } or { HasMalformedMarker: true })
         {
-            failures.Add($"{field}.text: ids and citation markers belong in evidence_ids and citation_ids, not in the text.");
+            failures.Add($"{field}: ids and citation markers belong in evidence_ids and citation_ids, not in the text.");
         }
     }
 

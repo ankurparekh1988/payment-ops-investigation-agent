@@ -61,6 +61,19 @@ internal sealed class ProposalStore(TimeProvider time, IOptions<ApprovalOptions>
         }
     }
 
+    /// <summary>A new investigation leaves the old card behind, so the conversation's pending proposal stops counting.</summary>
+    public void Supersede(Guid conversationId)
+    {
+        lock (_lock)
+        {
+            var now = time.GetUtcNow();
+            foreach (var entry in _entries.Values.Where(e => e.Proposal.ConversationId == conversationId && State(e, now) == ProposalState.Pending).ToList())
+            {
+                _entries[entry.Proposal.Id] = entry with { State = ProposalState.Superseded };
+            }
+        }
+    }
+
     /// <summary>
     /// Moves the owner's proposal from <paramref name="from"/> in one step. On failure, <paramref name="entry"/> is where
     /// it stands now, or null when there's no such proposal for this owner, so nothing about anyone else's leaks.

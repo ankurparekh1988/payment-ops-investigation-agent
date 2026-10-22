@@ -15,6 +15,8 @@ public sealed class TicketContentPolicyTests
     [InlineData("Account 12345678")]
     [InlineData("IBAN GB82WEST12345698765432")]
     [InlineData("DE89370400440532013000")]
+    [InlineData("IBAN GB29 NWBK 6016 1331 9268 19")]
+    [InlineData("gb29nwbk60161331926819")]
     public void Account_like_numbers_are_found(string text) =>
         Assert.Contains("account_number", TicketContentPolicy.Violations(text));
 

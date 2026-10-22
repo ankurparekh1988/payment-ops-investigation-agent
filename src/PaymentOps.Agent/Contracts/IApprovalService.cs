@@ -57,6 +57,6 @@ public abstract record ApprovalResult
 
     public sealed record Superseded : ApprovalResult;
 
-    /// <summary>The ticket store failed or is full; the proposal is still pending.</summary>
+    /// <summary>The ticket store failed or is full, or another click is still creating the ticket; nothing is decided yet.</summary>
     public sealed record Unavailable : ApprovalResult;
 }

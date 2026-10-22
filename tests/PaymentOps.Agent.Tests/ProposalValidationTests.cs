@@ -52,6 +52,11 @@ public sealed class ProposalValidationTests
     [Fact]
     public void A_null_ticket_needs_nothing() => Assert.Empty(AssessmentValidator.Check(With(null), _turn, Today));
 
+    // An incomplete outcome's ticket is withheld whatever it says, so it can't cost the assessment its correction.
+    [Fact]
+    public void An_incomplete_outcomes_ticket_is_not_checked() =>
+        Assert.Empty(AssessmentValidator.Check(With(Ticket() with { MerchantIds = ["M-9999"], StartDate = "2026-01-01" }, "incomplete"), _turn, Today));
+
     [Fact]
     public void A_refusal_carries_no_ticket() =>
         Assert.Contains("proposed_ticket: a refusal carries no ticket.", AssessmentValidator.Check(With(Ticket(), "refused"), _turn, Today));
@@ -113,8 +118,8 @@ public sealed class ProposalValidationTests
     {
         Assert.Contains("proposed_ticket.title: can be at most 120 characters.", Check(Ticket() with { Title = new string('t', 121) }));
         Assert.Contains("proposed_ticket.summary: can be at most 1,000 characters.", Check(Ticket() with { Summary = new string('s', 1001) }));
-        Assert.Contains("proposed_ticket.title.text: can't be blank.", Check(Ticket() with { Title = " " }));
-        Assert.Contains("proposed_ticket.summary.text: ids and citation markers belong in evidence_ids and citation_ids, not in the text.", Check(Ticket() with { Summary = "See [S1] and merchant:M-1042." }));
+        Assert.Contains("proposed_ticket.title: can't be blank.", Check(Ticket() with { Title = " " }));
+        Assert.Contains("proposed_ticket.summary: ids and citation markers belong in evidence_ids and citation_ids, not in the text.", Check(Ticket() with { Summary = "See [S1] and merchant:M-1042." }));
     }
 
     [Fact]
