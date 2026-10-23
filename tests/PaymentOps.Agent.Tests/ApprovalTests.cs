@@ -8,6 +8,7 @@ using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
+using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
@@ -90,6 +91,7 @@ public sealed class ApprovalTests : IDisposable
         var limits = Options.Create(new InvestigationLimits());
         return new InvestigationService(
             _fixture.Runner(model, user),
+            _fixture.FixedPrompt,
             new SourceService(FakeKnowledgeLookup.Returning(), user, limits, NullLogger<SourceService>.Instance),
             conversation ?? new Conversation(),
             Options.Create(new ConversationOptions()),
@@ -345,6 +347,25 @@ public sealed class ApprovalTests : IDisposable
         Assert.Null(await Ticket(2));
     }
 
+    // The store won't take another ticket until a restart, so retrying can't help: the proposal ends where it is.
+    [Fact]
+    public async Task A_full_ticket_store_ends_the_proposal_and_creates_nothing()
+    {
+        var store = new InMemoryIncidentStore(_time, maxTickets: 1);
+        var approvals = new ApprovalService(_proposals, store, TestUser.Engineer, _log);
+        var first = (await ProposeAsync(TestUser.Engineer, new Conversation())).ProposalId!.Value;
+        var second = (await ProposeAsync(TestUser.Engineer, new Conversation())).ProposalId!.Value;
+        Assert.IsType<ApprovalResult.Created>(await approvals.ApproveAsync(first, CancellationToken.None));
+        Assert.Equal(1, _proposals.PendingCount);
+
+        Assert.IsType<ApprovalResult.CapacityReached>(await approvals.ApproveAsync(second, CancellationToken.None));
+        Assert.IsType<ApprovalResult.CapacityReached>(await approvals.ApproveAsync(second, CancellationToken.None));
+        Assert.IsType<ApprovalResult.CapacityReached>(await approvals.RejectAsync(second, RejectionReason.Other, null, CancellationToken.None));
+
+        Assert.Equal(0, _proposals.PendingCount);
+        Assert.Null(await store.FindAsync("INC-0002", CancellationToken.None));
+    }
+
     // Review focus: with no room for another pending proposal the assessment still shows.
     [Fact]
     public async Task A_full_store_shows_the_assessment_with_the_proposal_unavailable()
@@ -398,6 +419,8 @@ public sealed class ApprovalTests : IDisposable
     private string History(Conversation conversation) =>
         string.Join("\n", HistoryProjection.Build(conversation.Turns, 100_000, _proposals.NoteFor).Select(m => m.Text));
 
+    private sealed class TransientStoreException : Exception;
+
     /// <summary>The real store, failing once on request.</summary>
     private sealed class FlakyIncidentStore(IIncidentStore inner) : IIncidentStore
     {
@@ -410,7 +433,7 @@ public sealed class ApprovalTests : IDisposable
             if (FailNext)
             {
                 FailNext = false;
-                throw new IncidentStoreFullException();
+                throw new TransientStoreException();
             }
 
             if (Hold is { } hold)

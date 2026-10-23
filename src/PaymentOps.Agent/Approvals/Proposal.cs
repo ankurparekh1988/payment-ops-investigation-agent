@@ -26,6 +26,9 @@ internal enum ProposalState
     Rejected,
     Expired,
     Superseded,
+
+    /// <summary>The ticket store was full when it was approved. Terminal: the demo store never frees a ticket.</summary>
+    CapacityReached,
 }
 
 /// <summary>A proposal and where it stands now. <paramref name="Note"/> is the rejecter's own text, never logged.</summary>

@@ -57,6 +57,9 @@ public abstract record ApprovalResult
 
     public sealed record Superseded : ApprovalResult;
 
-    /// <summary>The ticket store failed or is full, or another click is still creating the ticket; nothing is decided yet.</summary>
+    /// <summary>The ticket store failed, or another click is still creating the ticket; nothing is decided yet.</summary>
     public sealed record Unavailable : ApprovalResult;
+
+    /// <summary>The ticket store accepts no more tickets, so this proposal can never create one.</summary>
+    public sealed record CapacityReached : ApprovalResult;
 }

@@ -192,13 +192,17 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
             .OrderBy(p => p.Name, StringComparer.Ordinal)
             .Select(p => $"{p.Name}={p.Value}"));
 
+    /// <summary>A tool's parameter schema as the request carries it.</summary>
+    public static JsonElement Schema(Type requestType) =>
+        Schemas.GetOrAdd(requestType, type => AIJsonUtilities.CreateJsonSchema(type, serializerOptions: ToolJson.Requests));
+
     private sealed class GuardedFunction(ToolGuard guard, IInvestigationTool tool) : AIFunction
     {
         public override string Name => tool.Name;
 
         public override string Description => tool.Description;
 
-        public override JsonElement JsonSchema { get; } = Schemas.GetOrAdd(tool.RequestType, type => AIJsonUtilities.CreateJsonSchema(type, serializerOptions: ToolJson.Requests));
+        public override JsonElement JsonSchema { get; } = Schema(tool.RequestType);
 
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
             await guard.InvokeAsync(tool, arguments, cancellationToken);

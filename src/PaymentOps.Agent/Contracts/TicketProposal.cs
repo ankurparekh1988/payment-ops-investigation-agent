@@ -12,6 +12,9 @@ public enum ProposalStatus
     Rejected,
     Expired,
     Superseded,
+
+    /// <summary>The ticket store was full when it was approved, so no ticket was or will be created.</summary>
+    CapacityReached,
 }
 
 /// <summary>

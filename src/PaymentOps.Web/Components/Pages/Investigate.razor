@@ -148,6 +148,7 @@
                     ApprovalResult.AlreadyDecided decided => proposal with { Status = decided.TicketId is null ? ProposalStatus.Rejected : ProposalStatus.Approved, TicketId = decided.TicketId },
                     ApprovalResult.Expired => proposal with { Status = ProposalStatus.Expired },
                     ApprovalResult.Superseded => proposal with { Status = ProposalStatus.Superseded },
+                    ApprovalResult.CapacityReached => proposal with { Status = ProposalStatus.CapacityReached },
                     ApprovalResult.Unavailable => proposal,
                     _ => proposal with { Status = ProposalStatus.Unavailable },
                 },

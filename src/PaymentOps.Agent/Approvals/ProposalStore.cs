@@ -115,6 +115,7 @@ internal sealed class ProposalStore(TimeProvider time, IOptions<ApprovalOptions>
                 ProposalState.Rejected => $"The proposed ticket was rejected: {RejectionReasons.Describe(entry.Reason!.Value)}.",
                 ProposalState.Expired => "The proposed ticket expired unapproved.",
                 ProposalState.Superseded => "The proposed ticket was replaced by a later one.",
+                ProposalState.CapacityReached => "The proposed ticket wasn't created: the ticket store is full.",
                 _ => "The proposed ticket is awaiting an Operations Engineer's decision.",
             };
         }

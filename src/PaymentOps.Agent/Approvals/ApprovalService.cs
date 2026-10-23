@@ -35,6 +35,13 @@ internal sealed class ApprovalService(ProposalStore proposals, IIncidentStore ti
             // The proposal id is the idempotency key: a retry after a failure finds the ticket already made.
             ticket = await tickets.CreateAsync(proposalId.ToString(), Content(proposal), cancellationToken);
         }
+        catch (IncidentStoreFullException)
+        {
+            // Retrying can't succeed until a restart, so the proposal stops counting as pending and stays ended.
+            proposals.TryMove(proposalId, user.UserId, ProposalState.Executing, e => e with { State = ProposalState.CapacityReached }, out _);
+            ApprovalLog.StoreFull(logger, proposal.InvestigationId, proposalId);
+            return new ApprovalResult.CapacityReached();
+        }
         catch (Exception ex)
         {
             proposals.TryMove(proposalId, user.UserId, ProposalState.Executing, e => e with { State = ProposalState.Pending }, out _);
@@ -81,6 +88,7 @@ internal sealed class ApprovalService(ProposalStore proposals, IIncidentStore ti
         ProposalState.Expired => new ApprovalResult.Expired(),
         ProposalState.Executed => new ApprovalResult.AlreadyDecided(entry.TicketId),
         ProposalState.Executing => new ApprovalResult.Unavailable(),
+        ProposalState.CapacityReached => new ApprovalResult.CapacityReached(),
         _ => new ApprovalResult.AlreadyDecided(null),
     };
 

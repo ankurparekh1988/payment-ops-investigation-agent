@@ -91,6 +91,19 @@ public sealed partial class ConversationTests
         Assert.Equal(7_998, budget);
     }
 
+    // Startup and run time budget from this one measurement, so it must be what a request actually carries.
+    [Fact]
+    public async Task The_fixed_prompt_measures_what_the_first_request_sends()
+    {
+        using var fixture = new AgentFixture();
+        var model = new ScriptedChatClient(Respond(Call(Submit, Submission())));
+
+        await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+
+        var sent = model.Requests[0].Options!;
+        Assert.Equal(sent.Instructions!.Length + sent.Tools!.OfType<AIFunction>().Sum(PromptSize.DefinitionChars), fixture.FixedPrompt.Chars);
+    }
+
     [Fact]
     public async Task A_follow_up_cannot_cite_evidence_from_an_earlier_turn()
     {
@@ -219,6 +232,7 @@ public sealed partial class ConversationTests
         var limits = Options.Create(new InvestigationLimits());
         var service = new InvestigationService(
             fixture.Runner(model),
+            fixture.FixedPrompt,
             new SourceService(FakeKnowledgeLookup.Returning(), TestUser.Reader, limits, NullLogger<SourceService>.Instance),
             conversation,
             Options.Create(new ConversationOptions()),

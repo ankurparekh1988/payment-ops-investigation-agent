@@ -47,6 +47,9 @@
         case ProposalStatus.Expired:
             <p role="note">This proposal expired before it was approved. Run the investigation again to propose it again.</p>
             break;
+        case ProposalStatus.CapacityReached:
+            <p role="note">No ticket was created: the demo ticket store has reached capacity.</p>
+            break;
         case ProposalStatus.Superseded:
             <p role="note">This proposal was replaced by a later proposal in this conversation.</p>
             break;

@@ -68,8 +68,9 @@ internal static class AssessmentValidator
             failures.Add("claims: an assessed outcome needs at least one claim.");
         }
 
-        // An incomplete outcome's ticket is withheld whatever it says, so it isn't checked and can't cost the correction.
-        if (submission.ProposedTicket is { } ticket && submission.Outcome != "incomplete")
+        // A ticket on an outcome that is or will be incomplete is withheld whatever it says, so it isn't checked
+        // and can't cost the correction. The server's forcing is decided by AssessmentPolicy.ForcesIncomplete.
+        if (submission.ProposedTicket is { } ticket && submission.Outcome != "incomplete" && !AssessmentPolicy.ForcesIncomplete(turn))
         {
             ProposalValidator.Check(ticket, turn, today, failures);
         }

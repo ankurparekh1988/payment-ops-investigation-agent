@@ -43,12 +43,14 @@ internal sealed class AgentFixture : IDisposable
     public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null) => new(
         model,
         _provider.GetServices<IInvestigationTool>(),
-        new PromptProvider(Release),
+        FixedPrompt,
         _provider.GetRequiredService<IInvestigationClock>(),
         user ?? TestUser.Reader,
         Options.Create(new InvestigationLimits()),
         time ?? TimeProvider.System,
         logger ?? NullLogger<InvestigationAgentRunner>.Instance);
+
+    public FixedPrompt FixedPrompt => new(_provider.GetServices<IInvestigationTool>(), new PromptProvider(Release), _provider.GetRequiredService<IInvestigationClock>());
 
     public IIncidentStore IncidentStore => _provider.GetRequiredService<IIncidentStore>();
 
@@ -65,7 +67,8 @@ internal sealed class AgentFixture : IDisposable
         string[]? rootEvidence = null,
         string[]? rootCitations = null,
         string outcome = "assessed",
-        string confidence = "high") => new
+        string confidence = "high",
+        object? ticket = null) => new
         {
             outcome,
             summary = new { text = "M-1042's Fabrikam batch for 9 November didn't arrive.", evidence_ids = new[] { summaryEvidence }, citation_ids = Array.Empty<string>() },
@@ -73,7 +76,7 @@ internal sealed class AgentFixture : IDisposable
             root_cause = new { text = rootCause, evidence_ids = rootEvidence ?? [], citation_ids = rootCitations ?? [] },
             confidence,
             next_steps = Array.Empty<object>(),
-            proposed_ticket = (object?)null,
+            proposed_ticket = ticket,
         };
 }
 

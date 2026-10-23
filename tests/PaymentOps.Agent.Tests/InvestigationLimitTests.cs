@@ -44,6 +44,35 @@ public sealed class InvestigationLimitTests
         Assert.Equal([ToolNames.SubmitAssessment], model.Requests[^1].Tools);
     }
 
+    // A stopped turn is incomplete whatever the model says, so its ticket is withheld unchecked and costs no correction.
+    [Fact]
+    public async Task Hitting_the_call_limit_withholds_an_unsupported_ticket_without_a_correction()
+    {
+        using var fixture = new AgentFixture();
+        var calls = Enumerable.Range(0, 11)
+            .Select(i => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = i == 0 ? "M-1042" : $"M-{9000 + i}" })));
+        var ticket = new
+        {
+            processor_id = "fabrikam-pay",
+            merchant_ids = new[] { "M-9999" },
+            start_date = "2026-11-09",
+            end_date = "2026-11-09",
+            title = "Fabrikam Pay settlement file missing",
+            summary = "No settlement file arrived from Fabrikam Pay.",
+            evidence_ids = new[] { "fact:missing-file:fabrikam-pay:2026-11-09" },
+            citation_ids = new[] { "S9" },
+        };
+        var model = new ScriptedChatClient([.. calls, _ => Call(ToolNames.SubmitAssessment, Submission(ticket: ticket))]);
+
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None));
+
+        Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
+        Assert.Equal(Confidence.Low, assessed.Confidence);
+        Assert.Null(assessed.Proposal);
+        Assert.True(assessed.ProposalWithheld);
+        Assert.Equal(12, model.Requests.Count);
+    }
+
     // Service messages can echo the request; only the failure's type and codes are logged.
     [Fact]
     public async Task A_model_failure_is_logged_without_its_message()

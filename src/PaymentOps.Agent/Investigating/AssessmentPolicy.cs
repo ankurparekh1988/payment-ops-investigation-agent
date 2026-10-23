@@ -39,14 +39,10 @@ internal static class AssessmentPolicy
             confidence = Min(confidence, Confidence.Medium);
         }
 
-        if (turn.EveryStructuredSourceFailed)
+        if (ForcesIncomplete(turn))
         {
             outcome = AssessmentOutcome.Incomplete;
-            rootCause = null;
-        }
-        else if (turn.Stopped)
-        {
-            outcome = AssessmentOutcome.Incomplete;
+            rootCause = turn.EveryStructuredSourceFailed ? null : rootCause;
         }
 
         if (outcome == AssessmentOutcome.Incomplete)
@@ -70,6 +66,9 @@ internal static class AssessmentPolicy
             ProposalWithheld = withheld,
         };
     }
+
+    /// <summary>The turn stopped or no structured source answered: the outcome is incomplete whatever was submitted.</summary>
+    public static bool ForcesIncomplete(TurnState turn) => turn.Stopped || turn.EveryStructuredSourceFailed;
 
     /// <summary>
     /// The processor's reference from the incidents the ticket cites for its processor, when they agree on one.

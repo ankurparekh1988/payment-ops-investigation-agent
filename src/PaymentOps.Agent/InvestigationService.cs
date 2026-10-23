@@ -13,6 +13,7 @@ namespace PaymentOps.Agent;
 /// <summary>Investigations with the agent within one conversation, and the sections they cite, behind one seam.</summary>
 internal sealed class InvestigationService(
     InvestigationAgentRunner agent,
+    FixedPrompt fixedPrompt,
     SourceService sources,
     Conversation conversation,
     IOptions<ConversationOptions> conversationOptions,
@@ -78,7 +79,7 @@ internal sealed class InvestigationService(
     private (IReadOnlyList<ChatMessage> History, bool Ended) Plan()
     {
         var turns = conversation.Turns;
-        var budget = HistoryProjection.HistoryBudgetChars(conversationOptions.Value, limits.Value, agent.FixedPromptChars);
+        var budget = HistoryProjection.HistoryBudgetChars(conversationOptions.Value, limits.Value, fixedPrompt.Chars);
         var history = HistoryProjection.Build(turns, budget, proposals.NoteFor);
         var ended = turns.Count >= conversationOptions.Value.MaxQuestions || (turns.Count > 0 && history.Count == 0);
         return (history, ended);

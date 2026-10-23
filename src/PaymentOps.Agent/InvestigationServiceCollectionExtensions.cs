@@ -3,6 +3,7 @@ using Azure.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
@@ -44,7 +45,15 @@ public static class InvestigationServiceCollectionExtensions
         });
         services.AddInvestigationTools();
         services.AddOptions<InvestigationLimits>();
-        services.AddOptions<ConversationOptions>();
+        services.AddSingleton<FixedPrompt>();
+
+        // The current turn's reservations must leave room for history, or every conversation would end after one
+        // question. Checked with the same calculation that budgets history at run time.
+        services.AddOptions<ConversationOptions>()
+            .Validate<IOptions<InvestigationLimits>, FixedPrompt>(
+                (o, limits, prompt) => HistoryProjection.HistoryBudgetChars(o, limits.Value, prompt.Chars) > 0,
+                $"{ConversationOptions.SectionName}:InputBudgetTokens must exceed the instructions, tool definitions, question, tool results and output each turn reserves.")
+            .ValidateOnStart();
         services.AddOptions<ApprovalOptions>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<SourceService>();

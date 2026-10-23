@@ -31,6 +31,9 @@ internal static partial class ApprovalLog
         }
     }
 
+    [LoggerMessage(EventId = 3103, Level = LogLevel.Warning, Message = "Ticket store full: investigation {InvestigationId}, proposal {ProposalId}; no ticket was created and the proposal is closed")]
+    public static partial void StoreFull(ILogger logger, Guid investigationId, Guid proposalId);
+
     [LoggerMessage(EventId = 3101, EventName = "approval.decided", Level = LogLevel.Information,
         Message = "Approval decided: investigation {InvestigationId}, proposal {ProposalId}, {Decision}, reason {ReasonCode}, ticket {TicketId}, approver {ApproverId}, release {Release}")]
     private static partial void Decided(ILogger logger, Guid investigationId, Guid proposalId, string decision, RejectionReason? reasonCode, string? ticketId, string approverId, string release);

@@ -6,11 +6,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Contracts;
-using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Model;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
-using PaymentOps.Platform.Ai;
 using PaymentOps.Tools;
 
 using NotAssessed = PaymentOps.Agent.Contracts.AssessmentResult.NotAssessed;
@@ -24,7 +22,7 @@ namespace PaymentOps.Agent.Investigating;
 internal sealed class InvestigationAgentRunner(
     IChatClient model,
     IEnumerable<IInvestigationTool> tools,
-    IPromptProvider prompts,
+    FixedPrompt fixedPrompt,
     IInvestigationClock clock,
     IUserContext user,
     IOptions<InvestigationLimits> options,
@@ -33,9 +31,7 @@ internal sealed class InvestigationAgentRunner(
 {
     public const string PromptId = "investigation-agent";
 
-    private static readonly Dictionary<string, string> NoValues = [];
     private readonly InvestigationLimits _limits = options.Value;
-    private int? _fixedPromptChars;
 
     /// <param name="history">Earlier turns as plain text: context for the question, never evidence for it.</param>
     public async Task<AssessmentResult> InvestigateAsync(
@@ -72,7 +68,7 @@ internal sealed class InvestigationAgentRunner(
             UseProvidedChatClientAsIs = true,
             ChatOptions = new ChatOptions
             {
-                Instructions = Instructions(),
+                Instructions = fixedPrompt.Instructions(),
                 MaxOutputTokens = _limits.MaxOutputTokens,
                 AllowMultipleToolCalls = false,
                 Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None },
@@ -132,16 +128,6 @@ internal sealed class InvestigationAgentRunner(
             : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
     }
 
-    /// <summary>The instructions and every tool definition, as sent with each request: the fixed part of the input budget.</summary>
-    public int FixedPromptChars => _fixedPromptChars ??= MeasureFixedPrompt();
-
-    private int MeasureFixedPrompt()
-    {
-        var guard = new ToolGuard(new TurnState(), _limits, time, user, null);
-        AIFunction[] definitions = [.. tools.Select(guard.Wrap), new SubmitAssessmentFunction(new TurnState(), clock.Today, null)];
-        return Instructions().Length + definitions.Sum(PromptSize.DefinitionChars);
-    }
-
     private static readonly NotAssessed Unverified = new(NotAssessedReason.AssessmentUnverified);
 
     private static bool HasUnansweredCall(IList<ChatMessage> messages)
@@ -152,8 +138,4 @@ internal sealed class InvestigationAgentRunner(
 
     private static ChatClientAgentRunOptions Run(IList<AITool> runTools, ChatToolMode? mode) =>
         new(new ChatOptions { Tools = runTools, ToolMode = mode });
-
-    // The current time comes from the investigation clock, so "yesterday" is the data's yesterday, not the model's.
-    private string Instructions() =>
-        $"{prompts.GetPrompt(PromptId).Template.Render(NoValues)}\n\nNow: {clock.Now:yyyy-MM-dd HH:mm} UTC. Today is {clock.Today:yyyy-MM-dd}.";
 }

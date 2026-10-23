@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Microsoft.Extensions.AI;
 
 namespace PaymentOps.Agent.Conversations;
@@ -17,6 +19,9 @@ public static class PromptSize
     {
         ArgumentNullException.ThrowIfNull(function);
 
-        return function.Name.Length + function.Description.Length + function.JsonSchema.GetRawText().Length;
+        return DefinitionChars(function.Name, function.Description, function.JsonSchema);
     }
+
+    public static int DefinitionChars(string name, string description, JsonElement schema) =>
+        name.Length + description.Length + schema.GetRawText().Length;
 }

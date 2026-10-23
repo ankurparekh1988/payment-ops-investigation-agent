@@ -62,6 +62,7 @@ public sealed class TicketCardTests
 
     [Theory]
     [InlineData(ProposalStatus.Unavailable, "can't be approved right now")]
+    [InlineData(ProposalStatus.CapacityReached, "demo ticket store has reached capacity")]
     [InlineData(ProposalStatus.Expired, "expired")]
     [InlineData(ProposalStatus.Superseded, "replaced by a later proposal")]
     public async Task A_proposal_that_cannot_be_decided_says_why(ProposalStatus status, string words)
