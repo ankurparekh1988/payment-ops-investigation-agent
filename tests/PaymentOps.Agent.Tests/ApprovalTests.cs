@@ -225,6 +225,20 @@ public sealed class ApprovalTests : IDisposable
         Assert.IsType<ApprovalResult.Superseded>(await Approvals(TestUser.Engineer).ApproveAsync(id, CancellationToken.None));
     }
 
+    // The card goes when the next question is asked, so its proposal can't be left waiting for a decision.
+    [Fact]
+    public async Task A_follow_up_question_supersedes_the_pending_proposal()
+    {
+        var conversation = new Conversation();
+        var proposal = await ProposeAsync(TestUser.Engineer, conversation);
+        var followUp = Model(Call(ToolNames.SubmitAssessment, Submission(null)));
+
+        await Investigation(TestUser.Engineer, followUp, conversation).InvestigateAsync("And what about M-1042?", null, CancellationToken.None);
+
+        Assert.Equal(0, _proposals.PendingCount);
+        Assert.IsType<ApprovalResult.Superseded>(await Approvals(TestUser.Engineer).ApproveAsync(proposal.ProposalId!.Value, CancellationToken.None));
+    }
+
     [Fact]
     public async Task A_superseded_proposal_cannot_be_approved()
     {

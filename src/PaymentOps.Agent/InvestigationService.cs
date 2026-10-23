@@ -32,6 +32,9 @@ internal sealed class InvestigationService(
     public async Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken)
     {
         var investigationId = Guid.NewGuid();
+
+        // The page replaces the card with each new question, so a proposal nobody can see any longer stops waiting.
+        proposals.Supersede(conversation.Id);
         var (history, ended) = Plan();
         if (ended)
         {

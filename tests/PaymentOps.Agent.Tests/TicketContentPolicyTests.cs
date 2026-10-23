@@ -27,6 +27,7 @@ public sealed class TicketContentPolicyTests
     [InlineData("PO-1042-NW-1109")]
     [InlineData("INC-FAB-1109")]
     [InlineData("1,234.56 USD")]
+    [InlineData("AB12 batch settlement failed overnight")]
     [InlineData("fact:missing-file:fabrikam-pay:2026-11-09")]
     [InlineData("Settlement batch processing unavailable 2026-11-09 21:00 to 2026-11-10 02:00 UTC.")]
     public void Dataset_values_pass(string text) =>

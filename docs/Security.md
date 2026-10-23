@@ -141,12 +141,12 @@ Creating an incident ticket is the only action that changes anything outside the
 | Another user approves | The owner check, answered like a missing id | Another Engineer gets "not found" |
 | Double clicks or parallel calls | An atomic pending-to-executing step and the proposal id as idempotency key | 50 parallel approvals make one ticket |
 | Replay after a decision | State | Approving after an approval or a rejection creates nothing |
-| An old page approves new content | A newer proposal, or a new investigation, supersedes the pending one | A superseded id is refused, with no ticket |
+| An old page approves new content | The next question, or a new investigation, supersedes the pending one | A superseded id is refused, with no ticket |
 | Expiry | 15 minutes on the host's real clock | Real time +15 min 1 s is expired; the data's clock has no say |
 | An ungrounded proposal | Processor and merchants must be records the investigation returned; data evidence and a runbook citation are both required | Each rule rejects, then one correction |
 | A platform incident forced into one processor's ticket | Prompt rule, and missing files from two processors reject the ticket | Rejected |
 | Card or account data in a ticket | `TicketContentPolicy`: card-number checksum, runs of eight or more digits, IBAN shapes; reports rule ids only | The correction, logs and result carry no digits from the input |
-| Role removed mid-session | Re-checked at call time | Demoted to Reader before the click: refused |
+| Role removed mid-session | The role is read from the signed-in user at call time; a change in Entra applies at the next sign-in | Demoted to Reader before the click: refused |
 | Cross-site request forgery | No HTTP endpoint for approvals; decisions go through the signed-in circuit | Endpoint enumeration finds none |
 | Clickjacking | `frame-ancestors 'none'` on the interactive pages | A smoke test reads the header on `/` |
 | A cancel races completion | A cancelled investigation keeps nothing | Cancelled after the submission: no proposal, no turn |
