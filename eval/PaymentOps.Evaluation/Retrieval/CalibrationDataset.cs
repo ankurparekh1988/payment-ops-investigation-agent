@@ -72,22 +72,28 @@ internal static class CalibrationReferences
 
             foreach (var expected in testCase.Expected)
             {
-                var matches = sections.Where(s => s.DocId == expected.DocId && s.SectionPath == expected.SectionPath).ToList();
-                if (!docs.Contains(expected.DocId))
+                if (TryResolve(expected, sections, docs, out var key, out var error))
                 {
-                    errors.Add($"{testCase.Id}: no document '{expected.DocId}'.");
-                }
-                else if (matches.Count != 1)
-                {
-                    errors.Add($"{testCase.Id}: '{expected.SectionPath}' matches {matches.Count} indexed sections; it must match exactly one with text of its own.");
+                    keys[expected] = key;
                 }
                 else
                 {
-                    keys[expected] = matches[0].Id;
+                    errors.Add($"{testCase.Id}: {error}");
                 }
             }
         }
 
         return errors.Count == 0 ? keys : throw new InvalidDataException(string.Join(Environment.NewLine, errors));
+    }
+
+    /// <summary>One readable reference to its section key; shared by every dataset that names sections.</summary>
+    public static bool TryResolve(ExpectedSection expected, IReadOnlyList<KnowledgeSearchDocument> sections, IReadOnlySet<string> docs, out string key, out string? error)
+    {
+        var matches = sections.Where(s => s.DocId == expected.DocId && s.SectionPath == expected.SectionPath).ToList();
+        key = matches.Count == 1 ? matches[0].Id : string.Empty;
+        error = !docs.Contains(expected.DocId) ? $"no document '{expected.DocId}'."
+            : matches.Count != 1 ? $"'{expected.SectionPath}' matches {matches.Count} indexed sections; it must match exactly one with text of its own."
+            : null;
+        return error is null;
     }
 }
