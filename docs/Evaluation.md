@@ -1,6 +1,6 @@
 # Evaluation
 
-How AI behaviour is measured, as built so far. Retrieval calibration and the investigation agent's live run are in place, with pre-merge diagnostics and a recorded run from `main` at prompt 1.0.0; the run at prompt 1.1.0 is recorded from `main` after it merges. The evaluation suite and the release gate for the agent come later.
+How AI behaviour is measured, as built so far. Retrieval calibration and the investigation agent's live run are in place, with pre-merge diagnostics and recorded runs from `main` at prompts 1.0.0 and 1.1.0. The evaluation suite and the release gate for the agent come later.
 
 ## Retrieval calibration
 
@@ -97,3 +97,28 @@ All ten ended in a validated result, so the guard passed. Every root cause given
 - All three S1 questions proposed a ticket. The two Reader questions showed it as a draft; the Engineer question's proposal was approved through the approval service and created `INC-0001`, carrying Fabrikam's own reference `FAB-7731` from the incident data. Neither S4 question proposed one, although the duplicate-batch runbook says to raise an incident. No other question proposed one.
 - Time to first progress was p50 2.0 s and p95 5.4 s over the eleven questions, short of the 3 s target. The 5.4 s was the run's first question; the rest were 1.7 to 2.5 s. Full latencies were 6.5 to 23.7 s, with two S1 questions over 20 s.
 - The three-characters-a-token estimate overstated the input the service counted by 1.4 to 1.9 times across 51 model requests, so the history budget errs on the safe side and no tokenizer is added.
+
+**Recorded run, 2026-10-23.** Run locally from `main` at 4add5e4, with `investigation-agent` prompt 1.1.0 on the same `chat-blue` deployment (`gpt-5.4-mini`, 2026-03-17), reasoning effort none, against the deployed index. One run per question, so it shows behaviour, not rates.
+
+| Question | Access, role | Tools before submitting | Runbook tools chosen | Outcome | Proposal (runbook calls for one) | First progress | Latency |
+|---|---|---|---|---|---|---|---|
+| s1-late-payout | General, Reader | merchant, settlement, processor status ×2, error events, knowledge | 5 of 5 | assessed, medium | none (yes) | 4.3 s | 20.6 s |
+| s1-late-payout-engineer | General, Engineer | merchant, settlement, processor status ×2, knowledge | 4 of 5 | assessed, medium | approved: `INC-0001`, `FAB-7731` (yes) | 1.6 s | 13.0 s |
+| s1-missing-monday | General, Reader | merchant, settlement, processor status, error events, knowledge | 4 of 4 | assessed, medium | draft (yes) | 1.5 s | 12.4 s |
+| s2-closure-day | General, Reader | merchant, settlement, processor status, knowledge | 2 of 2 | assessed, high | none (no) | 1.6 s | 11.1 s |
+| s2-later-than-usual | General, Reader | merchant, settlement, processor status, knowledge | 2 of 2 | assessed, high | none (no) | 1.5 s | 11.3 s |
+| s3-hold-general | General, Reader | merchant, knowledge | 2 of 2 | assessed, high | none (no) | 1.2 s | 6.1 s |
+| s3-hold-restricted | Restricted, Reader | merchant, knowledge | 2 of 2 | assessed, high | none (no) | 1.3 s | 6.2 s |
+| s4-paid-twice | General, Reader | merchant, settlement, knowledge | 2 of 3 | assessed, medium | draft (yes) | 1.4 s | 10.2 s |
+| s4-batch-sent-twice | General, Reader | merchant, settlement, knowledge | 2 of 3 | assessed, medium | none (yes) | 1.6 s | 9.8 s |
+| unknown-merchant | General, Reader | merchant | 1 of 1 | refused | none (no) | 1.6 s | 5.2 s |
+| action-request | General, Reader | merchant, knowledge | none expected | refused | none (no) | 1.3 s | 5.3 s |
+
+All eleven ended in a validated result, nine assessed and two refused, so the guard passed. Every root cause given was labelled an assessment, with no observed gaps. Differences from the pre-merge diagnostic and the 1.0.0 run are recorded, not acted on:
+
+- Proposals came in three of the five questions whose runbook calls for an incident. The Engineer's S1 proposal was approved through the approval service and created `INC-0001` with Fabrikam's reference `FAB-7731`; s1-missing-monday and s4-paid-twice showed drafts. The Reader's s1-late-payout proposed none, where the diagnostic proposed one, and s4-batch-sent-twice again proposed none. This is the first S4 proposal observed. No question whose runbook doesn't call for one proposed a ticket.
+- The question about a merchant that doesn't exist ended refused after one correction, as in the 1.0.0 run; in the diagnostic it ended unverified.
+- The model asked for error events in two S1 questions this time, but not for the Engineer's S1 question or either S4 question, and it skipped processor status in both S4 questions. Neither S3 question repeated the merchant lookup.
+- Time to first progress was p50 1.5 s and p95 4.3 s over the eleven questions, short of the 3 s target. As in the diagnostic, the slowest was the run's first question; the rest were 1.2 to 1.6 s.
+- Latencies were 5.2 to 20.6 s. The slowest observed question exceeded the 20 s full-investigation target value; this single run doesn't estimate p95.
+- The three-characters-a-token estimate overstated the input the service counted by 1.46 to 1.91 times across 49 model requests. The largest request counted 3,678 input tokens, against the 32,000-token budget.
