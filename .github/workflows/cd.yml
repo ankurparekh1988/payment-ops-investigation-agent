@@ -21,7 +21,7 @@ env:
 
 jobs:
   build:
-    name: Build
+    name: Build and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,10 +32,15 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Built once here; the same artifact is what gets deployed.
+      # Tested here too, not only by CI: CD doesn't wait for CI, and a failure can first appear after merging.
+      - run: dotnet restore PaymentOps.slnx
+      - run: dotnet build PaymentOps.slnx --no-restore --configuration Release
+      - run: dotnet test PaymentOps.slnx --no-build --configuration Release
+
+      # Published from the binaries just tested; the same artifact is what gets deployed.
       - name: Publish
         run: |
-          dotnet publish src/PaymentOps.Web --configuration Release --output publish
+          dotnet publish src/PaymentOps.Web --no-build --configuration Release --output publish
           (cd publish && zip -qr ../app.zip .)
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
