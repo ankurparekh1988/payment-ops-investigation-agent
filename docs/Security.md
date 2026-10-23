@@ -23,7 +23,7 @@ Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.
 | App role | Can |
 |---|---|
 | `Ops.Reader` | Ask questions, run investigations, view citations |
-| `Ops.Engineer` | Everything a Reader can, plus approve proposed actions |
+| `Ops.Engineer` | Everything a Reader can, plus approve or reject the tickets their own investigations propose |
 | `Ops.Admin` | Everything an Engineer can, plus administration |
 
 Higher roles include lower ones. Membership of the **Risk and Compliance** security group grants access to Restricted knowledge, and only when the group is configured: with no group id set, nobody gets Restricted knowledge. The token carries only groups assigned to the app, which keeps unrelated group IDs out of it and avoids overage for users in many groups.
@@ -44,7 +44,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Principal | Scope | Role | Why |
 |---|---|---|---|
 | Web app | Foundry resource | Cognitive Services OpenAI User | Call the chat and embedding deployments |
-| Web app | Search service | Search Index Data Reader | Retrieve sections for questions and show cited sections |
+| Web app | Search service | Search Index Data Reader | Retrieve sections for investigations and show cited sections |
 | Web app | Application Insights | Monitoring Metrics Publisher | Send telemetry with an Entra token |
 | Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
 | Foundry project | Application Insights | Log Analytics Reader | Show traces in the Foundry portal |
@@ -100,29 +100,65 @@ The merchant, settlement, processor and error-event data is synthetic, and it is
 
 The dataset is in the public repository under the same checks as the knowledge sources: nothing that passes the card checksum, and only reserved example domains. Fault injection can't be switched on by configuration: only a test host enables it, in code, and a fault setting on its own stops the app from starting.
 
-## Retrieval and answers
+## Knowledge retrieval
 
-The model sees only sections the user may see, and the user sees only what the server has checked.
+The model sees only sections the user may see.
 
-- **Retrieval-time authorization.** The classification filter is built from the signed-in user's identity inside the Knowledge module and added to every query. The question is search text only: it can't add to or change the filter. A user who isn't signed in gets no access at all.
-- **Citations come from the server.** Each retrieved section gets an id for this question only. The model returns ids, never links, keys or titles; the server checks that the ids in the answer and the ids it declared are exactly the same set, and that each was retrieved for this question. One unknown or missing citation fails the whole answer.
+- **Retrieval-time authorization.** The classification filter is built from the signed-in user's identity inside the Knowledge module and added to every query. A search query is text only: it can't add to or change the filter. A user who isn't signed in gets no access at all.
 - **Source pages re-check access.** `/sources/{key}` looks the section up with the user's current access in the same query, so a section they may not see returns the same 404 as one that doesn't exist. A key that isn't well formed is never sent to Search.
-- **Rendering is an allowlist.** Model output and corpus text are rendered from a short list of Markdown elements, with all text encoded. Links, images, raw HTML and entities become plain text, so the model can't choose a URL, an image, markup or a link target.
-- **Prompt guidance isn't a control.** The prompt tells the model to treat section text as evidence, never instructions, and the question and sections are delimited. That helps the model; it doesn't protect anything. The controls are the filter, the citation checks and the renderer.
-- **No evidence, no model call.** With no sections the user may see, the server answers without calling the model, so the model can't fill the gap from its own knowledge.
-- **Logs hold no content.** Answer logs record reason codes, counts, section keys, timings and token usage, and on failure the dependency, the exception type, status, error code and request id. They never record the question, section text, the prompt or the model's output, nor an exception's message, which can echo the request.
+- **Rendering is an allowlist.** Corpus text is rendered from a short list of Markdown elements, with all text encoded. Links, images, raw HTML and entities become plain text.
 - **Calibration probes.** The retrieval comparison asks Restricted-only questions as a General user, in both modes, and fails if any Restricted section comes back ([Evaluation](Evaluation.md)).
 
 ## Investigation tools and agent
 
 The agent can only read, and only what the user may read; what it says is checked against what its tools actually returned.
 
-- **Tools are read-only, and offered by role.** Every tool needs `Ops.Reader`. The agent is offered only the tools the user's role allows, and each tool checks the role again when it runs, so a tool is neither offered to nor executable by a user without it. Knowledge search uses the user's own access, exactly as grounded answers do: a General user's investigation can't retrieve, register or cite a Restricted section, and isn't told one exists.
+- **Tools are read-only, and offered by role.** Every tool needs `Ops.Reader`. The agent is offered only the tools the user's role allows, and each tool checks the role again when it runs, so a tool is neither offered to nor executable by a user without it. Knowledge search uses the user's own access: a General user's investigation can't retrieve, register or cite a Restricted section, and isn't told one exists.
 - **Arguments are validated before any data is read.** The server reads them strictly, whatever the schema sent to the model says: an argument the tool doesn't declare is an error and the tool doesn't run. Repeats are counted on the request as parsed, so an extra or blank argument doesn't make a new call. Ids are checked against a fixed pattern and matched exactly; ranges are capped at 31 days and can't end after the investigation's date. Errors go back to the model in fixed wording, never as exception text.
 - **The tool loop fails closed.** Calls run one at a time; an unexpected exception or a call to an unknown tool ends the loop at once, with nothing from the exception sent to the model. Call, repeat, correction and time limits are enforced by our own code ([Architecture](Architecture.md#limits)).
 - **Evidence comes from the server.** Only tool code registers evidence, from typed results; the model can cite an id but can't create one. An assessment citing anything this investigation's tools didn't return is rejected. Labels, outcome and confidence caps are set by the server.
-- **Untrusted text before injection defences.** Incident summaries and knowledge content reach the model marked as untrusted data. The markers are guidance; dedicated injection defences come later. Until then the structural controls hold: there are no write tools, evidence is registered by the server, and every statement shown is validated against it.
-- **Logs hold no content.** Investigation logs record the outcome, confidence, label, counts of claims and gaps, timings and failure classes. They never record the question, tool results, the prompt or the model's output.
+- **Untrusted text before injection defences.** Incident summaries and knowledge content reach the model marked as untrusted data. The markers are guidance; dedicated injection defences come later. Until then the structural controls hold: there are no write tools, evidence is registered by the server, every statement shown is validated against it, and a ticket needs a person's approval.
+- **Earlier questions aren't evidence.** Follow-up questions see earlier turns as plain text with no tool messages and no section ids, and validation accepts only what this question's own tools returned.
+- **Model text is never markup.** The investigation page binds every model-written string, including a proposed ticket's title and summary, as text. Timeline labels come from validated ids and dates in the parsed request, never from free text the model wrote.
+- **Logs hold no content.** Investigation logs record the investigation id, outcome, confidence, label, counts of claims and gaps, timings and failure classes. They never record the question, tool results, the prompt or the model's output.
+
+## Ticket approvals
+
+Creating an incident ticket is the only action that changes anything outside the app, and the model can't take it ([ADR 0011](adr/0011-the-model-proposes-the-server-executes.md)).
+
+| Asset | Where | Who can read it |
+|---|---|---|
+| Conversation and Reader drafts | The page's circuit, in memory | That user, until refresh, sign-out or restart |
+| Pending proposals | Process memory, keyed by a server-generated id | Only through the approval service, which checks the owner on every call |
+| Tickets | Process memory | The owner's card; there's no other read path |
+| `approval.decided` and investigation logs | Application Insights | Identities with workspace read. Ids, the investigation id, the decision, a reason code, a pseudonymous approver id and the prompt and model version; never the title, summary, note, question, model text or a detected value |
+
+| Threat | Control | Tested by |
+|---|---|---|
+| The model approves its own proposal | No ticket tool, no decision field, nothing the model returns reaches the approval service | A call to `create_incident_ticket` ends unverified with an empty store; text claiming approval leaves the proposal pending |
+| A ticket before approval | Proposing never touches the ticket store | A valid proposal leaves the store empty |
+| A Reader approves | No pending proposal exists for a Reader, and the role is read at call time | A Reader's assessment stores nothing; a Reader approving any id is refused |
+| Another user approves | The owner check, answered like a missing id | Another Engineer gets "not found" |
+| Double clicks or parallel calls | An atomic pending-to-executing step and the proposal id as idempotency key | 50 parallel approvals make one ticket |
+| Replay after a decision | State | Approving after an approval or a rejection creates nothing |
+| An old page approves new content | The next question, or a new investigation, supersedes the pending one | A superseded id is refused, with no ticket |
+| Expiry | 15 minutes on the host's real clock | Real time +15 min 1 s is expired; the data's clock has no say |
+| An ungrounded proposal | Processor and merchants must be records the investigation returned; data evidence and a runbook citation are both required | Each rule rejects, then one correction |
+| A platform incident forced into one processor's ticket | Prompt rule, and missing files from two processors reject the ticket | Rejected |
+| Card or account data in a ticket | `TicketContentPolicy`: card-number checksum, runs of eight or more digits, IBAN shapes; reports rule ids only | The correction, logs and result carry no digits from the input |
+| Role removed mid-session | The role is read from the signed-in user at call time; a change in Entra applies at the next sign-in | Demoted to Reader before the click: refused |
+| Cross-site request forgery | No HTTP endpoint for approvals; decisions go through the signed-in circuit | Endpoint enumeration finds none |
+| Clickjacking | `frame-ancestors 'none'` on the interactive pages | A smoke test reads the header on `/` |
+| A cancel races completion | A cancelled investigation keeps nothing | Cancelled after the submission: no proposal, no turn |
+| Unbounded memory | 500 pending proposals, 1,000 tickets, Reader drafts outside the store | Full stores refuse with fixed results |
+
+Known limits:
+
+- A role removed in Entra applies at the next sign-in, as for every check.
+- A person can approve a well-formed proposal that untrusted text steered. Warnings for that come with the injection defences.
+- The content policy blocks card-like and account-like numbers. It isn't data-loss prevention for bank details ([ProductionGapAnalysis](ProductionGapAnalysis.md)).
+- Proposals and tickets are lost on restart, deploy or slot swap, and the app runs as one instance.
+- A Reader's draft can't be handed to an Engineer; the Engineer runs the investigation themselves.
 
 ## Content safety
 

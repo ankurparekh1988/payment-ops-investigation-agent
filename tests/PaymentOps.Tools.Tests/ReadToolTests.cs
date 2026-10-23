@@ -37,6 +37,18 @@ public sealed class ReadToolTests
         Assert.Contains("incident:INC-FAB-1109", Ids(ok));
     }
 
+    // The reference a ticket may carry comes from typed data at registration, never from text the model saw.
+    [Fact]
+    public async Task The_incident_reference_is_registered_from_typed_data()
+    {
+        using var tools = new ToolFixture();
+        var ok = Ok(await tools.Tool<ProcessorStatusTool>().RunAsync(new ProcessorStatusRequest("fabrikam-pay", "2026-11-09", "2026-11-10"), TestUser.Reader, CancellationToken.None));
+
+        var incident = Assert.IsType<IncidentEvidence>(ok.Evidence.Single(e => e.Id == "incident:INC-FAB-1109"));
+        Assert.Equal(new IncidentEvidence("incident:INC-FAB-1109", "Incident INC-FAB-1109", "fabrikam-pay", "FAB-7731"), incident);
+        Assert.DoesNotContain("processor_reference", ToolJson.Serialize(ok), StringComparison.Ordinal);
+    }
+
     // A count is supported by every event it counted, even when only a few ids are shown.
     [Fact]
     public async Task An_event_group_counts_everything_and_shows_only_the_cap()

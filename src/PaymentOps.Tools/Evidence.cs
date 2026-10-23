@@ -8,6 +8,12 @@ public abstract record EvidenceItem(string Id, string Label);
 /// <summary>A record from a system of record, such as <c>payout:PO-1042-NW-1109</c>.</summary>
 public sealed record RecordEvidence(string Id, string Label) : EvidenceItem(Id, Label);
 
+/// <summary>
+/// A processor incident record. The reference is the processor's own, kept from typed data so a ticket can carry it
+/// without anything being read back from model text.
+/// </summary>
+public sealed record IncidentEvidence(string Id, string Label, string ProcessorId, string? ProcessorReference) : EvidenceItem(Id, Label);
+
 /// <summary>A fact computed from records, holding the exact record ids it was computed from.</summary>
 public sealed record DerivedEvidence(string Id, string Label, IReadOnlyList<string> SourceIds) : EvidenceItem(Id, Label);
 
@@ -16,18 +22,21 @@ public static class EvidenceIds
 {
     public const string FactPrefix = "fact:";
 
+    public const string ProcessorPrefix = "processor:";
+    public const string MissingFilePrefix = FactPrefix + "missing-file:";
+
     private const string EventPrefix = "event:";
     private const string EventGroupPrefix = FactPrefix + "event-group:";
 
     /// <summary>Every prefix an evidence id can start with, so text can be checked for ids without repeating the list.</summary>
     public static IReadOnlyList<string> Prefixes { get; } =
-        ["merchant:", "hold:", "processor:", "payment:", "file:", "payout:", "incident:", EventPrefix, "calendar:", FactPrefix];
+        ["merchant:", "hold:", ProcessorPrefix, "payment:", "file:", "payout:", "incident:", EventPrefix, "calendar:", FactPrefix];
 
     public static string Merchant(string id) => $"merchant:{id}";
 
     public static string Hold(string id) => $"hold:{id}";
 
-    public static string Processor(string id) => $"processor:{id}";
+    public static string Processor(string id) => ProcessorPrefix + id;
 
     public static string Payment(string id) => $"payment:{id}";
 

@@ -42,6 +42,7 @@ public sealed class InvestigationScenarioTests
         root_cause = rootCause,
         confidence,
         next_steps = new[] { new { text = "Follow the runbook.", citation_ids = new[] { "S1" } } },
+        proposed_ticket = (object?)null,
     };
 
     private static ScriptedChatClient Model(params ChatResponse[] responses) =>
@@ -105,6 +106,7 @@ public sealed class InvestigationScenarioTests
             root_cause = Statement(string.Empty, [], []),
             confidence = "medium",
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
         var shownOnly = CountClaim(["event:EV-1109-01", "event:EV-1109-02"]);
         var model = Model([.. S1Trajectory(shownOnly), Call(Submit, shownOnly)]);
@@ -138,6 +140,7 @@ public sealed class InvestigationScenarioTests
             root_cause = Statement("A processor outage.", [], ["S1"]),
             confidence = "high",
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
 
         var result = await RunAsync(Model(S1Trajectory(submission)), AllSourcesDown);
@@ -146,6 +149,45 @@ public sealed class InvestigationScenarioTests
         Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
         Assert.Null(assessed.RootCause);
         Assert.Equal(Confidence.Low, assessed.Confidence);
+    }
+
+    // A ticket naming nothing this investigation returned: it would fail every proposal check that applies.
+    private static readonly object UnsupportedTicket = new
+    {
+        processor_id = Fabrikam,
+        merchant_ids = new[] { "M-9999" },
+        start_date = "2026-11-09",
+        end_date = "2026-11-09",
+        title = "Fabrikam Pay settlement file missing",
+        summary = "No settlement file arrived from Fabrikam Pay.",
+        evidence_ids = new[] { MissingFile },
+        citation_ids = new[] { "S9" },
+    };
+
+    // The server will force incomplete and withhold the ticket, so the ticket isn't checked and costs no correction.
+    [Fact]
+    public async Task With_every_data_source_down_an_unsupported_ticket_is_withheld_without_a_correction()
+    {
+        var submission = new
+        {
+            outcome = "assessed",
+            summary = Statement("Outages delay payouts.", [], ["S1"]),
+            claims = new[] { Statement("The runbook describes outage handling.", [], ["S1"]) },
+            root_cause = Statement(string.Empty, [], []),
+            confidence = "high",
+            next_steps = Array.Empty<object>(),
+            proposed_ticket = UnsupportedTicket,
+        };
+        var model = Model(S1Trajectory(submission));
+
+        var result = await RunAsync(model, AllSourcesDown);
+
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(result);
+        Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
+        Assert.Equal(Confidence.Low, assessed.Confidence);
+        Assert.Null(assessed.Proposal);
+        Assert.True(assessed.ProposalWithheld);
+        Assert.Equal(6, model.Requests.Count);
     }
 
     // A request no read-only tool can serve is refused without manufacturing evidence, and people see the server's notice.
@@ -160,6 +202,7 @@ public sealed class InvestigationScenarioTests
             root_cause = Statement(string.Empty, [], []),
             confidence = "high",
             next_steps = Array.Empty<object>(),
+            proposed_ticket = (object?)null,
         };
         var model = Model(Call(Submit, refusal));
         using var fixture = new AgentFixture(null, new CorpusKnowledge(), 20);
@@ -260,21 +303,5 @@ public sealed class InvestigationScenarioTests
         Assert.Equal(RootCauseLabel.Assessment, assessed.RootCause!.Label);
         Assert.Contains("\"relation\":\"identical\"", batches, StringComparison.Ordinal);
         Assert.DoesNotContain("duplicate", batches, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>The real corpus: a query naming a document returns its sections, filtered by the caller's access.</summary>
-    private sealed class CorpusKnowledge : IKnowledgeLookup
-    {
-        private static readonly Lazy<IReadOnlyList<KnowledgeSearchDocument>> Corpus =
-            new(() => IndexedCorpus.FromSourceDirectory(Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src")));
-
-        public Task<IReadOnlyList<RetrievedSection>> RetrieveAsync(string question, KnowledgeAccess access, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<RetrievedSection>>([.. Corpus.Value
-                .Where(d => d.DocId == question && (access.IncludesRestricted || d.Classification == KnowledgeClassification.General))
-                .Take(3)
-                .Select(d => new RetrievedSection(d.Id, d.DocId, d.Title, d.SectionPath, d.Content, d.Classification, null))]);
-
-        public Task<RetrievedSection?> FindAsync(string sectionKey, KnowledgeAccess access, CancellationToken cancellationToken) =>
-            Task.FromResult<RetrievedSection?>(null);
     }
 }

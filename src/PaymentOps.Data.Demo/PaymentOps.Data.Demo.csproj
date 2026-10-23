@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="PaymentOps.Data.ContractTests" />
+    <InternalsVisibleTo Include="PaymentOps.Agent.Tests" />
   </ItemGroup>
 
 </Project>

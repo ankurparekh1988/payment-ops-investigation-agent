@@ -19,7 +19,7 @@ A fixed sequence (fetch everything for a merchant and a date, then make one mode
 - Each tool checks the caller's role itself, so it's safe on its own, and the agent is offered only the tools the user may use.
 - The agent finishes with a `submit_assessment` tool, validated against the investigation's evidence ([ADR 0010](0010-validated-assessments-with-per-claim-evidence.md)).
 - Reasoning effort is none to start, set in code; low is the alternative to measure if tool choice turns out to need it.
-- Each investigation is a single question with no carried history.
+- Each investigation is a single question with no carried history. *Later:* follow-up questions now carry earlier turns as plain text, still in a fresh session each turn ([Architecture](../Architecture.md#conversation)).
 
 ## Consequences
 

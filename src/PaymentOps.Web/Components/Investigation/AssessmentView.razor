@@ -1,0 +1,92 @@
+@using PaymentOps.Agent.Contracts
+
+@* Model-written text is bound as text, never as markup. *@
+@if (Result is AssessmentResult.Assessed assessed)
+{
+    @if (assessed.Outcome == AssessmentOutcome.Refused)
+    {
+        <p class="summary">@assessed.Summary.Text</p>
+    }
+    else
+    {
+        @if (assessed.Outcome == AssessmentOutcome.Incomplete)
+        {
+            <p class="banner" role="note">Incomplete: the investigation couldn't check everything it needed, so this is a partial view.</p>
+        }
+        else if (assessed.Outcome == AssessmentOutcome.Escalated)
+        {
+            <p class="banner" role="note">Escalated: this needs an Operations Engineer to look into it.</p>
+        }
+
+        <p class="summary">@assessed.Summary.Text</p>
+        <EvidenceChips Statement="assessed.Summary" />
+        <p>Confidence: @Word(assessed.Confidence)</p>
+
+        @if (assessed.Claims.Count > 0)
+        {
+            <h3>What the evidence shows</h3>
+            <ul class="claims">
+                @foreach (var claim in assessed.Claims)
+                {
+                    <li>@claim.Text <EvidenceChips Statement="claim" /></li>
+                }
+            </ul>
+        }
+
+        @if (assessed.RootCause is { } root)
+        {
+            <h3>Root cause <span class="badge">@root.Label</span></h3>
+            <p>@root.Statement.Text</p>
+            <EvidenceChips Statement="root.Statement" />
+        }
+
+        @if (assessed.NextSteps.Count > 0)
+        {
+            <h3>Next steps</h3>
+            <ul>
+                @foreach (var step in assessed.NextSteps)
+                {
+                    <li>@step.Text <EvidenceChips Statement="step" /></li>
+                }
+            </ul>
+        }
+
+        @if (assessed.Proposal is { } proposal)
+        {
+            <TicketCard Proposal="proposal" Deciding="Deciding" Approve="Approve" Reject="Reject" />
+        }
+        else if (assessed.ProposalWithheld)
+        {
+            <p role="note">A ticket was proposed but isn't shown, because the investigation is incomplete.</p>
+        }
+
+        @if (assessed.Gaps.Count > 0)
+        {
+            <h3>Not checked</h3>
+            <ul class="gaps">
+                @foreach (var gap in assessed.Gaps)
+                {
+                    <li>@gap</li>
+                }
+            </ul>
+        }
+    }
+
+    <p class="investigation-id">Investigation @assessed.InvestigationId</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public AssessmentResult Result { get; set; } = default!;
+
+    [Parameter]
+    public bool Deciding { get; set; }
+
+    [Parameter]
+    public EventCallback Approve { get; set; }
+
+    [Parameter]
+    public EventCallback<(RejectionReason Reason, string? Note)> Reject { get; set; }
+
+    private static string Word(Confidence confidence) => confidence.ToString().ToLowerInvariant();
+}

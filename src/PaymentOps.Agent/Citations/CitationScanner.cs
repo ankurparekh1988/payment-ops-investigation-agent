@@ -8,8 +8,8 @@ using Markdig.Syntax.Inlines;
 namespace PaymentOps.Agent.Citations;
 
 /// <summary>
-/// The one definition of a citation, shared by answer validation and rendering: an exact
-/// <c>[S&lt;n&gt;]</c> in ordinary text, never inside a link, image, autolink, HTML, entity or code.
+/// The one definition of a citation marker: an exact <c>[S&lt;n&gt;]</c> in ordinary text, never inside a link,
+/// image, autolink, HTML, entity or code. Validation uses it to keep markers out of statement text.
 /// </summary>
 public static partial class CitationScanner
 {
@@ -34,13 +34,9 @@ public static partial class CitationScanner
         return new CitationScan(citations, malformed);
     }
 
-    /// <summary>The citations in one run of ordinary text.</summary>
-    public static IReadOnlyList<CitationToken> CitationsIn(TextRun run)
-    {
-        ArgumentNullException.ThrowIfNull(run);
-
-        return [.. Exact().Matches(run.Text).Select(m => new CitationToken(m.Groups[1].Value, m.Index, m.Length))];
-    }
+    // The citations in one run of ordinary text.
+    private static IEnumerable<CitationToken> CitationsIn(TextRun run) =>
+        Exact().Matches(run.Text).Select(m => new CitationToken(m.Groups[1].Value));
 
     /// <summary>
     /// A container's children as text runs and other inlines. Adjacent literals are joined, and an
@@ -135,8 +131,7 @@ public static partial class CitationScanner
 
 public sealed record CitationScan(IReadOnlyList<CitationToken> Citations, bool HasMalformedMarker);
 
-/// <summary>A citation inside a run: <paramref name="Start"/> and <paramref name="Length"/> are offsets in the run's text.</summary>
-public sealed record CitationToken(string Id, int Start, int Length);
+public sealed record CitationToken(string Id);
 
 /// <summary>Either a run of text or another inline, in document order.</summary>
 public sealed record InlineSegment(TextRun? Run, Inline? Other);

@@ -7,8 +7,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent;
-using PaymentOps.Agent.Answering;
+using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
@@ -34,14 +35,6 @@ builder.Services.AddDemoData(builder.Configuration);
 TokenCredential azureCredential = new DefaultAzureCredential();
 builder.Services.AddSingleton(azureCredential);
 
-builder.Services.AddOptions<AnsweringOptions>()
-    .Bind(builder.Configuration.GetSection(AnsweringOptions.SectionName))
-    .Validate(
-        o => o.MaxQuestionLength > 0 && o.MaxOutputTokens > 0
-            && o.SearchTimeout > TimeSpan.Zero && o.SearchTimeout <= TimeSpan.FromMinutes(5)
-            && o.ModelTimeout > TimeSpan.Zero && o.ModelTimeout <= TimeSpan.FromMinutes(5),
-        $"{AnsweringOptions.SectionName} needs positive limits and timeouts of at most 5 minutes.")
-    .ValidateOnStart();
 builder.Services.AddOptions<InvestigationLimits>()
     .Bind(builder.Configuration.GetSection(InvestigationLimits.SectionName))
     .Validate(
@@ -50,13 +43,25 @@ builder.Services.AddOptions<InvestigationLimits>()
             && o.TurnTimeout > TimeSpan.Zero && o.TurnTimeout <= TimeSpan.FromMinutes(5),
         $"{InvestigationLimits.SectionName} needs positive limits and timeouts of at most 5 minutes.")
     .ValidateOnStart();
+builder.Services.AddOptions<ConversationOptions>()
+    .Bind(builder.Configuration.GetSection(ConversationOptions.SectionName))
+    .Validate(
+        o => o.InputBudgetTokens > 0 && o.ToolResultAllowanceTokens > 0 && o.MaxQuestions > 0,
+        $"{ConversationOptions.SectionName} needs a positive input budget, tool result allowance and question limit.")
+    .ValidateOnStart();
+builder.Services.AddOptions<ApprovalOptions>()
+    .Bind(builder.Configuration.GetSection(ApprovalOptions.SectionName))
+    .Validate(
+        o => o.ProposalLifetime > TimeSpan.Zero && o.ProposalLifetime <= TimeSpan.FromHours(1) && o.MaxPendingProposals > 0,
+        $"{ApprovalOptions.SectionName} needs a proposal lifetime of at most an hour and a positive pending limit.")
+    .ValidateOnStart();
 builder.Services.AddOptions<ToolOptions>()
     .Bind(builder.Configuration.GetSection(ToolOptions.SectionName))
     .Validate(
         o => o.MaxListItems > 0 && o.MaxQueryLength > 0 && o.RetryBackoff >= TimeSpan.Zero && o.RetryBackoff <= TimeSpan.FromSeconds(10),
         $"{ToolOptions.SectionName} needs positive limits and a retry backoff of at most 10 seconds.")
     .ValidateOnStart();
-builder.Services.AddSingleton(sp => new AnsweringLimits(sp.GetRequiredService<IOptions<AnsweringOptions>>().Value.MaxQuestionLength));
+builder.Services.AddSingleton(sp => new QuestionLimits(sp.GetRequiredService<IOptions<InvestigationLimits>>().Value.MaxQuestionLength));
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -92,6 +97,7 @@ else if (!builder.Environment.IsDevelopment())
 else
 {
     builder.Services.AddScoped<IInvestigationService, UnconfiguredInvestigationService>();
+    builder.Services.AddScoped<IApprovalService, UnconfiguredApprovalService>();
 }
 
 // Readiness depends on Foundry once an endpoint is configured; locally and in tests it isn't.
@@ -137,7 +143,8 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check 
 
 app.MapAccountEndpoints();
 app.MapStaticAssets().AllowAnonymous();
+// The page approves tickets, so no site may frame it: a framed page could trick a click.
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode(o => o.ContentSecurityFrameAncestorsPolicy = "'none'");
 
 app.Run();

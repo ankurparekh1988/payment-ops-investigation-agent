@@ -60,7 +60,8 @@ public static partial class ToolArguments
     internal static DateRange Range(string? start, string? end, DateOnly today) =>
         TryRange(start, end, today, out var range, out var code, out var error) ? range : throw new ToolFailedException(new(code, error!));
 
-    private static bool TryDate(string? value, out DateOnly date) =>
+    /// <summary>A date written YYYY-MM-DD, as every tool takes it.</summary>
+    public static bool TryDate(string? value, out DateOnly date) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.CultureInvariant)]

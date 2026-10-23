@@ -1,0 +1,19 @@
+@using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Components.Pages
+
+@if (Status.Ended)
+{
+    <p role="note">@NotAssessedText.For(NotAssessedReason.ConversationLimit, MaxQuestionLength)</p>
+}
+else if (Status.CarriedQuestions < Status.Questions)
+{
+    <p role="note">The agent sees your last @(Status.CarriedQuestions == 1 ? "question" : $"{Status.CarriedQuestions} questions") as context.</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ConversationStatus Status { get; set; } = default!;
+
+    [Parameter]
+    public int MaxQuestionLength { get; set; }
+}

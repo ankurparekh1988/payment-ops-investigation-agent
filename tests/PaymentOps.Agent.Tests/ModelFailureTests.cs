@@ -1,6 +1,6 @@
 using System.ClientModel;
 
-using PaymentOps.Agent.Answering;
+using PaymentOps.Agent.Model;
 
 namespace PaymentOps.Agent.Tests;
 

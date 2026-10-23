@@ -1,4 +1,5 @@
-using PaymentOps.Agent.Answering;
+using System.Globalization;
+
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Tools;
 
@@ -38,14 +39,10 @@ internal static class AssessmentPolicy
             confidence = Min(confidence, Confidence.Medium);
         }
 
-        if (turn.EveryStructuredSourceFailed)
+        if (ForcesIncomplete(turn))
         {
             outcome = AssessmentOutcome.Incomplete;
-            rootCause = null;
-        }
-        else if (turn.Stopped)
-        {
-            outcome = AssessmentOutcome.Incomplete;
+            rootCause = turn.EveryStructuredSourceFailed ? null : rootCause;
         }
 
         if (outcome == AssessmentOutcome.Incomplete)
@@ -53,6 +50,9 @@ internal static class AssessmentPolicy
             confidence = Min(confidence, Confidence.Low);
         }
 
+        // An incomplete investigation can't ground a ticket, whatever the model proposed.
+        var ticket = submission.ProposedTicket;
+        var withheld = ticket is not null && outcome == AssessmentOutcome.Incomplete;
         return new AssessmentResult.Assessed(
             outcome,
             Resolve(submission.Summary, turn),
@@ -60,8 +60,47 @@ internal static class AssessmentPolicy
             rootCause,
             confidence,
             [.. submission.NextSteps.Select(n => Resolve(new SubmittedStatement(n.Text, [], n.CitationIds), turn))],
-            [.. gaps.Select(g => g.Wording)]);
+            [.. gaps.Select(g => g.Wording)])
+        {
+            Proposal = ticket is null || withheld ? null : Draft(ticket, turn),
+            ProposalWithheld = withheld,
+        };
     }
+
+    /// <summary>The turn stopped or no structured source answered: the outcome is incomplete whatever was submitted.</summary>
+    public static bool ForcesIncomplete(TurnState turn) => turn.Stopped || turn.EveryStructuredSourceFailed;
+
+    /// <summary>
+    /// The processor's reference from the incidents the ticket cites for its processor, when they agree on one.
+    /// Read from typed incident data only; model text is never searched for it.
+    /// </summary>
+    public static string? Reference(ProposedTicket ticket, TurnState turn)
+    {
+        var references = ticket.EvidenceIds
+            .Select(id => turn.TryGetEvidence(id, out var item) ? item : null)
+            .OfType<IncidentEvidence>()
+            .Where(incident => incident.ProcessorId == ticket.ProcessorId && incident.ProcessorReference is not null)
+            .Select(incident => incident.ProcessorReference!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return references.Count == 1 ? references[0] : null;
+    }
+
+    // Only called after validation, so the dates parse and every id resolves.
+    private static TicketProposal Draft(ProposedTicket ticket, TurnState turn) => new(
+        null,
+        ProposalStatus.Draft,
+        ticket.ProcessorId,
+        [.. ticket.MerchantIds.Distinct(StringComparer.Ordinal)],
+        DateOnly.ParseExact(ticket.StartDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+        DateOnly.ParseExact(ticket.EndDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+        ticket.Title,
+        ticket.Summary,
+        [.. ticket.EvidenceIds.Distinct(StringComparer.Ordinal).Select(id => Evidence(id, turn))],
+        [.. ticket.CitationIds.Distinct(StringComparer.Ordinal).Select(turn.CitationFor)],
+        Reference(ticket, turn),
+        null,
+        null);
 
     // Data (a record or a fact computed from records) and knowledge together make an assessment.
     private static RootCauseLabel Label(SubmittedStatement rootCause) =>
@@ -70,19 +109,13 @@ internal static class AssessmentPolicy
     private static Statement Resolve(SubmittedStatement statement, TurnState turn) => new(
         statement.Text,
         [.. statement.EvidenceIds.Distinct(StringComparer.Ordinal).Select(id => Evidence(id, turn))],
-        [.. statement.CitationIds.Distinct(StringComparer.Ordinal).Select(id => Citation(id, turn))]);
+        [.. statement.CitationIds.Distinct(StringComparer.Ordinal).Select(turn.CitationFor)]);
 
     // Only called after validation, so every id resolves.
     private static EvidenceReference Evidence(string id, TurnState turn)
     {
         turn.TryGetEvidence(id, out var item);
         return new EvidenceReference(id, item.Label, item is DerivedEvidence);
-    }
-
-    private static Citation Citation(string id, TurnState turn)
-    {
-        turn.TryGetSection(id, out var section);
-        return EvidenceRegistry.Cite(id, section);
     }
 
     private static Confidence Min(Confidence a, Confidence b) => a < b ? a : b;

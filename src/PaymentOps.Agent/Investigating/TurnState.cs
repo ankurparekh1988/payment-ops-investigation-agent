@@ -1,4 +1,4 @@
-using PaymentOps.Agent.Answering;
+using PaymentOps.Agent.Contracts;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools;
 
@@ -54,7 +54,7 @@ internal sealed class TurnState
         {
             if (!_idsBySectionKey.TryGetValue(section.Key, out var id))
             {
-                id = EvidenceRegistry.SectionId(_sectionsById.Count + 1);
+                id = $"S{_sectionsById.Count + 1}";
                 _idsBySectionKey[section.Key] = id;
                 _sectionsById[id] = section;
             }
@@ -92,11 +92,38 @@ internal sealed class TurnState
         }
     }
 
+    /// <summary>Processors with a missing file this turn: more than one points to a platform incident, not a processor's.</summary>
+    public IReadOnlySet<string> ProcessorsWithMissingFiles
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _evidence.Values.OfType<DerivedEvidence>()
+                    .Where(fact => fact.Id.StartsWith(EvidenceIds.MissingFilePrefix, StringComparison.Ordinal))
+                    .SelectMany(fact => fact.SourceIds)
+                    .Where(id => id.StartsWith(EvidenceIds.ProcessorPrefix, StringComparison.Ordinal))
+                    .Select(id => id[EvidenceIds.ProcessorPrefix.Length..])
+                    .ToHashSet(StringComparer.Ordinal);
+            }
+        }
+    }
+
     public bool TryGetSection(string id, out RetrievedSection section)
     {
         lock (_lock)
         {
             return _sectionsById.TryGetValue(id, out section!);
+        }
+    }
+
+    /// <summary>How a registered section is shown: from the server's copy, never from what the model wrote.</summary>
+    public Citation CitationFor(string id)
+    {
+        lock (_lock)
+        {
+            var section = _sectionsById[id];
+            return new Citation(id, section.Key, section.Title, section.SectionPath);
         }
     }
 
@@ -111,10 +138,17 @@ internal sealed class TurnState
         }
     }
 
-    public void Stop()
+    /// <summary>Stops the turn; true only the first time, so the stop is reported once however it was reached.</summary>
+    public bool Stop()
     {
+        if (Stopped)
+        {
+            return false;
+        }
+
         Stopped = true;
         AddGap(ObservedGap.LimitReached);
+        return true;
     }
 
     public void Accept(AssessmentSubmission submission) => Accepted = submission;

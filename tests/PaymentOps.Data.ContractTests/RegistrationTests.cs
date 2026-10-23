@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PaymentOps.Data.Demo;
 using PaymentOps.Data.Demo.Faults;
 using PaymentOps.Domain.ErrorEvents;
+using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Merchants;
 using PaymentOps.Domain.Processors;
@@ -34,6 +35,16 @@ public sealed class RegistrationTests
         Assert.Equal(new DateTimeOffset(2026, 11, 11, 6, 0, 0, TimeSpan.Zero), clock.Now);
         Assert.Equal(new DateOnly(2026, 11, 11), clock.Today);
         Assert.Null(provider.GetService<TimeProvider>());
+    }
+
+    // One store for the app, on the host's real clock: tickets are created now, not at the dataset's moment.
+    [Fact]
+    public void The_incident_store_is_one_in_memory_store_on_the_hosts_clock()
+    {
+        using var provider = Provider([]);
+
+        Assert.IsType<InMemoryIncidentStore>(provider.GetRequiredService<IIncidentStore>());
+        Assert.Same(provider.GetRequiredService<IIncidentStore>(), provider.GetRequiredService<IIncidentStore>());
     }
 
     [Theory]

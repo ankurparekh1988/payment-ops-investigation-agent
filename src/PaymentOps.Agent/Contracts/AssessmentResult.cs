@@ -32,6 +32,12 @@ public enum NotAssessedReason
     ModelUnavailable,
     LimitReached,
     AssessmentUnverified,
+
+    /// <summary>The person stopped the investigation; nothing from it is kept.</summary>
+    Cancelled,
+
+    /// <summary>The conversation is full; a new investigation starts a fresh one.</summary>
+    ConversationLimit,
 }
 
 /// <summary>A record or computed fact the server registered this turn, described from its own data.</summary>
@@ -49,6 +55,9 @@ public abstract record AssessmentResult
     {
     }
 
+    /// <summary>Ties the result to its logs and anything created from it.</summary>
+    public Guid InvestigationId { get; init; }
+
     /// <param name="Gaps">What the investigation couldn't check, as the server observed it.</param>
     public sealed record Assessed(
         AssessmentOutcome Outcome,
@@ -57,7 +66,14 @@ public abstract record AssessmentResult
         RootCause? RootCause,
         Confidence Confidence,
         IReadOnlyList<Statement> NextSteps,
-        IReadOnlyList<string> Gaps) : AssessmentResult;
+        IReadOnlyList<string> Gaps) : AssessmentResult
+    {
+        /// <summary>The ticket the agent proposed, if any, with what the server allows done with it.</summary>
+        public TicketProposal? Proposal { get; init; }
+
+        /// <summary>A ticket was proposed but isn't shown, because the investigation ended incomplete.</summary>
+        public bool ProposalWithheld { get; init; }
+    }
 
     public sealed record NotAssessed(NotAssessedReason Reason) : AssessmentResult;
 }

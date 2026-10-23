@@ -1,0 +1,22 @@
+@using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Rendering
+
+@* What supports one statement, described from the server's evidence; labels and titles are bound as text. *@
+@if (Statement.Evidence.Count + Statement.Citations.Count > 0)
+{
+    <ul class="evidence-chips">
+        @foreach (var evidence in Statement.Evidence)
+        {
+            <li class="chip">@(evidence.IsDerived ? $"{evidence.Label} (computed)" : evidence.Label)</li>
+        }
+        @foreach (var citation in Statement.Citations)
+        {
+            <li class="chip chip-source"><a href="@SectionRenderer.SourceUrl(citation.SectionKey)">@citation.Title</a></li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Statement Statement { get; set; } = default!;
+}

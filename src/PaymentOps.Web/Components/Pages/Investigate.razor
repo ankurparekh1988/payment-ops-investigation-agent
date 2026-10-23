@@ -1,0 +1,206 @@
+@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
+@using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Components.Investigation
+@inject IInvestigationService Investigation
+@inject IApprovalService Approvals
+@inject IUserContext CurrentUser
+@inject QuestionLimits Limits
+
+<PageTitle>Payment Ops Investigation Agent</PageTitle>
+
+<h1>Investigate</h1>
+
+<p>Questions in this conversation carry over as context until you start a new investigation or reload the page.</p>
+<ConversationNotice Status="_conversation" MaxQuestionLength="Limits.MaxQuestionLength" />
+
+<form @onsubmit="InvestigateAsync">
+    <label for="question">Question</label>
+    <textarea id="question" @bind="_question" @bind:event="oninput" rows="3" maxlength="@Limits.MaxQuestionLength" disabled="@_busy"></textarea>
+    <button type="submit" disabled="@(_busy || _deciding || string.IsNullOrWhiteSpace(_question) || _conversation.Ended)">Investigate</button>
+    @if (_busy)
+    {
+        <button type="button" @onclick="Cancel">Cancel</button>
+    }
+    else
+    {
+        <button type="button" @onclick="StartNew" disabled="@_deciding">New investigation</button>
+    }
+</form>
+
+@if (_events.Count > 0)
+{
+    <section aria-labelledby="timeline-heading">
+        <h2 id="timeline-heading">Steps</h2>
+        <Timeline Events="_events" />
+    </section>
+}
+
+@if (_result is not null)
+{
+    <section aria-labelledby="result-heading">
+        <h2 id="result-heading" tabindex="-1" @ref="_resultHeading">Result</h2>
+        @if (_result is AssessmentResult.NotAssessed notAssessed)
+        {
+            <p role="status">@NotAssessedText.For(notAssessed.Reason, Limits.MaxQuestionLength)</p>
+        }
+        else
+        {
+            <AssessmentView Result="_result" Deciding="_deciding" Approve="ApproveAsync" Reject="RejectAsync" />
+            @if (_decisionFailed)
+            {
+                <p role="alert">The ticket couldn't be created right now. The proposal is still pending; please try again.</p>
+            }
+        }
+    </section>
+}
+
+<section aria-labelledby="access-heading">
+    <h2 id="access-heading">Your access</h2>
+    <dl>
+        <dt>Roles</dt>
+        <dd>@string.Join(", ", CurrentUser.Roles.Order(StringComparer.Ordinal))</dd>
+        <dt>Restricted knowledge</dt>
+        <dd>@(CurrentUser.CanAccessRestrictedKnowledge ? "Yes, through Risk and Compliance" : "No")</dd>
+    </dl>
+</section>
+
+@code {
+    private readonly List<InvestigationProgress> _events = [];
+    private string _question = string.Empty;
+    private bool _busy;
+    private bool _focusResult;
+    private AssessmentResult? _result;
+    private ElementReference _resultHeading;
+    private bool _deciding;
+    private bool _decisionFailed;
+
+    // Read when it can change, not on every render: each read projects the conversation's history.
+    private ConversationStatus _conversation = new(0, 0, false);
+
+    // Owned by the page, so closing the tab or leaving cancels the investigation.
+    private CancellationTokenSource? _run;
+
+    // The service applies its own timeouts; the page adds only the person's Cancel.
+    private async Task InvestigateAsync()
+    {
+        // Re-checked here: a disabled button is only the visible half.
+        if (_busy || _deciding || string.IsNullOrWhiteSpace(_question) || _conversation.Ended)
+        {
+            return;
+        }
+
+        _busy = true;
+        _result = null;
+        _decisionFailed = false;
+        _events.Clear();
+        _run = new CancellationTokenSource();
+        try
+        {
+            _result = await Investigation.InvestigateAsync(_question, new PageProgress(this), _run.Token);
+            _focusResult = true;
+        }
+        finally
+        {
+            _run.Dispose();
+            _run = null;
+            _busy = false;
+            _conversation = Investigation.Conversation;
+        }
+    }
+
+    private void Cancel() => _run?.Cancel();
+
+    private Task ApproveAsync() => DecideAsync(id => Approvals.ApproveAsync(id, CancellationToken.None), null);
+
+    private Task RejectAsync((RejectionReason Reason, string? Note) rejection) =>
+        DecideAsync(id => Approvals.RejectAsync(id, rejection.Reason, rejection.Note, CancellationToken.None), rejection.Reason);
+
+    // The card shows what the server answered, never what the click hoped for.
+    private async Task DecideAsync(Func<Guid, Task<ApprovalResult>> decide, RejectionReason? reason)
+    {
+        if (_deciding || _result is not AssessmentResult.Assessed { Proposal: { Status: ProposalStatus.Pending, ProposalId: { } id } proposal } assessed)
+        {
+            return;
+        }
+
+        _deciding = true;
+        _decisionFailed = false;
+        try
+        {
+            var outcome = await decide(id);
+
+            // The page moved on while the decision ran; the card it was made from is gone.
+            if (!ReferenceEquals(_result, assessed))
+            {
+                return;
+            }
+
+            // The store failed; the proposal is still pending, so the card stays as it is.
+            _decisionFailed = outcome is ApprovalResult.Unavailable;
+            _result = assessed with
+            {
+                Proposal = outcome switch
+                {
+                    ApprovalResult.Created created => proposal with { Status = ProposalStatus.Approved, TicketId = created.TicketId },
+                    ApprovalResult.Rejected => proposal with { Status = ProposalStatus.Rejected, Rejection = reason },
+                    ApprovalResult.AlreadyDecided decided => proposal with { Status = decided.TicketId is null ? ProposalStatus.Rejected : ProposalStatus.Approved, TicketId = decided.TicketId },
+                    ApprovalResult.Expired => proposal with { Status = ProposalStatus.Expired },
+                    ApprovalResult.Superseded => proposal with { Status = ProposalStatus.Superseded },
+                    ApprovalResult.CapacityReached => proposal with { Status = ProposalStatus.CapacityReached },
+                    ApprovalResult.Unavailable => proposal,
+                    _ => proposal with { Status = ProposalStatus.Unavailable },
+                },
+            };
+            _conversation = Investigation.Conversation;
+        }
+        finally
+        {
+            _deciding = false;
+        }
+    }
+
+    private void StartNew()
+    {
+        if (_busy || _deciding)
+        {
+            return;
+        }
+
+        _decisionFailed = false;
+        Investigation.StartNew();
+        _conversation = Investigation.Conversation;
+        _question = string.Empty;
+        _result = null;
+        _events.Clear();
+    }
+
+    // The conversation belongs to the circuit, so coming back to the page finds it as it was.
+    protected override void OnInitialized() => _conversation = Investigation.Conversation;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusResult && _result is not null)
+        {
+            _focusResult = false;
+            await _resultHeading.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _run?.Cancel();
+        _run?.Dispose();
+    }
+
+    // Events arrive on the investigation's thread; each is applied and rendered on the page's own.
+    private sealed class PageProgress(Investigate page) : IProgress<InvestigationProgress>
+    {
+        public void Report(InvestigationProgress value) => _ = page.InvokeAsync(() =>
+        {
+            page._events.Add(value);
+            page.StateHasChanged();
+        });
+    }
+}

@@ -1,6 +1,6 @@
 # 0006. Grounded answers with a server-owned evidence registry
 
-- **Status:** Accepted
+- **Status:** Superseded in part. The grounded-answer path was retired when the investigation view replaced it; its server-owned evidence registry lives on in [ADR 0010](0010-validated-assessments-with-per-claim-evidence.md), and source pages still work as described here.
 - **Date:** 2026-10-16
 
 ## Context

@@ -41,7 +41,7 @@ public sealed class ProcessorStatusTool(IProcessorData processors, IInvestigatio
         var evidence = Collect();
         var views = incidents.Select(i => new IncidentView(
             i.Id, ToolJson.Word(i.Component), i.StartedAt, i.ResolvedAt, i.ProcessorReference, UntrustedText.Wrap(i.Summary),
-            evidence.Record(EvidenceIds.Incident(i.Id), $"Incident {i.Id}"))).ToList();
+            evidence.Incident(i))).ToList();
 
         var c = processor.Configuration;
         return evidence.Ok(new ProcessorStatus(

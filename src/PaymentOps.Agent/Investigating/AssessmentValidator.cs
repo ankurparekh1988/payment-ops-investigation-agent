@@ -16,7 +16,8 @@ internal static class AssessmentValidator
         $@"\b({string.Join('|', EvidenceIds.Prefixes.Select(Regex.Escape))})[A-Za-z0-9]",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    public static IReadOnlyList<string> Check(AssessmentSubmission submission, TurnState turn)
+    /// <param name="today">The investigation's today: a proposed ticket's dates are the data's.</param>
+    public static IReadOnlyList<string> Check(AssessmentSubmission submission, TurnState turn, DateOnly today)
     {
         ArgumentNullException.ThrowIfNull(submission);
 
@@ -41,6 +42,11 @@ internal static class AssessmentValidator
                 failures.Add("outcome: a refusal carries no claims, no root cause and no next steps.");
             }
 
+            if (submission.ProposedTicket is not null)
+            {
+                failures.Add("proposed_ticket: a refusal carries no ticket.");
+            }
+
             return failures;
         }
 
@@ -53,13 +59,20 @@ internal static class AssessmentValidator
         Statement("root_cause", submission.RootCause, turn, failures, blankAllowed: true);
         for (var i = 0; i < submission.NextSteps.Count; i++)
         {
-            Text($"next_steps[{i}]", submission.NextSteps[i].Text, failures);
+            Text($"next_steps[{i}].text", submission.NextSteps[i].Text, failures);
             Citations($"next_steps[{i}]", submission.NextSteps[i].CitationIds, turn, failures);
         }
 
         if (submission.Outcome == "assessed" && submission.Claims.Count == 0)
         {
             failures.Add("claims: an assessed outcome needs at least one claim.");
+        }
+
+        // A ticket on an outcome that is or will be incomplete is withheld whatever it says, so it isn't checked
+        // and can't cost the correction. The server's forcing is decided by AssessmentPolicy.ForcesIncomplete.
+        if (submission.ProposedTicket is { } ticket && submission.Outcome != "incomplete" && !AssessmentPolicy.ForcesIncomplete(turn))
+        {
+            ProposalValidator.Check(ticket, turn, today, failures);
         }
 
         return failures;
@@ -80,31 +93,36 @@ internal static class AssessmentValidator
     {
         if (!(blankAllowed && string.IsNullOrWhiteSpace(statement.Text)))
         {
-            Text(field, statement.Text, failures);
+            Text($"{field}.text", statement.Text, failures);
         }
 
-        foreach (var id in statement.EvidenceIds.Where(id => !turn.TryGetEvidence(id, out _)))
-        {
-            failures.Add($"{field}.evidence_ids: '{Shown(id)}' wasn't returned by a tool in this investigation.");
-        }
-
+        Evidence(field, statement.EvidenceIds, turn, failures);
         Citations(field, statement.CitationIds, turn, failures);
         PartialGroupsCiteTheGroup(field, statement, turn, failures);
     }
 
-    private static void Text(string field, string text, List<string> failures)
+    public static void Evidence(string field, IReadOnlyList<string> evidenceIds, TurnState turn, List<string> failures)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        foreach (var id in evidenceIds.Where(id => !turn.TryGetEvidence(id, out _)))
         {
-            failures.Add($"{field}.text: can't be blank.");
-        }
-        else if (IdInText.IsMatch(text) || CitationScanner.Scan(text) is { Citations.Count: > 0 } or { HasMalformedMarker: true })
-        {
-            failures.Add($"{field}.text: ids and citation markers belong in evidence_ids and citation_ids, not in the text.");
+            failures.Add($"{field}.evidence_ids: '{Shown(id)}' wasn't returned by a tool in this investigation.");
         }
     }
 
-    private static void Citations(string field, IReadOnlyList<string> citationIds, TurnState turn, List<string> failures)
+    /// <param name="field">The field as the schema names it, such as <c>claims[0].text</c>.</param>
+    public static void Text(string field, string text, List<string> failures)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            failures.Add($"{field}: can't be blank.");
+        }
+        else if (IdInText.IsMatch(text) || CitationScanner.Scan(text) is { Citations.Count: > 0 } or { HasMalformedMarker: true })
+        {
+            failures.Add($"{field}: ids and citation markers belong in evidence_ids and citation_ids, not in the text.");
+        }
+    }
+
+    public static void Citations(string field, IReadOnlyList<string> citationIds, TurnState turn, List<string> failures)
     {
         foreach (var id in citationIds.Where(id => !turn.TryGetSection(id, out _)))
         {

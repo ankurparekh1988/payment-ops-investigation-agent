@@ -18,7 +18,7 @@ public sealed class InvestigationLimitTests
     {
         using var fixture = new AgentFixture();
         var time = new FakeTimeProvider();
-        using var model = new WaitingChatClient();
+        using var model = new ProgressTests.WaitingChatClient();
 
         var running = fixture.Runner(model, time: time).InvestigateAsync("q", CancellationToken.None);
         await model.Started.Task;
@@ -44,18 +44,33 @@ public sealed class InvestigationLimitTests
         Assert.Equal([ToolNames.SubmitAssessment], model.Requests[^1].Tools);
     }
 
+    // A stopped turn is incomplete whatever the model says, so its ticket is withheld unchecked and costs no correction.
     [Fact]
-    public async Task The_callers_cancellation_isnt_turned_into_a_result()
+    public async Task Hitting_the_call_limit_withholds_an_unsupported_ticket_without_a_correction()
     {
         using var fixture = new AgentFixture();
-        using var model = new WaitingChatClient();
-        using var cancel = new CancellationTokenSource();
+        var calls = Enumerable.Range(0, 11)
+            .Select(i => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = i == 0 ? "M-1042" : $"M-{9000 + i}" })));
+        var ticket = new
+        {
+            processor_id = "fabrikam-pay",
+            merchant_ids = new[] { "M-9999" },
+            start_date = "2026-11-09",
+            end_date = "2026-11-09",
+            title = "Fabrikam Pay settlement file missing",
+            summary = "No settlement file arrived from Fabrikam Pay.",
+            evidence_ids = new[] { "fact:missing-file:fabrikam-pay:2026-11-09" },
+            citation_ids = new[] { "S9" },
+        };
+        var model = new ScriptedChatClient([.. calls, _ => Call(ToolNames.SubmitAssessment, Submission(ticket: ticket))]);
 
-        var running = fixture.Runner(model).InvestigateAsync("q", cancel.Token);
-        await model.Started.Task;
-        await cancel.CancelAsync();
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None));
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+        Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
+        Assert.Equal(Confidence.Low, assessed.Confidence);
+        Assert.Null(assessed.Proposal);
+        Assert.True(assessed.ProposalWithheld);
+        Assert.Equal(12, model.Requests.Count);
     }
 
     // Service messages can echo the request; only the failure's type and codes are logged.
@@ -68,31 +83,8 @@ public sealed class InvestigationLimitTests
 
         await fixture.Runner(model, logger: logger).InvestigateAsync("Why were M-1042's payouts delayed?", CancellationToken.None);
 
-        var entry = Assert.Single(logger.Entries);
-        Assert.Null(entry.Exception);
-        Assert.Contains("HttpRequestException", entry.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("M-1042", entry.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>A model that never answers, so only a timeout or cancellation can end the call.</summary>
-    private sealed class WaitingChatClient : IChatClient
-    {
-        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            Started.TrySetResult();
-            await Task.Delay(Timeout.Infinite, cancellationToken);
-            throw new InvalidOperationException("Unreachable.");
-        }
-
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
-
-        public void Dispose()
-        {
-        }
+        Assert.Contains(logger.Entries, e => e.Message.Contains("HttpRequestException", StringComparison.Ordinal));
+        Assert.All(logger.Entries, e => Assert.Null(e.Exception));
+        Assert.All(logger.Entries, e => Assert.DoesNotContain("M-1042", e.Message, StringComparison.Ordinal));
     }
 }

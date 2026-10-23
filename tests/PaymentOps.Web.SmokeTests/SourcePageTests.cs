@@ -67,7 +67,7 @@ public sealed class SourcePageTests(PaymentOpsWebApplicationFactory factory) : I
     {
         var called = false;
         using var app = factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IInvestigationService>(_ =>
-            new FakeInvestigationService(new InvestigationResult.NotAnswered(NotAnsweredReason.NoEvidence), _ =>
+            new FakeInvestigationService(source: _ =>
             {
                 called = true;
                 return new SourceResult.NotFound();
@@ -83,7 +83,7 @@ public sealed class SourcePageTests(PaymentOpsWebApplicationFactory factory) : I
     private HttpClient ClientWith(Func<string, SourceResult> source) =>
         PaymentOpsWebApplicationFactory.SignedIn(
             factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IInvestigationService>(_ =>
-                new FakeInvestigationService(new InvestigationResult.NotAnswered(NotAnsweredReason.NoEvidence), source)))),
+                new FakeInvestigationService(source: source)))),
             "Riley Reader",
             [OpsRoles.Reader]);
 }
