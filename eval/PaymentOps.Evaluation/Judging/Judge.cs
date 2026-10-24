@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.AI;
 
@@ -38,13 +37,6 @@ internal sealed class Judge(IChatClient judgeModel)
 {
     public static EvaluationPrompt Prompt { get; } = EvaluationPrompt.Load("prompts/judge.md");
 
-    private static readonly JsonSerializerOptions Strict = new(ToolJson.Options)
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true,
-        RespectNullableAnnotations = true,
-    };
-
     public async Task<JudgeScore> ScoreAsync(InvestigationCase c, CaseResult r, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(c);
@@ -60,7 +52,7 @@ internal sealed class Judge(IChatClient judgeModel)
         {
             response = await judgeModel.GetResponseAsync<JudgeVerdict>(
                 [new ChatMessage(ChatRole.System, Prompt.Body), new ChatMessage(ChatRole.User, Input(c, r))],
-                Strict,
+                StrictFiles.SnakeCase,
                 new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } },
                 cancellationToken: cancellationToken);
         }

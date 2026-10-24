@@ -1,6 +1,5 @@
 using Azure.Identity;
 
-using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Reporting;
 using PaymentOps.Evaluation.Retrieval;
 using PaymentOps.Evaluation.Running;
@@ -22,7 +21,13 @@ internal static class RetrievalEvalCommand
 
     private static readonly string[] Valued = ["endpoint", "ai", "sources", "dataset", "thresholds", "out", "summary"];
 
-    public static Task<int> RunAsync(string[] args) => ExitCodes.GuardAsync("Retrieval evaluation", Usage, async () =>
+    public static Task<int> RunAsync(string[] args) => RunAsync(args, null, TimeSpan.FromMinutes(1));
+
+    /// <param name="retrieve">Tests only: stands in for the live index.</param>
+    public static Task<int> RunAsync(
+        string[] args,
+        Func<string, KnowledgeAccess, RetrievalMode, Task<IReadOnlyList<RetrievedSection>>>? retrieve,
+        TimeSpan retryDelay) => ExitCodes.GuardAsync("Retrieval evaluation", Usage, async () =>
     {
         var options = Options.Parse(args, Valued, []);
         var endpoint = options.Https("endpoint");
@@ -31,15 +36,19 @@ internal static class RetrievalEvalCommand
         var dataset = CalibrationDataset.Load(options.One("dataset"));
         var keys = CalibrationReferences.Resolve(dataset, IndexedCorpus.FromSourceDirectory(options.One("sources")));
         var thresholds = thresholdsPath is null ? null : Thresholds.Load(thresholdsPath);
-        if (thresholds is not null && dataset.Cases.Any(c => c.IsAnswerable))
+        if (thresholds is not null)
         {
-            Gate.Require(thresholds, [MetricNames.RetrievalRecallAt5]);
+            Gate.Require(thresholds, EvaluationReport.Applicable(RetrievalEval.Opportunities(dataset)));
         }
 
-        var retriever = KnowledgeRetriever.Create(endpoint, release.KnowledgeIndex, new AzureCliCredential());
+        if (retrieve is null)
+        {
+            var retriever = KnowledgeRetriever.Create(endpoint, release.KnowledgeIndex, new AzureCliCredential());
+            retrieve = (question, access, mode) => retriever.RetrieveAsync(question, access, mode, release.SemanticFloor, CancellationToken.None);
+        }
+
         var startedAt = DateTimeOffset.UtcNow;
-        var result = await OnceMoreIfUnavailableAsync(() => RetrievalEval.RunAsync(dataset, keys, release, (question, access, mode) =>
-            retriever.RetrieveAsync(question, access, mode, release.SemanticFloor, CancellationToken.None)));
+        var result = await RunPlan.OnceMoreIfInvalidAsync("The retrieval run", () => RetrievalEval.RunAsync(dataset, keys, release, retrieve), _ => null, retryDelay, CancellationToken.None);
 
         var context = new ReportContext(EvaluationReport.RetrievalSystem, RepositoryCommit.Current(), [], null, null, null, startedAt);
         var report = EvaluationReport.ForRetrieval(context, result, thresholds, thresholdsPath);
@@ -53,26 +62,4 @@ internal static class RetrievalEvalCommand
 
         return ExitCodes.Passed;
     });
-
-    // Search failing is the environment, not retrieval: the one run is repeated once, as an investigation run is.
-    private static async Task<RetrievalResult> OnceMoreIfUnavailableAsync(Func<Task<RetrievalResult>> run)
-    {
-        try
-        {
-            return await run();
-        }
-        catch (Exception first) when (InfrastructureFailures.Of(first) is not null)
-        {
-            Console.Error.WriteLine($"The retrieval run failed ({InfrastructureFailures.Of(first)}); repeating it once.");
-            await Task.Delay(TimeSpan.FromMinutes(1));
-            try
-            {
-                return await run();
-            }
-            catch (Exception second) when (InfrastructureFailures.Of(second) is { } failure)
-            {
-                throw new CouldNotEvaluateException($"The retrieval run failed twice ({failure}). The evaluation environment is unavailable.");
-            }
-        }
-    }
 }

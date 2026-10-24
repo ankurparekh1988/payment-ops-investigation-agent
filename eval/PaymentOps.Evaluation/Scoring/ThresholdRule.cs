@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using PaymentOps.Evaluation.Cases;
 
@@ -63,28 +62,14 @@ internal sealed record Thresholds(int SchemaVersion, string BaselineCommit, stri
 {
     public const int SupportedSchemaVersion = 1;
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true,
-        RespectNullableAnnotations = true,
-        WriteIndented = true,
-    };
+    private static readonly JsonSerializerOptions Indented = new(StrictFiles.SnakeCase) { WriteIndented = true };
 
     public static Thresholds Load(string path)
     {
-        try
-        {
-            var thresholds = JsonSerializer.Deserialize<Thresholds>(File.ReadAllBytes(path), Json) ?? throw new InvalidDataException($"{path} is empty.");
-            return thresholds.SchemaVersion == SupportedSchemaVersion ? thresholds
-                : throw new InvalidDataException($"{path} is schema version {thresholds.SchemaVersion}; this build reads {SupportedSchemaVersion}.");
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidDataException($"{path}: {ex.Message}", ex);
-        }
+        var thresholds = StrictFiles.Read<Thresholds>(path, StrictFiles.SnakeCase);
+        return thresholds.SchemaVersion == SupportedSchemaVersion ? thresholds
+            : throw new InvalidDataException($"{path} is schema version {thresholds.SchemaVersion}; this build reads {SupportedSchemaVersion}.");
     }
 
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => JsonSerializer.Serialize(this, Indented);
 }

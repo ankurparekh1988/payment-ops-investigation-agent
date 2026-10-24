@@ -24,13 +24,11 @@ internal static class RetrievalEval
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(retrieve);
 
-        var mode = release.RetrievalMode.ToString().ToLowerInvariant();
+        // In series, as calibration does: the free search plan throttles bursts.
         var runs = new List<CaseRun>();
         foreach (var testCase in dataset.Cases)
         {
-            var hits = await retrieve(testCase.Question, KnowledgeAccess.From(CalibrationUser.For(testCase.Access)), release.RetrievalMode);
-            var expected = testCase.Expected.Select(e => keys[e]).ToHashSet(StringComparer.Ordinal);
-            runs.Add(CalibrationDecision.Score(testCase, mode, [.. hits.Select(h => new CaseHit(h.Key, h.DocId, h.SectionPath, h.Classification, h.RerankerScore))], expected));
+            runs.Add(await RetrievalCompare.RunCaseAsync(testCase, keys, release.RetrievalMode, retrieve));
         }
 
         var answerable = runs.Where(run => CalibrationCase.Answerable(run.Kind)).ToList();
@@ -45,4 +43,10 @@ internal static class RetrievalEval
             runs.ToDictionary(run => run.CaseId, run => (IReadOnlyDictionary<string, bool>)new Dictionary<string, bool> { [MetricNames.RetrievalRecallAt5] = run.ExpectedRank is not null }, StringComparer.Ordinal));
         return new RetrievalResult(metrics, answerable.Count, runs);
     }
+
+    /// <summary>N for both retrieval metrics: the answerable cases, which the labels fix before any run.</summary>
+    public static IReadOnlyDictionary<string, int> Opportunities(int answerable) =>
+        new Dictionary<string, int>(StringComparer.Ordinal) { [MetricNames.RetrievalRecallAt5] = answerable, [MetricNames.RetrievalMrr] = answerable };
+
+    public static IReadOnlyDictionary<string, int> Opportunities(CalibrationDataset dataset) => Opportunities(dataset.Cases.Count(c => c.IsAnswerable));
 }

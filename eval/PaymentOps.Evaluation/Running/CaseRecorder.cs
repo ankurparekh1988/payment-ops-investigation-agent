@@ -151,10 +151,11 @@ internal sealed class CaseRecorder
     // Each evidence item with the records in the tool's typed result that carry its id: server data, never model text.
     private void Returned(string tool, ToolResult.Ok ok)
     {
-        var body = JsonSerializer.SerializeToNode(ok.Body, ok.Body.GetType(), ToolJson.Options);
         lock (_lock)
         {
-            foreach (var item in ok.Evidence.Where(item => !_facts.ContainsKey(item.Id)))
+            var added = ok.Evidence.Where(item => !_facts.ContainsKey(item.Id)).ToList();
+            var body = added.Count == 0 ? null : JsonSerializer.SerializeToNode(ok.Body, ok.Body.GetType(), ToolJson.Options);
+            foreach (var item in added)
             {
                 var fact = new JsonObject
                 {

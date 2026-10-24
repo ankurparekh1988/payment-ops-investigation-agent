@@ -88,25 +88,26 @@ internal sealed class FixedWorkflow(
     {
         var scope = await ScopeExtraction.ExtractAsync(model, question, clock.Today, processors, cancellationToken);
         var (start, end) = ScopeExtraction.Window(scope, clock.Today);
-        var window = (Start: start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), End: end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        (string, string)[] window = [("start_date", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), ("end_date", end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))];
         if (scope.MerchantIds.Count > 0)
         {
-            var profiles = await fanOut.RunAsync([.. scope.MerchantIds.Select(m => (ToolNames.MerchantProfile, Args(("merchant_id", m))))], cancellationToken);
+            var profiles = await fanOut.RunAsync([.. scope.MerchantIds.Select(m => (ToolNames.MerchantProfile, Args([("merchant_id", m)])))], cancellationToken);
             await fanOut.RunAsync(
-                [.. scope.MerchantIds.Select(m => (ToolNames.SettlementBatches, Args(("merchant_id", m), ("start_date", window.Start), ("end_date", window.End))))],
+                [.. scope.MerchantIds.Select(m => (ToolNames.SettlementBatches, Args([("merchant_id", m), .. window])))],
                 cancellationToken);
             var routed = scope.ProcessorIds.Concat(profiles.SelectMany(RoutedProcessors)).Distinct(StringComparer.Ordinal).ToList();
             await fanOut.RunAsync(
                 [.. routed.SelectMany(p => new[]
                 {
-                    (ToolNames.ProcessorStatus, Args(("processor_id", p), ("start_date", window.Start), ("end_date", window.End))),
-                    (ToolNames.ErrorEvents, Args(("processor_id", p), ("start_date", window.Start), ("end_date", window.End))),
+                    (ToolNames.ProcessorStatus, Args([("processor_id", p), .. window])),
+                    (ToolNames.ErrorEvents, Args([("processor_id", p), .. window])),
                 })],
                 cancellationToken);
         }
 
         var query = question.Trim();
-        await fanOut.RunAsync([(ToolNames.KnowledgeSearch, Args(("query", query.Length > toolOptions.Value.MaxQueryLength ? query[..toolOptions.Value.MaxQueryLength] : query)))], cancellationToken, last: true);
+        query = query.Length > toolOptions.Value.MaxQueryLength ? query[..toolOptions.Value.MaxQueryLength] : query;
+        await fanOut.RunAsync([(ToolNames.KnowledgeSearch, Args([("query", query)]))], cancellationToken, last: true);
     }
 
     // Every result in context and only submit_assessment offered; one more request corrects a rejected submission.
@@ -130,7 +131,7 @@ internal sealed class FixedWorkflow(
         }
     }
 
-    private static Dictionary<string, object?> Args(params (string Name, string Value)[] arguments) =>
+    private static Dictionary<string, object?> Args(IEnumerable<(string Name, string Value)> arguments) =>
         arguments.ToDictionary(a => a.Name, a => (object?)a.Value, StringComparer.Ordinal);
 
     // The processors a profile result routes the merchant to, read from the tool's own typed output.

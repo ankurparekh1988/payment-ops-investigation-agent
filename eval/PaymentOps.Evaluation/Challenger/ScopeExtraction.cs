@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.AI;
 
@@ -36,12 +35,6 @@ internal static class ScopeExtraction
 
     public static EvaluationPrompt Prompt { get; } = EvaluationPrompt.Load("prompts/scope-extraction.md");
 
-    private static readonly JsonSerializerOptions Strict = new(ToolJson.Options)
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true,
-    };
-
     public static async Task<ExtractedScope> ExtractAsync(IChatClient model, string question, DateOnly today, IReadOnlyList<KnownProcessor> processors, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(model);
@@ -53,7 +46,7 @@ internal static class ScopeExtraction
                 new ChatMessage(ChatRole.System, $"{Prompt.Body}\n\nToday is {today:yyyy-MM-dd}. Known processors: {known}."),
                 new ChatMessage(ChatRole.User, question),
             ],
-            Strict,
+            StrictFiles.SnakeCase,
             new ChatOptions { Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } },
             cancellationToken: cancellationToken);
 

@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using PaymentOps.Evaluation.Retrieval;
@@ -27,13 +25,6 @@ internal sealed record LoadedCases(
 internal static partial class InvestigationDataset
 {
     public const int SupportedSchemaVersion = 2;
-
-    private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web)
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true,
-        RespectNullableAnnotations = true,
-    };
 
     /// <param name="retrievalQuestions">Calibration and retrieval questions, which an investigation case must not repeat.</param>
     public static LoadedCases Load(IReadOnlyList<string> paths, IReadOnlyList<KnowledgeSearchDocument> corpus, IReadOnlyList<string> retrievalQuestions)
@@ -79,16 +70,7 @@ internal static partial class InvestigationDataset
 
     private static IReadOnlyList<InvestigationCase> Read(string path)
     {
-        CaseFile file;
-        try
-        {
-            file = JsonSerializer.Deserialize<CaseFile>(File.ReadAllBytes(path), Strict) ?? throw new InvalidDataException($"{path} is empty.");
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidDataException($"{path}: {ex.Message}", ex);
-        }
-
+        var file = StrictFiles.Read<CaseFile>(path, StrictFiles.CamelCase);
         return file.SchemaVersion == SupportedSchemaVersion ? file.Cases
             : throw new InvalidDataException($"{path} is schema version {file.SchemaVersion}; this build reads {SupportedSchemaVersion}.");
     }
@@ -212,7 +194,7 @@ internal static partial class InvestigationDataset
     }
 
     // Trimmed, whitespace collapsed and case ignored, so a reworded copy of the same question still matches.
-    private static string Normalize(string question) => Whitespace().Replace(question.Trim(), " ").ToLower(CultureInfo.InvariantCulture);
+    public static string Normalize(string question) => Whitespace().Replace(question.Trim(), " ").ToLower(CultureInfo.InvariantCulture);
 
     [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant)]
     private static partial Regex Whitespace();

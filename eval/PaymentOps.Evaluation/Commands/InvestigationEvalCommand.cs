@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Azure.Core;
 using Azure.Identity;
 
 using PaymentOps.Agent;
@@ -64,8 +65,10 @@ internal static class InvestigationEvalCommand
             Gate.Require(thresholds, EvaluationReport.Applicable(Opportunities.Count(cases.Cases)));
         }
 
-        var runner = runners?.Invoke(release, settings) ?? Runner(release, settings);
-        var judge = judges is not null ? judges(release) : settings.Judge ? LiveJudge(release, settings) : null;
+        // One sign-in for the whole evaluation, so token fetches stay out of every case's timings.
+        var credential = new CachedTokenCredential(new AzureCliCredential());
+        var runner = runners?.Invoke(release, settings) ?? Runner(release, settings, credential);
+        var judge = judges is not null ? judges(release) : settings.Judge ? LiveJudge(release, settings, credential) : null;
         var context = new ReportContext(
             settings.System,
             RepositoryCommit.Current(),
@@ -76,13 +79,17 @@ internal static class InvestigationEvalCommand
             DateTimeOffset.UtcNow);
 
         var runs = await RunPlan.RunAsync(runner, cases.Cases, settings.Runs, retryDelay, CancellationToken.None);
+        var byId = cases.Cases.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var judged = new List<IReadOnlyDictionary<string, JudgeScore>>();
         foreach (var run in runs)
         {
             var scores = new Dictionary<string, JudgeScore>(StringComparer.Ordinal);
-            foreach (var result in judge is null ? [] : run.Results)
+            if (judge is not null)
             {
-                scores[result.CaseId] = await judge!.ScoreAsync(cases.Cases.Single(c => c.Id == result.CaseId), result, CancellationToken.None);
+                foreach (var result in run.Results)
+                {
+                    scores[result.CaseId] = await judge.ScoreAsync(byId[result.CaseId], result, CancellationToken.None);
+                }
             }
 
             judged.Add(scores);
@@ -125,12 +132,12 @@ internal static class InvestigationEvalCommand
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
-    private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings) => settings.System == EvaluationReport.AgentSystem
-        ? new AgentCaseRunner(release, settings.Endpoints, new AzureCliCredential())
-        : new FixedWorkflowCaseRunner(release, settings.Endpoints, new AzureCliCredential());
+    private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential) => settings.System == EvaluationReport.AgentSystem
+        ? new AgentCaseRunner(release, settings.Endpoints, credential)
+        : new FixedWorkflowCaseRunner(release, settings.Endpoints, credential);
 
-    private static Judge LiveJudge(AiRelease release, InvestigationEvalSettings settings) =>
-        new(ModelClient.Create(settings.Endpoints.FoundryEndpoint, settings.Endpoints.FoundryTokenScope, new AzureCliCredential(), release.JudgeDeployment));
+    private static Judge LiveJudge(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential) =>
+        new(ModelClient.Create(settings.Endpoints.FoundryEndpoint, settings.Endpoints.FoundryTokenScope, credential, release.JudgeDeployment));
 
     private static IReadOnlyList<PromptInfo> Prompts(AiRelease release, string system) => system == EvaluationReport.AgentSystem
         ? [.. release.Prompts.Values.Select(p => new PromptInfo(p.Id, p.Version))]

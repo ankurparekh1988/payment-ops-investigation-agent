@@ -1,8 +1,5 @@
-using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 using PaymentOps.Platform.Ai;
+using PaymentOps.Tools;
 
 namespace PaymentOps.Evaluation.Pricing;
 
@@ -36,27 +33,11 @@ internal sealed class PriceList(IReadOnlyList<Price> prices)
 {
     public const int SupportedSchemaVersion = 1;
 
-    private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web)
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true,
-        RespectNullableAnnotations = true,
-    };
-
     public IReadOnlyList<Price> Prices { get; } = prices;
 
     public static PriceList Load(string path)
     {
-        PriceFile file;
-        try
-        {
-            file = JsonSerializer.Deserialize<PriceFile>(File.ReadAllBytes(path), Strict) ?? throw new InvalidDataException($"{path} is empty.");
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidDataException($"{path}: {ex.Message}", ex);
-        }
-
+        var file = StrictFiles.Read<PriceFile>(path, StrictFiles.CamelCase);
         var problems = file.Prices.SelectMany(Check).ToList();
         if (file.SchemaVersion != SupportedSchemaVersion)
         {
@@ -75,10 +56,14 @@ internal sealed class PriceList(IReadOnlyList<Price> prices)
     /// <summary>The estimated cost, or null when the deployment has no price.</summary>
     public decimal? Cost(DeploymentIdentity deployment, TokenUse use)
     {
+        return Find(deployment) is { } price ? Cost(price, use) : null;
+    }
+
+    public static decimal Cost(Price price, TokenUse use)
+    {
+        ArgumentNullException.ThrowIfNull(price);
         ArgumentNullException.ThrowIfNull(use);
-        return Find(deployment) is { } p
-            ? (((use.Input - use.CachedInput) * p.InputPerMillion) + (use.CachedInput * p.CachedInputPerMillion) + (use.Output * p.OutputPerMillion)) / 1_000_000m
-            : null;
+        return (((use.Input - use.CachedInput) * price.InputPerMillion) + (use.CachedInput * price.CachedInputPerMillion) + (use.Output * price.OutputPerMillion)) / 1_000_000m;
     }
 
     public static decimal? CostPerValidatedInvestigation(decimal? chatCost, int validated) =>
@@ -97,7 +82,7 @@ internal sealed class PriceList(IReadOnlyList<Price> prices)
             yield return $"{name}: source must be the https address the price was read from.";
         }
 
-        if (!Date(p.EffectiveDate) || !Date(p.Retrieved))
+        if (!ToolArguments.TryDate(p.EffectiveDate, out _) || !ToolArguments.TryDate(p.Retrieved, out _))
         {
             yield return $"{name}: effectiveDate and retrieved must be dates written YYYY-MM-DD.";
         }
@@ -107,8 +92,6 @@ internal sealed class PriceList(IReadOnlyList<Price> prices)
             yield return $"{name}: prices can't be negative.";
         }
     }
-
-    private static bool Date(string value) => DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
 
     private sealed record PriceFile(int SchemaVersion, IReadOnlyList<Price> Prices);
 }

@@ -74,9 +74,12 @@ internal static class Outcomes
 {
     public const string NotAssessedPrefix = "not-assessed:";
 
-    public static string Of(AssessmentOutcome outcome) => Kebab(outcome);
+    /// <summary>A case the run recorded no result for; it scores 0 everywhere.</summary>
+    public const string Missing = "missing";
 
-    public static string NotAssessed(NotAssessedReason reason) => NotAssessedPrefix + Kebab(reason);
+    public static string Of(AssessmentOutcome outcome) => Word(outcome);
+
+    public static string NotAssessed(NotAssessedReason reason) => NotAssessedPrefix + Word(reason);
 
     public static string Of(AssessmentResult result) => result switch
     {
@@ -85,5 +88,6 @@ internal static class Outcomes
         _ => throw new ArgumentOutOfRangeException(nameof(result)),
     };
 
-    private static string Kebab(Enum value) => ToolJson.Word(value).Replace('_', '-');
+    /// <summary>An enum value as labels and reports write it, such as <c>assessment-unverified</c>.</summary>
+    public static string Word(Enum value) => ToolJson.Word(value).Replace('_', '-');
 }

@@ -44,18 +44,7 @@ public sealed class FixedWorkflowTests
     [Fact]
     public async Task Without_a_merchant_only_knowledge_is_searched()
     {
-        var submission = new
-        {
-            outcome = "refused",
-            summary = Statement("Out of scope.", [], []),
-            claims = Array.Empty<object>(),
-            root_cause = Statement(string.Empty, [], []),
-            confidence = "low",
-            next_steps = Array.Empty<object>(),
-            proposed_ticket = (object?)null,
-        };
-
-        var result = await RunAsync(() => Model(Scope(string.Empty, null, null), Submit(submission)));
+        var result = await RunAsync(() => Model(Scope(string.Empty, null, null), Submit(Refusal())));
 
         Assert.Equal([ToolNames.KnowledgeSearch, ToolNames.SubmitAssessment], result.Calls.Select(c => c.Tool));
         Assert.Equal("refused", result.Outcome);
@@ -85,16 +74,7 @@ public sealed class FixedWorkflowTests
     [Fact]
     public async Task The_submission_goes_through_the_real_validator_with_one_correction()
     {
-        var bad = new
-        {
-            outcome = "assessed",
-            summary = Statement("The file never arrived.", ["file:NO-SUCH-FILE"], []),
-            claims = new[] { Statement("Missing.", ["file:NO-SUCH-FILE"], []) },
-            root_cause = Statement(string.Empty, [], []),
-            confidence = "low",
-            next_steps = Array.Empty<object>(),
-            proposed_ticket = (object?)null,
-        };
+        var bad = Submission(summary: Statement("The file never arrived.", ["file:NO-SUCH-FILE"], []), confidence: "low");
 
         var corrected = await RunAsync(() => Model(Scope("\"M-1042\""), Submit(bad), Submit(Submission())));
         var twice = await RunAsync(() => Model(Scope("\"M-1042\""), Submit(bad), Submit(bad)));

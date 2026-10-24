@@ -77,7 +77,7 @@ public sealed class JudgeTests
         Assert.Contains(Eligible.ExpectedRootCause!, text, StringComparison.Ordinal);
         Assert.Contains(Eligible.Question, text, StringComparison.Ordinal);
         Assert.DoesNotContain("TICKET TITLE SENTINEL", text, StringComparison.Ordinal);
-        Assert.Contains("version: 1.0.0", Judge.Prompt.Header, StringComparison.Ordinal);
+        Assert.Equal(("judge", "1.0.0"), (Judge.Prompt.Id, Judge.Prompt.Version));
     }
 
     [Fact]

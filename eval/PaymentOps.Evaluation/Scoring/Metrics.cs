@@ -43,7 +43,7 @@ internal static class Metrics
 
         foreach (var c in cases.Cases)
         {
-            var r = results.GetValueOrDefault(c.Id) ?? new CaseResult(c.Id, "missing");
+            var r = results.GetValueOrDefault(c.Id) ?? new CaseResult(c.Id, Outcomes.Missing);
             var met = new Dictionary<string, bool>(StringComparer.Ordinal);
             foreach (var (metric, credit, passed) in CaseScores(c, r, cases))
             {

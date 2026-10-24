@@ -60,16 +60,21 @@ internal static class EvaluationFakes
         citation_ids = new[] { "S1" },
     };
 
-    public static object Submission(object? ticket = null, string outcome = "assessed") => new
+    /// <summary>A <c>submit_assessment</c> call's arguments: by default a supported S1 assessment.</summary>
+    public static object Submission(object? ticket = null, string outcome = "assessed", object? summary = null, object[]? claims = null, object? rootCause = null, string confidence = "high") => new
     {
         outcome,
-        summary = Statement("The 9 November Fabrikam file never arrived.", [MissingFile], ["S1"]),
-        claims = new[] { Statement("M-1042 settles through Fabrikam Pay.", ["merchant:M-1042"], []) },
-        root_cause = Statement("A Fabrikam settlement outage stopped the file.", [MissingFile, Incident], ["S1"]),
-        confidence = "high",
+        summary = summary ?? Statement("The 9 November Fabrikam file never arrived.", [MissingFile], ["S1"]),
+        claims = claims ?? [Statement("M-1042 settles through Fabrikam Pay.", ["merchant:M-1042"], [])],
+        root_cause = rootCause ?? Statement("A Fabrikam settlement outage stopped the file.", [MissingFile, Incident], ["S1"]),
+        confidence,
         next_steps = Array.Empty<object>(),
         proposed_ticket = ticket,
     };
+
+    /// <summary>A refusal: no claims, no root cause, no ids.</summary>
+    public static object Refusal() =>
+        Submission(outcome: "refused", summary: Statement("Out of scope.", [], []), claims: [], rootCause: Statement(string.Empty, [], []), confidence: "low");
 
     public static ChatResponse[] Trajectory(object submission) =>
     [

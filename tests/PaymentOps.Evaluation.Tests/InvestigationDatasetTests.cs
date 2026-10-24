@@ -8,8 +8,7 @@ namespace PaymentOps.Evaluation.Tests;
 
 public sealed class InvestigationDatasetTests
 {
-    private static readonly IReadOnlyList<KnowledgeSearchDocument> Corpus =
-        IndexedCorpus.FromSourceDirectory(Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src"));
+    private static readonly IReadOnlyList<KnowledgeSearchDocument> Corpus = EvaluationFakes.Corpus;
 
     // A section whose document and path name it alone, so a readable reference resolves to exactly one key.
     private static readonly KnowledgeSearchDocument General = Unique("general");

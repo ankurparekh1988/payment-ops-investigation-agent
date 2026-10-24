@@ -5,7 +5,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using PaymentOps.Data.Demo;
-using PaymentOps.Domain.Security;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Retrieval;
 using PaymentOps.Knowledge.Indexing;
@@ -24,8 +23,7 @@ public sealed class DatasetContentTests
     private static readonly string RetrievalHeldOut = Path.Combine(Datasets, "retrieval-heldout.json");
     private static readonly string Calibration = Path.Combine(Datasets, "retrieval-comparison.json");
 
-    private static readonly IReadOnlyList<KnowledgeSearchDocument> Corpus =
-        IndexedCorpus.FromSourceDirectory(Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src"));
+    private static readonly IReadOnlyList<KnowledgeSearchDocument> Corpus = EvaluationFakes.Corpus;
 
     private static IReadOnlyList<string> RetrievalQuestions() =>
         [.. new[] { Calibration, RetrievalHeldOut }.Where(File.Exists).SelectMany(p => CalibrationDataset.Load(p).Cases.Select(c => c.Question))];
@@ -99,17 +97,15 @@ public sealed class DatasetContentTests
     public void The_held_out_retrieval_set_is_new_and_probes_restricted_content()
     {
         var dataset = CalibrationDataset.Load(RetrievalHeldOut);
-        var calibration = CalibrationDataset.Load(Calibration).Cases.Select(c => Normalize(c.Question)).ToHashSet(StringComparer.Ordinal);
+        var calibration = CalibrationDataset.Load(Calibration).Cases.Select(c => InvestigationDataset.Normalize(c.Question)).ToHashSet(StringComparer.Ordinal);
 
         Assert.InRange(dataset.Cases.Count, 30, 40);
         Assert.True(dataset.Cases.Count(c => c.Kind == CaseKind.Probe && c.Access == "general") >= 4);
         Assert.All(Enum.GetValues<CaseKind>(), kind => Assert.Contains(dataset.Cases, c => c.Kind == kind));
-        Assert.All(dataset.Cases, c => Assert.DoesNotContain(Normalize(c.Question), calibration));
+        Assert.All(dataset.Cases, c => Assert.DoesNotContain(InvestigationDataset.Normalize(c.Question), calibration));
         Assert.All(dataset.Cases, c => Assert.Equal(c.IsAnswerable, c.Expected.Count > 0));
         Assert.Equal(dataset.Cases.SelectMany(c => c.Expected).Distinct().Count(), CalibrationReferences.Resolve(dataset, Corpus).Count);
     }
-
-    private static string Normalize(string question) => string.Join(' ', question.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
 
     [Theory]
     [InlineData("agent-tasks.json")]
@@ -130,7 +126,7 @@ public sealed class DatasetContentTests
             foreach (var label in c.ToolArguments)
             {
                 var tool = tools[label.Tool];
-                var result = await tool.RunAsync(Request(tool, label), ToolUser.Instance, CancellationToken.None);
+                var result = await tool.RunAsync(Request(tool, label), TestUser.Reader, CancellationToken.None);
                 returned.UnionWith(Assert.IsType<ToolResult.Ok>(result).Evidence.Select(e => e.Id));
             }
 
@@ -159,24 +155,5 @@ public sealed class DatasetContentTests
         }
 
         return JsonSerializer.SerializeToElement(fields).Deserialize(tool.RequestType, ToolJson.Requests)!;
-    }
-
-    private sealed class ToolUser : IUserContext
-    {
-        public static readonly ToolUser Instance = new();
-
-        public bool IsAuthenticated => true;
-
-        public string UserId => "labels";
-
-        public string DisplayName => "Label check";
-
-        public IReadOnlySet<string> Roles { get; } = OpsRoles.Effective([OpsRoles.Reader]);
-
-        public IReadOnlySet<string> GroupIds { get; } = new HashSet<string>();
-
-        public bool CanAccessRestrictedKnowledge => false;
-
-        public bool IsInRole(string role) => Roles.Contains(role);
     }
 }

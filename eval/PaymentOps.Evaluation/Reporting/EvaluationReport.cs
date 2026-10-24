@@ -71,7 +71,7 @@ internal sealed record CostReport(
     TokenUse JudgeTokens,
     string? PriceSource);
 
-internal sealed record GateReport(string Verdict, bool HardPassed, IReadOnlyList<string> Failures, string? ThresholdsFile, IReadOnlyDictionary<string, double> Thresholds)
+internal sealed record GateReport(string Verdict, IReadOnlyList<string> Failures, string? ThresholdsFile, IReadOnlyDictionary<string, double> Thresholds)
 {
     public const string Passed = "passed";
     public const string Failed = "failed";
@@ -154,9 +154,9 @@ internal sealed record EvaluationReport(
 
         var chatTokens = results.Aggregate(TokenUse.Zero, (sum, r) => sum.Add(new TokenUse(r.InputTokens, r.CachedInputTokens, r.OutputTokens)));
         var judgeTokens = judgeScores.Aggregate(TokenUse.Zero, (sum, j) => sum.Add(new TokenUse(j.InputTokens, j.CachedInputTokens, j.OutputTokens)));
-        var chatCost = context.Chat is { } chat ? prices.Cost(chat.Identity, chatTokens) : null;
+        var price = context.Chat is { } chat ? prices.Find(chat.Identity) : null;
+        var chatCost = price is null ? null : (decimal?)PriceList.Cost(price, chatTokens);
         var validated = results.Count(r => InvestigationCase.AssessedOutcomes.Contains(r.Outcome));
-        var price = context.Chat is { } priced ? prices.Find(priced.Identity) : null;
         var cost = new CostReport(
             price?.Currency,
             chatCost,
@@ -176,7 +176,7 @@ internal sealed record EvaluationReport(
             context.Judge,
             context.JudgePromptVersion,
             context.StartedAt,
-            [.. runs.Select((run, i) => new RunReport(i + 1, run.Results, i < judged.Count ? judged[i] : new Dictionary<string, JudgeScore>(), metrics[i].Values, metrics[i].Hard, run.TicketsInStore))],
+            [.. runs.Select((run, i) => new RunReport(i + 1, run.Results, judged[i], metrics[i].Values, metrics[i].Hard, run.TicketsInStore))],
             summary,
             breakdown,
             [.. cases.Cases.Select(c => StabilityOf(c, runs, metrics))],
@@ -192,23 +192,23 @@ internal sealed record EvaluationReport(
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(result);
 
-        var n = new Dictionary<string, int>(StringComparer.Ordinal) { [MetricNames.RetrievalRecallAt5] = result.Answerable, [MetricNames.RetrievalMrr] = result.Answerable };
+        var n = RetrievalEval.Opportunities(result.Answerable);
         var summary = Aggregation.Summarize([result.Metrics], n);
         return new EvaluationReport(
             SupportedSchemaVersion,
             context.System,
             context.Commit,
             context.Prompts,
-            null,
-            null,
-            null,
+            context.Chat,
+            context.Judge,
+            context.JudgePromptVersion,
             context.StartedAt,
             [new RunReport(1, [], new Dictionary<string, JudgeScore>(), result.Metrics.Values, result.Metrics.Hard, 0)],
             summary,
             new Dictionary<string, IReadOnlyDictionary<string, MetricSummary>>(),
             [],
-            new Percentiles(null, null),
-            new Percentiles(null, null),
+            Percentiles.Of([]),
+            Percentiles.Of([]),
             new CostReport(null, null, null, null, 0, TokenUse.Zero, TokenUse.Zero, null),
             GateFor([result.Metrics], summary, thresholds, thresholdsFile, Applicable(n)),
             result.Cases);
@@ -216,7 +216,7 @@ internal sealed record EvaluationReport(
 
     public static EvaluationReport Load(string path)
     {
-        var report = JsonSerializer.Deserialize<EvaluationReport>(File.ReadAllBytes(path), Json) ?? throw new InvalidDataException($"{path} is empty.");
+        var report = StrictFiles.Read<EvaluationReport>(path, Json);
         return report.SchemaVersion == SupportedSchemaVersion ? report
             : throw new InvalidDataException($"{path} is report schema version {report.SchemaVersion}; this build reads {SupportedSchemaVersion}.");
     }
@@ -229,7 +229,7 @@ internal sealed record EvaluationReport(
         var shown = thresholds?.Metrics.Where(m => applicable.Contains(m.Key)).ToDictionary(m => m.Key, m => m.Value.Threshold, StringComparer.Ordinal)
             ?? new Dictionary<string, double>(StringComparer.Ordinal);
         var outcome = !verdict.Passed ? GateReport.Failed : verdict.ReportOnly ? GateReport.ReportOnly : GateReport.Passed;
-        return new GateReport(outcome, verdict.HardPassed, verdict.Failures, file, shown);
+        return new GateReport(outcome, verdict.Failures, file, shown);
     }
 
     // Regression and held-out are always shown apart, and each group on its own.
@@ -249,7 +249,7 @@ internal sealed record EvaluationReport(
             c.Id,
             c.Group,
             c.Group == InvestigationCase.RegressionGroup ? RegressionSet : HeldOutSet,
-            [.. runs.Select(run => run.Results.FirstOrDefault(r => r.CaseId == c.Id)?.Outcome ?? "missing")],
+            [.. runs.Select(run => run.Results.FirstOrDefault(r => r.CaseId == c.Id)?.Outcome ?? Outcomes.Missing)],
             names.ToDictionary(name => name, name => (IReadOnlyList<bool>)[.. perRun.Select(p => p.GetValueOrDefault(name))], StringComparer.Ordinal));
     }
 }

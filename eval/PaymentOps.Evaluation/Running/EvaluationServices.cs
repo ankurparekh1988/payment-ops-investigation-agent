@@ -3,12 +3,12 @@ using Azure.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent;
 using PaymentOps.Agent.Contracts;
-using PaymentOps.Agent.Knowledge;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Security;
@@ -46,23 +46,22 @@ internal static class EvaluationServices
         services.AddDemoData(new ConfigurationBuilder().Build());
         services.AddInvestigation(endpoints, model => recorder.Observe(substituteModel?.Invoke(model) ?? model));
 
-        // The last registration wins, so these wrap the app's own implementations in place.
-        services.AddSingleton(sp => recorder.Observe(substituteKnowledge?.Invoke(sp) ?? ActivatorUtilities.CreateInstance<ReleaseKnowledgeLookup>(sp)));
-        Wrap<IInvestigationTool>(services, recorder.Observe);
-        Wrap<IIncidentStore>(services, recorder.Observe);
+        Wrap<IKnowledgeLookup>(services, (sp, lookup) => recorder.Observe(substituteKnowledge?.Invoke(sp) ?? lookup));
+        Wrap<IInvestigationTool>(services, (_, tool) => recorder.Observe(tool));
+        Wrap<IIncidentStore>(services, (_, store) => recorder.Observe(store));
         return services.BuildServiceProvider();
     }
 
-    // Every registration of T, wrapped where it stands; they're all factory registrations in the app's extensions.
-    private static void Wrap<T>(ServiceCollection services, Func<T, T> observe)
+    // Every registration of T, wrapped where it stands with its own lifetime, however the app registered it.
+    private static void Wrap<T>(ServiceCollection services, Func<IServiceProvider, T, T> observe)
         where T : class
     {
         foreach (var descriptor in services.Where(d => d.ServiceType == typeof(T)).ToList())
         {
-            var create = descriptor.ImplementationFactory
-                ?? throw new InvalidOperationException($"{typeof(T).Name} is registered without a factory; the harness can't wrap it.");
+            Func<IServiceProvider, object> create = descriptor.ImplementationFactory
+                ?? (descriptor.ImplementationInstance is { } instance ? _ => instance : sp => ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType!));
             services.Remove(descriptor);
-            services.AddSingleton(sp => observe((T)create(sp)));
+            services.Add(new ServiceDescriptor(typeof(T), sp => observe(sp, (T)create(sp)), descriptor.Lifetime));
         }
     }
 
@@ -90,7 +89,7 @@ internal static class EvaluationServices
                 ApprovalResult.CapacityReached => ProposalStates.CapacityReached,
                 _ => ProposalStates.ApprovalFailed,
             },
-            var other => ToolJson.Word(other.Status).Replace('_', '-'),
+            var other => Outcomes.Word(other.Status),
         };
     }
 

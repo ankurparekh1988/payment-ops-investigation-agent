@@ -75,16 +75,11 @@ public sealed class InvestigationRunTests
     public async Task A_search_failure_the_app_absorbed_still_invalidates_the_run()
     {
         var knowledge = new FixedKnowledge { Failure = new KnowledgeUnavailableException() };
-        var submission = new
-        {
-            outcome = "assessed",
-            summary = Statement("M-1042 settles through Fabrikam Pay.", ["merchant:M-1042"], []),
-            claims = new[] { Statement("The merchant profile was read.", ["merchant:M-1042"], []) },
-            root_cause = Statement(string.Empty, [], []),
-            confidence = "medium",
-            next_steps = Array.Empty<object>(),
-            proposed_ticket = (object?)null,
-        };
+        var submission = Submission(
+            summary: Statement("M-1042 settles through Fabrikam Pay.", ["merchant:M-1042"], []),
+            claims: [Statement("The merchant profile was read.", ["merchant:M-1042"], [])],
+            rootCause: Statement(string.Empty, [], []),
+            confidence: "medium");
         var model = () => Model(
             ScriptedChatClient.Call(ToolNames.MerchantProfile, new { merchant_id = "M-1042" }),
             ScriptedChatClient.Call(ToolNames.KnowledgeSearch, new { query = "missing settlement file" }),
