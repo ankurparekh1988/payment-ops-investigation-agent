@@ -30,6 +30,8 @@ public sealed class DatasetContentTests
     private static IReadOnlyList<string> RetrievalQuestions() =>
         [.. new[] { Calibration, RetrievalHeldOut }.Where(File.Exists).SelectMany(p => CalibrationDataset.Load(p).Cases.Select(c => c.Question))];
 
+    private static readonly string[] CoreScenarios = ["core-s1", "core-s2", "core-s3", "core-s4"];
+
     // The questions as they were before labels were added; labelling must not change them.
     private static readonly Dictionary<string, string> RegressionQuestions = new(StringComparer.Ordinal)
     {
@@ -70,8 +72,32 @@ public sealed class DatasetContentTests
         Assert.DoesNotContain("not-assessed:assessment-unverified", cases.SelectMany(c => c.AllowedOutcomes));
     }
 
+    [Fact]
+    public void The_held_out_investigation_set_covers_every_group()
+    {
+        var regression = InvestigationDataset.Load([Regression], Corpus, []).Cases;
+        var cases = InvestigationDataset.Load([HeldOut], Corpus, RetrievalQuestions()).Cases;
+        var groups = cases.GroupBy(c => c.Group).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+
+        Assert.InRange(cases.Count, 20, 28);
+        foreach (var (group, minimum) in new Dictionary<string, int> { ["core"] = 4, ["decoy"] = 3, ["phrasing"] = 3, ["knowledge-only"] = 2, ["refusal"] = 2, ["authorization"] = 3, ["role"] = 2 })
+        {
+            Assert.True(groups.GetValueOrDefault(group) >= minimum, $"{group} has {groups.GetValueOrDefault(group)} cases; at least {minimum} are needed.");
+        }
+
+        Assert.All(CoreScenarios, prefix => Assert.Contains(cases, c => c.Id.StartsWith(prefix, StringComparison.Ordinal)));
+        Assert.All(cases.Where(c => c.Group == InvestigationCase.AuthorizationGroup && c.Access == "general"), c => Assert.NotEmpty(c.RestrictedMarkers));
+        Assert.Contains(cases, c => c.Group == "role" && c.Role == InvestigationCase.Reader);
+        Assert.Contains(cases, c => c.Role == InvestigationCase.Engineer);
+        Assert.Contains(cases, c => c.Role == InvestigationCase.Engineer && c.Proposal == InvestigationCase.ProposalForbidden);
+        Assert.Empty(cases.Select(c => c.Id).Intersect(regression.Select(c => c.Id)));
+        Assert.Empty(cases.Select(c => c.Question).Intersect(regression.Select(c => c.Question), StringComparer.OrdinalIgnoreCase));
+        Assert.DoesNotContain(InvestigationCase.RegressionGroup, groups.Keys);
+    }
+
     [Theory]
     [InlineData("agent-tasks.json")]
+    [InlineData("investigations-heldout.json")]
     public async Task Every_expected_evidence_group_is_returned_by_the_labelled_tool_calls(string file)
     {
         var cases = InvestigationDataset.Load([Path.Combine(Datasets, file)], Corpus, []).Cases;
