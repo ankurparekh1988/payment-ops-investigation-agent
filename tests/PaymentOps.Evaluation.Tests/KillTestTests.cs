@@ -60,4 +60,8 @@ public sealed class KillTestTests
     [Fact]
     public void Exactly_005_worse_is_still_equivalent() =>
         Assert.Equal(KillTestResult.Simplify, KillTest.Decide(Agent, Side(recall: 0.85, falsePositives: 0.15, cost: 0.75m)));
+
+    [Fact]
+    public void A_side_without_a_measured_p95_has_no_latency_advantage() =>
+        Assert.Equal(KillTestResult.KeepAgentMixed, KillTest.Decide(Agent, Side(cost: null) with { P95LatencyMs = null }));
 }

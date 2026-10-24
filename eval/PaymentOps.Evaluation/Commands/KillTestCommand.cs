@@ -13,11 +13,14 @@ internal static class KillTestCommand
 {
     public const string Usage = "kill-test --agent <report.json> --challenger <report.json> --out <file> --summary <file>";
 
+    private const int ComparedRuns = 3;
+
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, WriteIndented = true };
 
     public static Task<int> RunAsync(string[] args) => ExitCodes.GuardAsync("Kill test", Usage, async () =>
     {
         var options = Options.Parse(args, ["agent", "challenger", "out", "summary"], []);
+        var (outPath, summaryPath) = (options.OutputFile("out"), options.OutputFile("summary"));
         var agent = EvaluationReport.Load(options.One("agent"));
         var challenger = EvaluationReport.Load(options.One("challenger"));
         if (agent.System != EvaluationReport.AgentSystem || challenger.System != EvaluationReport.FixedWorkflowSystem)
@@ -25,9 +28,11 @@ internal static class KillTestCommand
             throw new InvalidDataException("--agent must be an agent report and --challenger a fixed-workflow report.");
         }
 
-        if (agent.Runs.Count != challenger.Runs.Count || !agent.Stability.Select(s => s.CaseId).Order().SequenceEqual(challenger.Stability.Select(s => s.CaseId).Order()))
+        if (agent.Runs.Count != ComparedRuns || challenger.Runs.Count != ComparedRuns
+            || agent.Commit != challenger.Commit || agent.Chat != challenger.Chat
+            || !agent.Stability.Select(s => s.CaseId).Order().SequenceEqual(challenger.Stability.Select(s => s.CaseId).Order()))
         {
-            throw new InvalidDataException("Both reports must cover the same cases over the same number of runs.");
+            throw new InvalidDataException($"Both reports must cover the same cases over {ComparedRuns} runs, from the same commit and chat deployment.");
         }
 
         var (a, c) = (Side(agent), Side(challenger));
@@ -36,7 +41,7 @@ internal static class KillTestCommand
             .Select(m => new { Metric = m, Agent = agent.Summary[m].Median, Challenger = challenger.Summary.GetValueOrDefault(m)?.Median, Direction = ThresholdRule.Direction(m) })
             .ToList();
 
-        await File.WriteAllTextAsync(options.One("out"), JsonSerializer.Serialize(
+        await File.WriteAllTextAsync(outPath, JsonSerializer.Serialize(
             new
             {
                 Result = result.ToString(),
@@ -58,14 +63,16 @@ internal static class KillTestCommand
         }
 
         md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Hard gates every run: agent {a.HardPassedEveryRun}, fixed workflow {c.HardPassedEveryRun}.");
-        md.AppendLine(CultureInfo.InvariantCulture, $"Runtime chat cost: agent {Money(a.RuntimeChatCost)}, fixed workflow {Money(c.RuntimeChatCost)}. Latency p95: agent {a.P95LatencyMs / 1000:0.0} s, fixed workflow {c.P95LatencyMs / 1000:0.0} s.");
-        await File.AppendAllTextAsync(options.One("summary"), md.ToString());
+        md.AppendLine(CultureInfo.InvariantCulture, $"Runtime chat cost: agent {Money(a.RuntimeChatCost)}, fixed workflow {Money(c.RuntimeChatCost)}. Latency p95: agent {Seconds(a.P95LatencyMs)}, fixed workflow {Seconds(c.P95LatencyMs)}.");
+        await File.AppendAllTextAsync(summaryPath, md.ToString());
         Console.WriteLine($"Kill test: {result}.");
         return ExitCodes.Passed;
     });
 
     private static Side Side(EvaluationReport report) =>
-        new(report.Summary, report.Runs.All(r => r.HardGates.Passed), report.Cost.Chat, report.Latency.P95 ?? 0);
+        new(report.Summary, report.Runs.All(r => r.HardGates.Passed), report.Cost.Chat, report.Latency.P95);
+
+    private static string Seconds(double? ms) => ms is { } v ? string.Create(CultureInfo.InvariantCulture, $"{v / 1000:0.0} s") : "not measured";
 
     private static string Money(decimal? amount) => amount is { } a ? a.ToString("0.0000", CultureInfo.InvariantCulture) : "not priced";
 }

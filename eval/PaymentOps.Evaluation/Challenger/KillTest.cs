@@ -16,8 +16,8 @@ internal enum KillTestResult
 
 /// <summary>One system's three-run results, as the decision rule compares them.</summary>
 /// <param name="RuntimeChatCost">The system's own chat calls priced from the frozen price list, input and output; never the judge. Null when unpriced.</param>
-/// <param name="P95LatencyMs">95th percentile of full-investigation latency over every case in every run.</param>
-internal sealed record Side(IReadOnlyDictionary<string, MetricSummary> Summary, bool HardPassedEveryRun, decimal? RuntimeChatCost, double P95LatencyMs);
+/// <param name="P95LatencyMs">95th percentile of full-investigation latency over every case in every run; null when nothing was measured.</param>
+internal sealed record Side(IReadOnlyDictionary<string, MetricSummary> Summary, bool HardPassedEveryRun, decimal? RuntimeChatCost, double? P95LatencyMs);
 
 /// <summary>
 /// The pre-registered agent-versus-fixed-workflow rule, fixed before either side ran. The challenger must pass
@@ -39,9 +39,9 @@ internal static class KillTest
             return KillTestResult.KeepAgent;
         }
 
-        // An unpriced side has no cost arm: it is neither zero nor estimated from tokens.
+        // An unpriced or unmeasured side has no advantage on that arm: it is never taken as zero or estimated.
         var cheaper = agent.RuntimeChatCost is > 0 && challenger.RuntimeChatCost is { } cost && cost <= agent.RuntimeChatCost * (1 - MaterialAdvantage);
-        var faster = agent.P95LatencyMs > 0 && (decimal)challenger.P95LatencyMs <= (decimal)agent.P95LatencyMs * (1 - MaterialAdvantage);
+        var faster = agent.P95LatencyMs is > 0 && challenger.P95LatencyMs is { } p95 && (decimal)p95 <= (decimal)agent.P95LatencyMs.Value * (1 - MaterialAdvantage);
         return cheaper || faster ? KillTestResult.Simplify : KillTestResult.KeepAgentMixed;
     }
 

@@ -63,6 +63,15 @@ internal sealed class Options
     public Uri Https(string name) =>
         Uri.TryCreate(One(name), UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri : throw new UsageException($"--{name} must be an https URL.");
 
+    /// <summary>A file the command will write, checked now so a bad path doesn't waste a whole live evaluation.</summary>
+    public string OutputFile(string name)
+    {
+        var path = Path.GetFullPath(One(name));
+        return Directory.Exists(Path.GetDirectoryName(path)) && !Directory.Exists(path)
+            ? path
+            : throw new UsageException($"--{name} must be a file in a folder that exists.");
+    }
+
     public int Positive(string name) =>
         int.TryParse(One(name), NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0 ? n : throw new UsageException($"--{name} must be a positive whole number.");
 }
@@ -100,7 +109,7 @@ internal static class ExitCodes
             GitHubAnnotation.Errors("Knowledge corpus", ex.Errors);
             return InvalidInput;
         }
-        catch (Exception ex) when (ex is InvalidDataException or JsonException or FileNotFoundException or DirectoryNotFoundException)
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
         {
             GitHubAnnotation.Error(title, ex.Message);
             return InvalidInput;

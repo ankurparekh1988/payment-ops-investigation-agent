@@ -192,4 +192,43 @@ public sealed class CommandTests
             []),
         null,
         null);
+
+    [Fact]
+    public async Task An_output_path_that_cant_be_written_exits_2_before_any_run()
+    {
+        var runner = new ScriptedRunner(Run(), Run(), Run());
+        var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "agent.json");
+
+        var exit = await InvestigationEvalCommand.RunAsync([.. Args(Dataset())[..^4], "--out", missing, "--summary", Path.GetTempFileName()], (_, _) => runner, _ => null, TimeSpan.Zero);
+
+        Assert.Equal(2, exit);
+        Assert.Equal(0, runner.Calls);
+    }
+
+    [Fact]
+    public async Task Retrieval_compare_exits_2_for_a_malformed_dataset() =>
+        Assert.Equal(2, await RetrievalCompareCommand.RunAsync(
+            ["--endpoint", "https://search.invalid", "--ai", Path.Combine(RepositoryRoot.FullPath, "ai"), "--dataset", Temp("{ "),
+             "--sources", Sources, "--out", Path.GetTempFileName(), "--summary", Path.GetTempFileName()]));
+
+    [Fact]
+    public async Task Kill_test_refuses_reports_from_different_commits_or_fewer_than_three_runs()
+    {
+        var agent = EvaluationReportTests.Report(EvaluationReportTests.Run(), EvaluationReportTests.Run(), EvaluationReportTests.Run());
+        var other = agent with { System = "fixed-workflow", Commit = new string('d', 40) };
+        var single = EvaluationReportTests.Report(EvaluationReportTests.Run());
+        var output = Path.GetTempFileName();
+
+        Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(agent.ToJson()), "--challenger", Temp(other.ToJson()), "--out", output, "--summary", output]));
+        Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(single.ToJson()), "--challenger", Temp((single with { System = "fixed-workflow" }).ToJson()), "--out", output, "--summary", output]));
+    }
+
+    [Fact]
+    public async Task A_baseline_from_an_uncommitted_tree_is_refused()
+    {
+        var dirty = EvaluationReportTests.Report(EvaluationReportTests.Run(), EvaluationReportTests.Run(), EvaluationReportTests.Run()) with { Commit = new string('c', 40) + RepositoryCommit.DirtySuffix };
+        var retrieval = RetrievalReport(recall: 0.9) with { Commit = dirty.Commit };
+
+        Assert.Equal(2, await ThresholdsCommand.RunAsync(["--investigations", Temp(dirty.ToJson()), "--retrieval", Temp(retrieval.ToJson()), "--out", Path.GetTempFileName()]));
+    }
 }

@@ -126,7 +126,7 @@ then clamped to [0, 1]
 
 The gate passes when the median of three runs is at or above the threshold (at or below, when lower is better). For `retrieval_recall_at_5`, the single baseline value is `min_b`. A change passes if its typical run is no worse than the worst baseline run by more than one item, and fails on a sustained loss of two or more. A metric is "n/a" only when the labels give it N = 0; then it never gates.
 
-`thresholds` writes `eval/thresholds.json` from the baseline reports and refuses a baseline that isn't three agent runs and one retrieval run from the same commit, or that failed a hard gate: a hard-gate failure in the baseline is a finding, fixed in its own change, after which the whole baseline is run again. Each command checks only the metrics it measures: a threshold missing for one of them is an input error, found before any run.
+`thresholds` writes `eval/thresholds.json` from the baseline reports and refuses a baseline that isn't three agent runs and one retrieval run from the same clean commit, or that failed a hard gate: a hard-gate failure in the baseline is a finding, fixed in its own change, after which the whole baseline is run again. Each command checks only the metrics it measures: a threshold missing for one of them, or derived from a different N, is an input error, found before any run.
 
 ### Judge, recorded, not gating
 
@@ -146,7 +146,7 @@ Both systems run the same cases three times. The rule, fixed before either ran:
 - **Keep the agent** when the challenger fails a hard gate or is more than 0.05 worse on any gating metric's median.
 - **Keep the agent, mixed** otherwise, with the result recorded.
 
-The result is recorded whichever way it falls. The gate's thresholds come only from the agent's baseline.
+`kill-test` compares only three-run reports of the same cases, commit and chat deployment. The result is recorded whichever way it falls. The gate's thresholds come only from the agent's baseline.
 
 ### Running it
 
@@ -164,7 +164,7 @@ dotnet run --project eval/PaymentOps.Evaluation -c Release -- retrieval-eval \
   --dataset eval/datasets/retrieval-heldout.json --out retrieval.json --summary retrieval.md
 ```
 
-`--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the gate, and `--no-judge` skips the judge. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
+`--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the gate, and `--no-judge` skips the judge. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
 
 ## Investigation agent
 

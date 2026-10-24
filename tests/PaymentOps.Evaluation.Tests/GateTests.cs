@@ -28,7 +28,7 @@ public sealed class GateTests
         Scoring.Thresholds.SupportedSchemaVersion,
         new string('a', 40),
         ThresholdRule.Text,
-        entries.ToDictionary(e => e.Metric, e => new ThresholdEntry(e.Value, ThresholdRule.LowerIsBetter.Contains(e.Metric) ? ThresholdRule.Lower : ThresholdRule.Higher, 10, 0, 0, 0)));
+        entries.ToDictionary(e => e.Metric, e => new ThresholdEntry(e.Value, ThresholdRule.Direction(e.Metric), N.GetValueOrDefault(e.Metric, 30), 0, 0, 0)));
 
     private static GateVerdict Evaluate(IReadOnlyList<RunMetrics> runs, Thresholds? thresholds) =>
         Gate.Evaluate(runs, Aggregation.Summarize(runs, N), thresholds, Applicable);
@@ -76,5 +76,17 @@ public sealed class GateTests
         var thresholds = Thresholds((MetricNames.RequiredToolRecall, 0.9), (MetricNames.ProposalFalsePositiveRate, 0.4), (MetricNames.RetrievalRecallAt5, 0.99));
 
         Assert.True(Evaluate([Run(1)], thresholds).Passed);
+    }
+
+    [Fact]
+    public void Thresholds_derived_from_different_labels_are_a_configuration_error()
+    {
+        var thresholds = Thresholds((MetricNames.RequiredToolRecall, 0.9), (MetricNames.ProposalFalsePositiveRate, 0.4)) is var t
+            ? t with { Metrics = new Dictionary<string, ThresholdEntry>(t.Metrics) { [MetricNames.RequiredToolRecall] = t.Metrics[MetricNames.RequiredToolRecall] with { N = 11 } } }
+            : null;
+
+        var ex = Assert.Throws<InvalidDataException>(() => Evaluate([Run(1)], thresholds));
+
+        Assert.Contains(MetricNames.RequiredToolRecall, ex.Message, StringComparison.Ordinal);
     }
 }

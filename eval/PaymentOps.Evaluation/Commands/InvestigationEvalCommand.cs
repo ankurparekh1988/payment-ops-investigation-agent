@@ -62,7 +62,7 @@ internal static class InvestigationEvalCommand
         var thresholds = settings.Thresholds is { } path ? Thresholds.Load(path) : null;
         if (thresholds is not null)
         {
-            Gate.Require(thresholds, EvaluationReport.Applicable(Opportunities.Count(cases.Cases)));
+            Gate.Require(thresholds, EvaluationReport.ApplicableN(Opportunities.Count(cases.Cases)));
         }
 
         // One sign-in for the whole evaluation, so token fetches stay out of every case's timings.
@@ -127,8 +127,8 @@ internal static class InvestigationEvalCommand
             options.One("pricing"),
             options.Optional("thresholds"),
             !options.Flag("no-judge"),
-            options.One("out"),
-            options.One("summary"));
+            options.OutputFile("out"),
+            options.OutputFile("summary"));
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
@@ -144,9 +144,15 @@ internal static class InvestigationEvalCommand
         : [new(FixedWorkflow.Prompt.Id, FixedWorkflow.Prompt.Version), new(ScopeExtraction.Prompt.Id, ScopeExtraction.Prompt.Version)];
 }
 
-/// <summary>The commit being evaluated: the workflow's, or the working tree's HEAD.</summary>
+/// <summary>
+/// The commit being evaluated: the workflow's, or the working tree's HEAD, marked dirty when tracked files have
+/// uncommitted changes, so a report never claims code that wasn't what ran.
+/// </summary>
 internal static class RepositoryCommit
 {
+    public const string Unknown = "unknown";
+    public const string DirtySuffix = "-dirty";
+
     public static string Current()
     {
         if (Environment.GetEnvironmentVariable("GITHUB_SHA") is { Length: > 0 } sha)
@@ -154,16 +160,25 @@ internal static class RepositoryCommit
             return sha;
         }
 
+        var head = Git("rev-parse HEAD");
+        return head is null ? Unknown : Git("status --porcelain --untracked-files=no") is "" ? head : head + DirtySuffix;
+    }
+
+    /// <summary>A full commit sha with nothing uncommitted: the only kind a baseline may come from.</summary>
+    public static bool IsClean(string commit) => commit.Length == 40 && commit.All(Uri.IsHexDigit);
+
+    private static string? Git(string arguments)
+    {
         try
         {
-            using var git = Process.Start(new ProcessStartInfo("git", "rev-parse HEAD") { RedirectStandardOutput = true, UseShellExecute = false });
-            var head = git?.StandardOutput.ReadToEnd().Trim();
+            using var git = Process.Start(new ProcessStartInfo("git", arguments) { RedirectStandardOutput = true, UseShellExecute = false });
+            var output = git?.StandardOutput.ReadToEnd().Trim();
             git?.WaitForExit();
-            return git?.ExitCode == 0 && !string.IsNullOrEmpty(head) ? head : "unknown";
+            return git?.ExitCode == 0 ? output : null;
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            return "unknown";
+            return null;
         }
     }
 }

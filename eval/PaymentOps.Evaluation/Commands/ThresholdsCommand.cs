@@ -16,12 +16,14 @@ internal static class ThresholdsCommand
     public static Task<int> RunAsync(string[] args) => ExitCodes.GuardAsync("Thresholds", Usage, async () =>
     {
         var options = Options.Parse(args, ["investigations", "retrieval", "out"], []);
+        var outPath = options.OutputFile("out");
         var investigations = EvaluationReport.Load(options.One("investigations"));
         var retrieval = EvaluationReport.Load(options.One("retrieval"));
 
         Expect(investigations.System == EvaluationReport.AgentSystem && investigations.Runs.Count == BaselineRuns, $"The investigation baseline must be {BaselineRuns} runs of the agent.");
         Expect(retrieval.System == EvaluationReport.RetrievalSystem && retrieval.Runs.Count == 1, "The retrieval baseline must be one retrieval-eval run.");
         Expect(investigations.Commit == retrieval.Commit, "Both baseline reports must come from the same commit.");
+        Expect(RepositoryCommit.IsClean(investigations.Commit), $"The baseline came from '{investigations.Commit}', not a committed tree; run it again from a clean checkout.");
 
         // A hard-gate failure in the baseline is a finding to fix and re-run, never a baseline.
         Expect(investigations.Runs.Concat(retrieval.Runs).All(r => r.HardGates.Passed), "The baseline failed a hard gate; fix it and run the baseline again.");
@@ -43,7 +45,7 @@ internal static class ThresholdsCommand
         }
 
         var thresholds = new Thresholds(Thresholds.SupportedSchemaVersion, investigations.Commit, ThresholdRule.Text, metrics);
-        await File.WriteAllTextAsync(options.One("out"), thresholds.ToJson());
+        await File.WriteAllTextAsync(outPath, thresholds.ToJson());
         Console.WriteLine($"Thresholds for {metrics.Count} metrics from the baseline at {investigations.Commit}.");
         return ExitCodes.Passed;
     });

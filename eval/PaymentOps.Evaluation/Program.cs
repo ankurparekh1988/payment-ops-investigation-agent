@@ -12,72 +12,20 @@
 //        PaymentOps.Evaluation kill-test --agent <report.json> --challenger <report.json> --out <file> --summary <file>
 //        PaymentOps.Evaluation retrieval-compare --endpoint <url> --ai <dir> --dataset <file> --sources <dir> --out <file> --summary <file>
 
-using System.Globalization;
-
-using Azure.Identity;
-
 using PaymentOps.Evaluation.Commands;
-using PaymentOps.Evaluation.Retrieval;
-using PaymentOps.Knowledge.Corpus;
-using PaymentOps.Knowledge.Indexing;
-using PaymentOps.Knowledge.Retrieval;
-using PaymentOps.Platform.Ai;
-using PaymentOps.Tools.Shared;
 
-switch (args)
+return args switch
 {
-    case ["investigation-eval", .. var rest]:
-        return await InvestigationEvalCommand.RunAsync(rest);
-    case ["retrieval-eval", .. var rest]:
-        return await RetrievalEvalCommand.RunAsync(rest);
-    case ["thresholds", .. var rest]:
-        return await ThresholdsCommand.RunAsync(rest);
-    case ["kill-test", .. var rest]:
-        return await KillTestCommand.RunAsync(rest);
-}
+    ["investigation-eval", .. var rest] => await InvestigationEvalCommand.RunAsync(rest),
+    ["retrieval-eval", .. var rest] => await RetrievalEvalCommand.RunAsync(rest),
+    ["thresholds", .. var rest] => await ThresholdsCommand.RunAsync(rest),
+    ["kill-test", .. var rest] => await KillTestCommand.RunAsync(rest),
+    ["retrieval-compare", .. var rest] => await RetrievalCompareCommand.RunAsync(rest),
+    _ => Usage(),
+};
 
-if (args is not ["retrieval-compare", "--endpoint", var url, "--ai", var ai, "--dataset", var datasetPath, "--sources", var sources, "--out", var outPath, "--summary", var summaryPath]
-    || !Uri.TryCreate(url, UriKind.Absolute, out var endpoint) || endpoint.Scheme != Uri.UriSchemeHttps)
+static int Usage()
 {
-    Console.Error.WriteLine("Usage: PaymentOps.Evaluation retrieval-compare --endpoint <url> --ai <dir> --dataset <file> --sources <dir> --out <file> --summary <file>");
-    return 2;
-}
-
-try
-{
-    var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(ai));
-    var dataset = CalibrationDataset.Load(datasetPath);
-    var keys = CalibrationReferences.Resolve(dataset, IndexedCorpus.FromSourceDirectory(sources));
-
-    // In the pipeline, azure/login has signed the CLI in as the deploy identity through OIDC.
-    var retriever = KnowledgeRetriever.Create(endpoint, release.KnowledgeIndex, new AzureCliCredential());
-    var result = await RetrievalCompare.RunAsync(dataset, keys, (question, access, mode) => retriever.RetrieveAsync(question, access, mode, null, CancellationToken.None));
-
-    await File.WriteAllTextAsync(outPath, CalibrationReport.ToJson(result));
-    await File.AppendAllTextAsync(summaryPath, CalibrationReport.ToMarkdown(result));
-
-    if (!result.ProbesPassed)
-    {
-        GitHubAnnotation.Error("Retrieval calibration", "A Restricted section was returned under General access.");
-        return 1;
-    }
-
-    var floor = result.RecommendedFloor?.ToString("F2", CultureInfo.InvariantCulture) ?? "none";
-    Console.WriteLine($"Recommended mode: {result.RecommendedMode}; floor: {floor}.");
-    return 0;
-}
-catch (AiReleaseException ex)
-{
-    GitHubAnnotation.Errors("AI release", ex.Errors);
-    return 1;
-}
-catch (KnowledgeCorpusException ex)
-{
-    GitHubAnnotation.Errors("Knowledge corpus", ex.Errors);
-    return 1;
-}
-catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or KnowledgeUnavailableException or AuthenticationFailedException)
-{
-    GitHubAnnotation.Error("Retrieval calibration", ex.Message);
-    return 1;
+    Console.Error.WriteLine("Usage: PaymentOps.Evaluation investigation-eval | retrieval-eval | thresholds | kill-test | retrieval-compare [options]; see the header of Program.cs.");
+    return ExitCodes.InvalidInput;
 }

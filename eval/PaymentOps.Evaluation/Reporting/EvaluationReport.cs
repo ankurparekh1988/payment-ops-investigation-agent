@@ -120,6 +120,10 @@ internal sealed record EvaluationReport(
     public static IReadOnlySet<string> Applicable(IReadOnlyDictionary<string, int> n) =>
         ThresholdRule.Gating.Where(m => n.GetValueOrDefault(m) > 0).ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>The applicable gating metrics with their N, as the thresholds file must match them.</summary>
+    public static IReadOnlyDictionary<string, int> ApplicableN(IReadOnlyDictionary<string, int> n) =>
+        Applicable(n).ToDictionary(m => m, m => n[m], StringComparer.Ordinal);
+
     public static EvaluationReport ForInvestigations(
         ReportContext context,
         LoadedCases cases,

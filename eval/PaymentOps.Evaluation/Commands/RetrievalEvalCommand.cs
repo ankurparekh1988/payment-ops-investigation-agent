@@ -32,13 +32,14 @@ internal static class RetrievalEvalCommand
         var options = Options.Parse(args, Valued, []);
         var endpoint = options.Https("endpoint");
         var thresholdsPath = options.Optional("thresholds");
+        var (outPath, summaryPath) = (options.OutputFile("out"), options.OutputFile("summary"));
         var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(options.One("ai")));
         var dataset = CalibrationDataset.Load(options.One("dataset"));
         var keys = CalibrationReferences.Resolve(dataset, IndexedCorpus.FromSourceDirectory(options.One("sources")));
         var thresholds = thresholdsPath is null ? null : Thresholds.Load(thresholdsPath);
         if (thresholds is not null)
         {
-            Gate.Require(thresholds, EvaluationReport.Applicable(RetrievalEval.Opportunities(dataset)));
+            Gate.Require(thresholds, EvaluationReport.ApplicableN(RetrievalEval.Opportunities(dataset)));
         }
 
         if (retrieve is null)
@@ -52,8 +53,8 @@ internal static class RetrievalEvalCommand
 
         var context = new ReportContext(EvaluationReport.RetrievalSystem, RepositoryCommit.Current(), [], null, null, null, startedAt);
         var report = EvaluationReport.ForRetrieval(context, result, thresholds, thresholdsPath);
-        await File.WriteAllTextAsync(options.One("out"), report.ToJson());
-        await File.AppendAllTextAsync(options.One("summary"), ReportMarkdown.Retrieval(report));
+        await File.WriteAllTextAsync(outPath, report.ToJson());
+        await File.AppendAllTextAsync(summaryPath, ReportMarkdown.Retrieval(report));
         if (report.Gate.Verdict == GateReport.Failed)
         {
             GitHubAnnotation.Errors("Retrieval evaluation", report.Gate.Failures);

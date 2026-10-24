@@ -31,7 +31,7 @@ internal static class Gate
         }
 
         var measured = applicable.Where(m => summary.GetValueOrDefault(m)?.Median is not null).Order(StringComparer.Ordinal).ToList();
-        Require(thresholds, measured);
+        Require(thresholds, measured.ToDictionary(m => m, m => summary[m].N, StringComparer.Ordinal));
         foreach (var metric in measured)
         {
             var median = summary[metric].Median!.Value;
@@ -46,16 +46,26 @@ internal static class Gate
     }
 
     /// <summary>
-    /// A metric the command can measure must have a threshold; a silent skip would let it regress unseen. Checked
-    /// before any run, so a wrong file costs nothing.
+    /// Each metric the command can measure must have a threshold derived from these same labels: a silent skip would
+    /// let it regress unseen, and a threshold from a different N means a different tolerance. Checked before any run,
+    /// so a wrong file costs nothing.
     /// </summary>
-    public static void Require(Thresholds thresholds, IEnumerable<string> applicable)
+    /// <param name="applicable">The measurable metrics and their N from the current labels.</param>
+    public static void Require(Thresholds thresholds, IReadOnlyDictionary<string, int> applicable)
     {
         ArgumentNullException.ThrowIfNull(thresholds);
-        var missing = applicable.Where(m => !thresholds.Metrics.ContainsKey(m)).Order(StringComparer.Ordinal).ToList();
-        if (missing.Count > 0)
+        ArgumentNullException.ThrowIfNull(applicable);
+
+        var problems = applicable.OrderBy(m => m.Key, StringComparer.Ordinal).Select(m => thresholds.Metrics.TryGetValue(m.Key, out var entry)
+                ? entry.N != m.Value || entry.Direction != ThresholdRule.Direction(m.Key)
+                    ? $"{m.Key} was derived with N = {entry.N} ({entry.Direction}), but these labels give N = {m.Value} ({ThresholdRule.Direction(m.Key)})"
+                    : null
+                : $"{m.Key} has no threshold")
+            .OfType<string>()
+            .ToList();
+        if (problems.Count > 0)
         {
-            throw new InvalidDataException($"The thresholds file has no threshold for {string.Join(", ", missing)}.");
+            throw new InvalidDataException($"The thresholds file doesn't fit these datasets: {string.Join("; ", problems)}. Thresholds change only through an ADR.");
         }
     }
 }

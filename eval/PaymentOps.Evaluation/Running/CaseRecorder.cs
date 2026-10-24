@@ -207,10 +207,10 @@ internal sealed class CaseRecorder
                 recorder.Retrieved(sections);
                 return sections;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (InfrastructureFailures.Of(ex) is { } failure)
             {
-                // A tool timeout cancels the call too: Search too slow to answer is Search unavailable.
-                recorder.Fail(InfrastructureFailures.Of(ex) ?? InfrastructureFailures.SearchUnavailable);
+                // Only Search itself failing: a cancellation from the turn's own limits, or a bug, is the system's result.
+                recorder.Fail(failure);
                 throw;
             }
         }

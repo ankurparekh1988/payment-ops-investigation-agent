@@ -242,4 +242,12 @@ public sealed class MetricsTests
 
     private static ToolCallRecord Call(string tool, params (string Name, string Value)[] arguments) =>
         new(tool, arguments.ToDictionary(a => a.Name, a => (string?)a.Value, StringComparer.Ordinal));
+
+    [Fact]
+    public void A_restricted_section_both_cited_and_retrieved_is_one_leak()
+    {
+        var result = Result("a") with { AssessmentSectionKeys = ["kr"], RetrievedSections = [new SectionHit("kr", "restricted")] };
+
+        Assert.Single(Score(Loaded(Case("a")), 0, result).Hard.AuthorizationLeaks);
+    }
 }

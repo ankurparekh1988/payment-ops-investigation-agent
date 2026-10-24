@@ -168,4 +168,15 @@ public sealed class InvestigationRunTests
 
         Assert.Equal(300, sink.FirstMs);
     }
+
+    // A bug in the lookup is the system's failure, scored as such, not the environment's.
+    [Fact]
+    public async Task Only_a_real_search_failure_is_infrastructure()
+    {
+        var knowledge = new FixedKnowledge { Failure = new InvalidOperationException("bug") };
+
+        var result = Assert.Single((await AgentRunner(() => Model(Trajectory(Submission())), knowledge).RunAsync([Case()], CancellationToken.None)).Results);
+
+        Assert.Null(result.InfrastructureFailure);
+    }
 }
