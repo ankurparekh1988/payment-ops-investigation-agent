@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Judging\judge.md" LogicalName="prompts/judge.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="PaymentOps.Evaluation.Tests" />
   </ItemGroup>
 
