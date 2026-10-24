@@ -147,9 +147,9 @@ internal static partial class InvestigationDataset
                 {
                     yield return $"constraint kind '{constraint.Kind}' must be equals or covers.";
                 }
-                else if (constraint.Kind == ArgumentConstraint.CoversKind && !ToolArguments.TryDate(constraint.Value, out _))
+                else if (constraint.Kind == ArgumentConstraint.CoversKind && (constraint.Field != ArgumentConstraint.DateRangeField || !ToolArguments.TryDate(constraint.Value, out _)))
                 {
-                    yield return $"covers needs a YYYY-MM-DD date, not '{constraint.Value}'.";
+                    yield return $"covers needs field {ArgumentConstraint.DateRangeField} and a YYYY-MM-DD date, not '{constraint.Field}' and '{constraint.Value}'.";
                 }
             }
         }

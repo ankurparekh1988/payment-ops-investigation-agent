@@ -61,11 +61,12 @@ internal sealed record InvestigationCase(
 internal sealed record ToolArgumentLabel(string Tool, IReadOnlyList<ArgumentConstraint> Constraints);
 
 /// <param name="Field">The argument as the tool receives it, in snake_case.</param>
-/// <param name="Kind"><c>equals</c>: the argument is the value. <c>covers</c>: the call's start_date..end_date includes the value's date.</param>
+/// <param name="Kind"><c>equals</c>: the argument is the value. <c>covers</c> (field <c>date_range</c>): the call's start_date..end_date includes the value's date.</param>
 internal sealed record ArgumentConstraint(string Field, string Kind, string Value)
 {
     public const string EqualsKind = "equals";
     public const string CoversKind = "covers";
+    public const string DateRangeField = "date_range";
 }
 
 /// <summary>How a result's outcome is written in labels and reports.</summary>

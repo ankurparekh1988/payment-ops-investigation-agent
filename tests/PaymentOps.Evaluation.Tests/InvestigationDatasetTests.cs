@@ -39,7 +39,7 @@ public sealed class InvestigationDatasetTests
                 ["tool"] = "get_settlement_batches",
                 ["constraints"] = new JsonArray(
                     new JsonObject { ["field"] = "merchant_id", ["kind"] = "equals", ["value"] = "M-1042" },
-                    new JsonObject { ["field"] = "start_date", ["kind"] = "covers", ["value"] = "2026-11-09" }),
+                    new JsonObject { ["field"] = "date_range", ["kind"] = "covers", ["value"] = "2026-11-09" }),
             }),
             ["scoreEvidence"] = true,
             ["evidenceOutcomes"] = null,
@@ -169,10 +169,13 @@ public sealed class InvestigationDatasetTests
             File(Case(change: c => c["toolArguments"] = new JsonArray(new JsonObject
             {
                 ["tool"] = "get_error_events",
-                ["constraints"] = new JsonArray(new JsonObject { ["field"] = "processor_id", ["kind"] = "like", ["value"] = "x" }),
+                ["constraints"] = new JsonArray(
+                    new JsonObject { ["field"] = "processor_id", ["kind"] = "like", ["value"] = "x" },
+                    new JsonObject { ["field"] = "start_date", ["kind"] = "covers", ["value"] = "2026-11-09" }),
             }))),
             "get_error_events",
-            "like");
+            "like",
+            "'start_date'");
 
     [Fact]
     public void Duplicate_ids_across_files_are_rejected()
