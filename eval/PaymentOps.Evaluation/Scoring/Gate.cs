@@ -30,14 +30,8 @@ internal static class Gate
             return new GateVerdict(hardPassed, failures, hardPassed, ReportOnly: true);
         }
 
-        // A metric this run can measure must have a threshold; a silent skip would let it regress unseen.
         var measured = applicable.Where(m => summary.GetValueOrDefault(m)?.Median is not null).Order(StringComparer.Ordinal).ToList();
-        var missing = measured.Where(m => !thresholds.Metrics.ContainsKey(m)).ToList();
-        if (missing.Count > 0)
-        {
-            throw new InvalidDataException($"The thresholds file has no threshold for {string.Join(", ", missing)}.");
-        }
-
+        Require(thresholds, measured);
         foreach (var metric in measured)
         {
             var median = summary[metric].Median!.Value;
@@ -49,5 +43,19 @@ internal static class Gate
         }
 
         return new GateVerdict(hardPassed, failures, failures.Count == 0, ReportOnly: false);
+    }
+
+    /// <summary>
+    /// A metric the command can measure must have a threshold; a silent skip would let it regress unseen. Checked
+    /// before any run, so a wrong file costs nothing.
+    /// </summary>
+    public static void Require(Thresholds thresholds, IEnumerable<string> applicable)
+    {
+        ArgumentNullException.ThrowIfNull(thresholds);
+        var missing = applicable.Where(m => !thresholds.Metrics.ContainsKey(m)).Order(StringComparer.Ordinal).ToList();
+        if (missing.Count > 0)
+        {
+            throw new InvalidDataException($"The thresholds file has no threshold for {string.Join(", ", missing)}.");
+        }
     }
 }

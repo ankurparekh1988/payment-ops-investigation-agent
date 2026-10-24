@@ -1,0 +1,162 @@
+using System.Diagnostics;
+
+using Azure.Identity;
+
+using PaymentOps.Agent;
+using PaymentOps.Agent.Model;
+using PaymentOps.Evaluation.Cases;
+using PaymentOps.Evaluation.Challenger;
+using PaymentOps.Evaluation.Judging;
+using PaymentOps.Evaluation.Pricing;
+using PaymentOps.Evaluation.Reporting;
+using PaymentOps.Evaluation.Running;
+using PaymentOps.Evaluation.Scoring;
+using PaymentOps.Knowledge.Indexing;
+using PaymentOps.Platform.Ai;
+using PaymentOps.Tools.Shared;
+
+namespace PaymentOps.Evaluation.Commands;
+
+internal sealed record InvestigationEvalSettings(
+    InvestigationEndpoints Endpoints,
+    string Ai,
+    string Sources,
+    IReadOnlyList<string> Datasets,
+    int Runs,
+    string System,
+    string Pricing,
+    string? Thresholds,
+    bool Judge,
+    string Out,
+    string Summary);
+
+/// <summary>
+/// investigation-eval: the labelled cases, N times, against the deployed model and index, signed in as whoever
+/// ran <c>az login</c>. Calls the model and queries Search; writes only the report and the summary.
+/// </summary>
+internal static class InvestigationEvalCommand
+{
+    public const string Usage =
+        "investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] " +
+        "--runs <n> --system agent|fixed-workflow --pricing <file> [--thresholds <file>] [--no-judge] --out <file> --summary <file>";
+
+    private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "out", "summary"];
+    private static readonly string[] Flags = ["no-judge"];
+
+    public static Task<int> RunAsync(string[] args) => RunAsync(args, null, null, TimeSpan.FromMinutes(1));
+
+    /// <param name="runners">Tests only: the system under evaluation; by default the agent or the fixed workflow, live.</param>
+    /// <param name="judges">Tests only: the judge; by default the release's pinned judge deployment.</param>
+    /// <param name="retryDelay">How long to wait before repeating an invalid run.</param>
+    public static Task<int> RunAsync(
+        string[] args,
+        Func<AiRelease, InvestigationEvalSettings, ICaseRunner>? runners,
+        Func<AiRelease, Judge?>? judges,
+        TimeSpan retryDelay) => ExitCodes.GuardAsync("Investigation evaluation", Usage, async () =>
+    {
+        var settings = Parse(args);
+        var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(settings.Ai));
+        var cases = InvestigationDataset.Load(settings.Datasets, IndexedCorpus.FromSourceDirectory(settings.Sources), []);
+        var prices = PriceList.Load(settings.Pricing);
+        var thresholds = settings.Thresholds is { } path ? Thresholds.Load(path) : null;
+        if (thresholds is not null)
+        {
+            Gate.Require(thresholds, EvaluationReport.Applicable(Opportunities.Count(cases.Cases)));
+        }
+
+        var runner = runners?.Invoke(release, settings) ?? Runner(release, settings);
+        var judge = judges is not null ? judges(release) : settings.Judge ? LiveJudge(release, settings) : null;
+        var context = new ReportContext(
+            settings.System,
+            RepositoryCommit.Current(),
+            Prompts(release, settings.System),
+            ModelInfo.From(release, release.ActiveChatDeployment),
+            judge is null ? null : ModelInfo.From(release, release.JudgeDeployment),
+            judge is null ? null : Judge.Prompt.Version,
+            DateTimeOffset.UtcNow);
+
+        var runs = await RunPlan.RunAsync(runner, cases.Cases, settings.Runs, retryDelay, CancellationToken.None);
+        var judged = new List<IReadOnlyDictionary<string, JudgeScore>>();
+        foreach (var run in runs)
+        {
+            var scores = new Dictionary<string, JudgeScore>(StringComparer.Ordinal);
+            foreach (var result in judge is null ? [] : run.Results)
+            {
+                scores[result.CaseId] = await judge!.ScoreAsync(cases.Cases.Single(c => c.Id == result.CaseId), result, CancellationToken.None);
+            }
+
+            judged.Add(scores);
+        }
+
+        var report = EvaluationReport.ForInvestigations(context, cases, runs, judged, prices, thresholds, settings.Thresholds);
+        await File.WriteAllTextAsync(settings.Out, report.ToJson());
+        await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.Investigations(report));
+        Console.WriteLine($"{settings.System}: gate {report.Gate.Verdict} over {runs.Count} run(s).");
+        if (report.Gate.Verdict == GateReport.Failed)
+        {
+            GitHubAnnotation.Errors("Investigation evaluation", report.Gate.Failures);
+            return ExitCodes.Failed;
+        }
+
+        return ExitCodes.Passed;
+    });
+
+    private static InvestigationEvalSettings Parse(string[] args)
+    {
+        var options = Options.Parse(args, Valued, Flags);
+        var system = options.One("system");
+        if (system is not (EvaluationReport.AgentSystem or EvaluationReport.FixedWorkflowSystem))
+        {
+            throw new UsageException("--system must be agent or fixed-workflow.");
+        }
+
+        return new InvestigationEvalSettings(
+            new InvestigationEndpoints(options.Https("search"), options.Https("foundry"), options.One("scope")),
+            options.One("ai"),
+            options.One("sources"),
+            options.All("dataset"),
+            options.Positive("runs"),
+            system,
+            options.One("pricing"),
+            options.Optional("thresholds"),
+            !options.Flag("no-judge"),
+            options.One("out"),
+            options.One("summary"));
+    }
+
+    // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
+    private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings) => settings.System == EvaluationReport.AgentSystem
+        ? new AgentCaseRunner(release, settings.Endpoints, new AzureCliCredential())
+        : new FixedWorkflowCaseRunner(release, settings.Endpoints, new AzureCliCredential());
+
+    private static Judge LiveJudge(AiRelease release, InvestigationEvalSettings settings) =>
+        new(ModelClient.Create(settings.Endpoints.FoundryEndpoint, settings.Endpoints.FoundryTokenScope, new AzureCliCredential(), release.JudgeDeployment));
+
+    private static IReadOnlyList<PromptInfo> Prompts(AiRelease release, string system) => system == EvaluationReport.AgentSystem
+        ? [.. release.Prompts.Values.Select(p => new PromptInfo(p.Id, p.Version))]
+        : [new(FixedWorkflow.Prompt.Id, FixedWorkflow.Prompt.Version), new(ScopeExtraction.Prompt.Id, ScopeExtraction.Prompt.Version)];
+}
+
+/// <summary>The commit being evaluated: the workflow's, or the working tree's HEAD.</summary>
+internal static class RepositoryCommit
+{
+    public static string Current()
+    {
+        if (Environment.GetEnvironmentVariable("GITHUB_SHA") is { Length: > 0 } sha)
+        {
+            return sha;
+        }
+
+        try
+        {
+            using var git = Process.Start(new ProcessStartInfo("git", "rev-parse HEAD") { RedirectStandardOutput = true, UseShellExecute = false });
+            var head = git?.StandardOutput.ReadToEnd().Trim();
+            git?.WaitForExit();
+            return git?.ExitCode == 0 && !string.IsNullOrEmpty(head) ? head : "unknown";
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return "unknown";
+        }
+    }
+}
