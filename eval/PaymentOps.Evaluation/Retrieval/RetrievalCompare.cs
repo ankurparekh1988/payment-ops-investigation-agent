@@ -18,15 +18,28 @@ internal static class RetrievalCompare
         var runs = new List<CaseRun>();
         foreach (var testCase in dataset.Cases)
         {
-            var access = KnowledgeAccess.From(CalibrationUser.For(testCase.Access));
-            var expected = testCase.Expected.Select(e => keys[e]).ToHashSet(StringComparer.Ordinal);
-            foreach (var (mode, name) in new[] { (RetrievalMode.Lexical, CalibrationDecision.Lexical), (RetrievalMode.Semantic, CalibrationDecision.Semantic) })
+            foreach (var mode in new[] { RetrievalMode.Lexical, RetrievalMode.Semantic })
             {
-                var hits = await retrieve(testCase.Question, access, mode);
-                runs.Add(CalibrationDecision.Score(testCase, name, [.. hits.Select(h => new CaseHit(h.Key, h.DocId, h.SectionPath, h.Classification, h.RerankerScore))], expected));
+                runs.Add(await RunCaseAsync(testCase, keys, mode, retrieve));
             }
         }
 
         return CalibrationDecision.Decide(runs);
+    }
+
+    /// <summary>One case in one mode, as the case's synthetic user, scored against its expected sections.</summary>
+    public static async Task<CaseRun> RunCaseAsync(
+        CalibrationCase testCase,
+        IReadOnlyDictionary<ExpectedSection, string> keys,
+        RetrievalMode mode,
+        Func<string, KnowledgeAccess, RetrievalMode, Task<IReadOnlyList<RetrievedSection>>> retrieve)
+    {
+        ArgumentNullException.ThrowIfNull(testCase);
+        ArgumentNullException.ThrowIfNull(retrieve);
+
+        var hits = await retrieve(testCase.Question, KnowledgeAccess.From(CalibrationUser.For(testCase.Access)), mode);
+        var expected = testCase.Expected.Select(e => keys[e]).ToHashSet(StringComparer.Ordinal);
+        var name = mode == RetrievalMode.Semantic ? CalibrationDecision.Semantic : CalibrationDecision.Lexical;
+        return CalibrationDecision.Score(testCase, name, [.. hits.Select(h => new CaseHit(h.Key, h.DocId, h.SectionPath, h.Classification, h.RerankerScore))], expected);
     }
 }

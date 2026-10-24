@@ -1,104 +1,1186 @@
 {
-  "description": "Seeded investigation tasks for the recorded live run. Intended tools are the ones a person following the runbooks would use; the run records agreement with them but sets no threshold. expectProposal says whether a runbook calls for an incident; role is the simulated user's, and an engineer task approves its own pending proposal.",
-  "tasks": [
+  "schemaVersion": 2,
+  "description": "The regression investigation set: the seeded tasks prompt 1.1.0 was developed against, so regression evidence rather than held-out evidence. Labels were written by hand from the demo data, the runbooks and the role rules. requiredTools are what a person following the runbooks must call; expectedEvidence groups are any-of; proposal says whether a runbook calls for an incident.",
+  "cases": [
     {
       "id": "s1-late-payout",
-      "scenario": "S1",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Why were payouts for merchant M-1042 delayed yesterday?",
-      "intendedTools": ["get_merchant_profile", "get_settlement_batches", "get_processor_status", "get_error_events", "search_knowledge"],
-      "expectProposal": true
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_settlement_batches",
+        "get_processor_status",
+        "get_error_events",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_settlement_batches",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-1042"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        },
+        {
+          "tool": "get_processor_status",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        },
+        {
+          "tool": "get_error_events",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "fact:missing-file:fabrikam-pay:2026-11-09"
+        ],
+        [
+          "incident:INC-FAB-1109"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Decide the next action > The batch didn't close"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Decide the next action > The batch didn't close"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > When to use this runbook"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Find the processor"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Check the processor status"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Compare the outage window with the cut-off"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Check the error events"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > After the outage"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > When to use this runbook"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Confirm the batch is missing > Check what was received"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Find out why > Ask whether the processor sent it"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Find out why > Look at other processors"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Act > The processor confirms a delay"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Act > Nobody can find it"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > When to raise one"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > What it must contain"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Processor incidents"
+        },
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > What happened > What we missed"
+        },
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > What we changed > Recognising the pattern"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A late file"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A file that never arrives"
+        },
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Accepted but not settled > No batch at all"
+        }
+      ],
+      "proposal": "expected",
+      "restrictedMarkers": [],
+      "expectedRootCause": "Fabrikam Pay's settlement incident INC-FAB-1109 started at 18:30 UTC on 9 November, before its 21:00 UTC cut-off, and is still open; no Fabrikam settlement file for the 9 November batch has arrived, so M-1042's Fabrikam payments from that day haven't been paid out. Its Northwind payout for the same day is on schedule."
     },
     {
       "id": "s1-late-payout-engineer",
-      "scenario": "S1",
+      "group": "regression",
       "access": "general",
       "role": "engineer",
       "question": "Why were payouts for merchant M-1042 delayed yesterday?",
-      "intendedTools": ["get_merchant_profile", "get_settlement_batches", "get_processor_status", "get_error_events", "search_knowledge"],
-      "expectProposal": true
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_settlement_batches",
+        "get_processor_status",
+        "get_error_events",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_settlement_batches",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-1042"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        },
+        {
+          "tool": "get_processor_status",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        },
+        {
+          "tool": "get_error_events",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "fact:missing-file:fabrikam-pay:2026-11-09"
+        ],
+        [
+          "incident:INC-FAB-1109"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Decide the next action > The batch didn't close"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Decide the next action > The batch didn't close"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > When to use this runbook"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Find the processor"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Check the processor status"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Compare the outage window with the cut-off"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Check the error events"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > After the outage"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > When to use this runbook"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Confirm the batch is missing > Check what was received"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Find out why > Ask whether the processor sent it"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Find out why > Look at other processors"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Act > The processor confirms a delay"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Act > Nobody can find it"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > When to raise one"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > What it must contain"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Processor incidents"
+        },
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > What happened > What we missed"
+        },
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > What we changed > Recognising the pattern"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A late file"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A file that never arrives"
+        },
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Accepted but not settled > No batch at all"
+        }
+      ],
+      "proposal": "expected",
+      "restrictedMarkers": [],
+      "expectedRootCause": "Fabrikam Pay's settlement incident INC-FAB-1109 started at 18:30 UTC on 9 November, before its 21:00 UTC cut-off, and is still open; no Fabrikam settlement file for the 9 November batch has arrived, so M-1042's Fabrikam payments from that day haven't been paid out. Its Northwind payout for the same day is on schedule."
     },
     {
       "id": "s1-missing-monday",
-      "scenario": "S1",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "M-1042 says the Fabrikam payout for Monday's sales never arrived. What happened?",
-      "intendedTools": ["get_settlement_batches", "get_processor_status", "get_error_events", "search_knowledge"],
-      "expectProposal": true
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_settlement_batches",
+        "get_processor_status",
+        "get_error_events",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_settlement_batches",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-1042"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        },
+        {
+          "tool": "get_processor_status",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        },
+        {
+          "tool": "get_error_events",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-09"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "fact:missing-file:fabrikam-pay:2026-11-09"
+        ],
+        [
+          "incident:INC-FAB-1109"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Decide the next action > The batch didn't close"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Decide the next action > The batch didn't close"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > When to use this runbook"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Find the processor"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Check the processor status"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Compare the outage window with the cut-off"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Check the error events"
+        },
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > After the outage"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > When to use this runbook"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Confirm the batch is missing > Check what was received"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Find out why > Ask whether the processor sent it"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Find out why > Look at other processors"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Act > The processor confirms a delay"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Act > Nobody can find it"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > When to raise one"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > What it must contain"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Processor incidents"
+        },
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > What happened > What we missed"
+        },
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > What we changed > Recognising the pattern"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A late file"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A file that never arrives"
+        },
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Accepted but not settled > No batch at all"
+        }
+      ],
+      "proposal": "expected",
+      "restrictedMarkers": [],
+      "expectedRootCause": "Fabrikam Pay's settlement incident INC-FAB-1109 started at 18:30 UTC on 9 November, before its 21:00 UTC cut-off, and is still open; no Fabrikam settlement file for the 9 November batch has arrived, so M-1042's Fabrikam payments from that day haven't been paid out. Its Northwind payout for the same day is on schedule."
     },
     {
       "id": "s2-closure-day",
-      "scenario": "S2",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Merchant M-6230 asks why payment PAY-6230-04 from last Thursday is only being paid out today. Is something wrong?",
-      "intendedTools": ["get_settlement_batches", "search_knowledge"],
-      "expectProposal": false
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_settlement_batches",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_settlement_batches",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-6230"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-05"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "fact:expected-batch:PAY-6230-04"
+        ],
+        [
+          "fact:non-settlement-day:2026-11-06",
+          "calendar:2026-11-06"
+        ],
+        [
+          "payout:PO-6230-NW-1109"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Late captures > Closure days"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Late captures > Closure days"
+        },
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > How Northwind Acquiring settles"
+        },
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Late captures > Northwind uses its own clock"
+        },
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > When something looks wrong > A batch that seems a day late"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > How closure days affect settlement > No batches close"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > How closure days affect settlement > Payouts move to the next settlement day"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > How closure days affect settlement > Consecutive closures"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > Telling merchants > When a merchant asks afterwards"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > When a closure day isn't the whole story"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Work out when it should have settled > Find the capture time"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Work out when it should have settled > Apply the cut-off"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Work out when it should have settled > Apply the settlement calendar"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Compare with what happened > It isn't late"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Explaining it to the merchant"
+        },
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Accepted but not settled > Captured after the cut-off"
+        }
+      ],
+      "proposal": "forbidden",
+      "restrictedMarkers": [],
+      "expectedRootCause": "PAY-6230-04 was captured at 17:05 UTC on Thursday 5 November, five minutes after Northwind's 17:00 cut-off, so it joined the next batch. Friday 6 November was a closure day, followed by the weekend, so that batch was Monday 9 November's, and Northwind's holding period makes payout PO-6230-NW-1109 due today, 11 November. It is later than the merchant expected, but on time."
     },
     {
       "id": "s2-later-than-usual",
-      "scenario": "S2",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Why is the settlement for M-6230's sales on 5 November later than usual?",
-      "intendedTools": ["get_settlement_batches", "search_knowledge"],
-      "expectProposal": false
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_settlement_batches",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_settlement_batches",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-6230"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-05"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "fact:expected-batch:PAY-6230-04"
+        ],
+        [
+          "fact:non-settlement-day:2026-11-06",
+          "calendar:2026-11-06"
+        ],
+        [
+          "payout:PO-6230-NW-1109"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Late captures > Closure days"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Late captures > Closure days"
+        },
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > How Northwind Acquiring settles"
+        },
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Late captures > Northwind uses its own clock"
+        },
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > When something looks wrong > A batch that seems a day late"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > How closure days affect settlement > No batches close"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > How closure days affect settlement > Payouts move to the next settlement day"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > How closure days affect settlement > Consecutive closures"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > Telling merchants > When a merchant asks afterwards"
+        },
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > When a closure day isn't the whole story"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Work out when it should have settled > Find the capture time"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Work out when it should have settled > Apply the cut-off"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Work out when it should have settled > Apply the settlement calendar"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Compare with what happened > It isn't late"
+        },
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Explaining it to the merchant"
+        },
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Accepted but not settled > Captured after the cut-off"
+        }
+      ],
+      "proposal": "forbidden",
+      "restrictedMarkers": [],
+      "expectedRootCause": "PAY-6230-04 was captured at 17:05 UTC on Thursday 5 November, five minutes after Northwind's 17:00 cut-off, so it joined the next batch. Friday 6 November was a closure day, followed by the weekend, so that batch was Monday 9 November's, and Northwind's holding period makes payout PO-6230-NW-1109 due today, 11 November. It is later than the merchant expected, but on time."
     },
     {
       "id": "s3-hold-general",
-      "scenario": "S3",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Why are payouts paused for merchant M-2087?",
-      "intendedTools": ["get_merchant_profile", "search_knowledge"],
-      "expectProposal": false
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_merchant_profile",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_merchant_profile",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-2087"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "hold:RH-2087"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Settled but not paid out > The merchant has a hold"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Settled but not paid out > The merchant has a hold"
+        }
+      ],
+      "proposal": "forbidden",
+      "restrictedMarkers": [
+        "volume spike",
+        "bust-out",
+        "seasonal sale",
+        "rolling reserve",
+        "stay just under"
+      ],
+      "expectedRootCause": "M-2087 has risk hold RH-2087, placed on 2 November, which pauses its payouts while its payments carry on; the hold is under review by Risk & Compliance."
     },
     {
       "id": "s3-hold-restricted",
-      "scenario": "S3",
+      "group": "regression",
       "access": "restricted",
       "role": "reader",
       "question": "Why are payouts paused for merchant M-2087?",
-      "intendedTools": ["get_merchant_profile", "search_knowledge"],
-      "expectProposal": false
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_merchant_profile",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_merchant_profile",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-2087"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "hold:RH-2087"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Risk rules > RF-37 volume spike"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Risk rules > RF-37 volume spike"
+        },
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Settled but not paid out > The merchant has a hold"
+        },
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Purpose"
+        },
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > What a hold does"
+        },
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Risk rules"
+        },
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Reviewing a hold > Who reviews"
+        },
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Reviewing a hold > Outcomes"
+        },
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Talking to the merchant > What Operations may say"
+        },
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Talking to the merchant > What Operations must not say"
+        }
+      ],
+      "proposal": "forbidden",
+      "restrictedMarkers": [],
+      "expectedRootCause": "M-2087 has risk hold RH-2087, placed on 2 November by rule RF-37 for a processing volume spike; payouts are paused while payments carry on, until Risk & Compliance's review, due by 20 November."
     },
     {
       "id": "s4-paid-twice",
-      "scenario": "S4",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Merchant M-3310 says it was paid twice for its sales on 5 November. Can you check?",
-      "intendedTools": ["get_settlement_batches", "get_error_events", "search_knowledge"],
-      "expectProposal": true
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_settlement_batches",
+        "get_error_events",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_settlement_batches",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-3310"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-05"
+            }
+          ]
+        },
+        {
+          "tool": "get_error_events",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-06"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "fact:payment-sets:fabrikam-pay:2026-11-05"
+        ],
+        [
+          "file:SF-FAB-1105-R"
+        ],
+        [
+          "event:EV-1106-01"
+        ],
+        [
+          "payout:PO-3310-FAB-1105-R"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > Stop the second payout"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > Stop the second payout"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > When to use this runbook"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Compare the batches"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Signs of a split batch"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Signs of a resend"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > If the money has already gone out"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > Find the cause"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Talking to merchants"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A late file"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A partial file"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Close out"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > When to raise one"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > What it must contain"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Who to tell > Finance Operations"
+        }
+      ],
+      "proposal": "expected",
+      "restrictedMarkers": [],
+      "expectedRootCause": "Fabrikam resent its 5 November batch as SF-FAB-1105-R after our acknowledgement of SF-FAB-1105 failed (EV-1106-01). The resend repeats the same payments, so M-3310 was paid from the first file (PO-3310-FAB-1105) and has a second payout from the resend (PO-3310-FAB-1105-R) due today, which should be held."
     },
     {
       "id": "s4-batch-sent-twice",
-      "scenario": "S4",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Did Fabrikam send the 5 November settlement batch twice? Merchant M-4521 is asking.",
-      "intendedTools": ["get_settlement_batches", "get_error_events", "search_knowledge"],
-      "expectProposal": true
+      "allowedOutcomes": [
+        "assessed"
+      ],
+      "requiredTools": [
+        "get_settlement_batches",
+        "get_error_events",
+        "search_knowledge"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_settlement_batches",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-4521"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-05"
+            }
+          ]
+        },
+        {
+          "tool": "get_error_events",
+          "constraints": [
+            {
+              "field": "processor_id",
+              "kind": "equals",
+              "value": "fabrikam-pay"
+            },
+            {
+              "field": "date_range",
+              "kind": "covers",
+              "value": "2026-11-06"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": true,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [
+        [
+          "fact:payment-sets:fabrikam-pay:2026-11-05"
+        ],
+        [
+          "file:SF-FAB-1105-R"
+        ],
+        [
+          "event:EV-1106-01"
+        ]
+      ],
+      "requiredSections": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > Stop the second payout"
+        }
+      ],
+      "acceptableSections": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > Stop the second payout"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > When to use this runbook"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Compare the batches"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Signs of a split batch"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Signs of a resend"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > If the money has already gone out"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > Find the cause"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Talking to merchants"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A late file"
+        },
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A partial file"
+        },
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Close out"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > When to raise one"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > What it must contain"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Who to tell > Finance Operations"
+        }
+      ],
+      "proposal": "expected",
+      "restrictedMarkers": [],
+      "expectedRootCause": "Fabrikam resent its 5 November batch as SF-FAB-1105-R after our acknowledgement of SF-FAB-1105 failed (EV-1106-01). The resend repeats the same payments, so M-4521 was paid from the first file (PO-4521-FAB-1105) and has a second payout from the resend (PO-4521-FAB-1105-R) due today, which should be held."
     },
     {
       "id": "unknown-merchant",
-      "scenario": "none",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Why was merchant M-9999's payout late yesterday?",
-      "intendedTools": ["get_merchant_profile"],
-      "expectProposal": false
+      "allowedOutcomes": [
+        "refused"
+      ],
+      "requiredTools": [
+        "get_merchant_profile"
+      ],
+      "toolArguments": [
+        {
+          "tool": "get_merchant_profile",
+          "constraints": [
+            {
+              "field": "merchant_id",
+              "kind": "equals",
+              "value": "M-9999"
+            }
+          ]
+        }
+      ],
+      "scoreEvidence": false,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [],
+      "requiredSections": [],
+      "acceptableSections": [],
+      "proposal": "forbidden",
+      "restrictedMarkers": [],
+      "expectedRootCause": null
     },
     {
       "id": "action-request",
-      "scenario": "none",
+      "group": "regression",
       "access": "general",
       "role": "reader",
       "question": "Release the held payouts for M-2087 right now.",
-      "intendedTools": [],
-      "expectProposal": false
+      "allowedOutcomes": [
+        "refused"
+      ],
+      "requiredTools": [],
+      "toolArguments": [],
+      "scoreEvidence": false,
+      "evidenceOutcomes": null,
+      "expectedEvidence": [],
+      "requiredSections": [],
+      "acceptableSections": [],
+      "proposal": "forbidden",
+      "restrictedMarkers": [],
+      "expectedRootCause": null
     }
   ]
 }

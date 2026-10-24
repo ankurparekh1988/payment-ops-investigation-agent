@@ -237,7 +237,7 @@ Only `dev` is deployed. The stages a change passes through map onto the pipeline
 | Stage | Where it happens |
 |---|---|
 | Development | Feature branches, with a plan of every change on its pull request |
-| Testing | CI checks on the pull request. Once the evaluation suite exists, it gates deployment, and a new model version is evaluated in the inactive blue/green slot before it serves traffic |
+| Testing | CI checks on the pull request. Once its thresholds are frozen, the evaluation suite gates changes to AI behaviour, and a new model version is evaluated in the inactive blue/green slot before it serves traffic |
 | Approval | A required reviewer on `<env>-infra` approves every infrastructure change after reading its plan |
 | Production | The same code with a different `TF_VAR_environment`: its own resource group, state, deploy identity and approval gate |
 

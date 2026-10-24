@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-> In place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, the knowledge corpus and its search index, the structured data behind domain ports, and the investigation agent: read-only tools over that data and the knowledge, assessments the server validates against what the tools returned, a home page that shows the investigation as it runs and carries follow-up questions, and incident tickets the agent can propose and only the investigating Engineer can approve. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
+> In place so far: module structure, architecture tests, the web host with sign-in and telemetry, the Azure platform defined in Terraform, the knowledge corpus and its search index, the structured data behind domain ports, and the investigation agent: read-only tools over that data and the knowledge, assessments the server validates against what the tools returned, a home page that shows the investigation as it runs and carries follow-up questions, incident tickets the agent can propose and only the investigating Engineer can approve, and the evaluation suite that measures the agent against labelled cases. This document describes what has actually been implemented, and it's updated in the same pull request as the code it describes.
 
 ## Current state
 
@@ -22,6 +22,7 @@
 | Investigation agent | ✅ One agent with five read-only tools, limits enforced in our own code, and an assessment shown only after every statement checks out against what this investigation's tools returned ([below](#investigation-agent)) |
 | Investigation view | ✅ The home page: a live timeline of tool calls written by the server, the validated assessment with each statement's support, cancel, and follow-up questions within an application-owned budget ([below](#investigation-view)) |
 | Ticket approvals | ✅ The agent can propose an incident ticket; the server stores it for the Engineer who ran the investigation, and creates the ticket only when they approve, once ([below](#proposals-and-approval)) |
+| Evaluation suite | ✅ `eval/PaymentOps.Evaluation` runs labelled cases through the app's own registration, observing the model, tools, knowledge and ticket store from outside; deterministic metrics over three runs, recorded judge scores and a fixed-workflow challenger ([Evaluation](Evaluation.md#release-gate)). Thresholds and the pull-request gate aren't in place yet |
 
 ## Azure platform
 
@@ -254,7 +255,7 @@ Follow-up questions see earlier ones as context, never as evidence.
 
 - **A fresh session every question.** The request is the instructions, the tool definitions, the newest earlier turns that fit, then the new question. Earlier tool calls and results are never replayed, and section ids such as `S1` never appear: a cited section is named by its title, and record ids stay as plain references the agent can look up again. Each earlier answer starts "Earlier context, not evidence for this question", and validation accepts only ids this question's own tools returned.
 - **What an earlier turn carries.** The question, the outcome, the summary, the claims, the root cause with its label, the confidence, the gaps, and what became of any proposal: created with its ticket id, rejected with the reason, expired or replaced. A question that wasn't assessed, or was refused, carries one fixed line.
-- **A budget the application owns.** The input budget is 32,000 tokens, a setting rather than a claim about the model. The current question reserves its share first: the instructions and tool definitions as sent (about 3,300 tokens, measured), the longest allowed question, ten tool results at 2,300 tokens each, and the output. What's left, about 3,400 tokens, goes to history, and startup refuses, with the same calculation, a budget that would leave no history. Sizes are estimated at three characters a token; the live run compares that with the counted input.
+- **A budget the application owns.** The input budget is 32,000 tokens, a setting rather than a claim about the model. The current question reserves its share first: the instructions and tool definitions as sent (about 3,300 tokens, measured), the longest allowed question, ten tool results at 2,300 tokens each, and the output. What's left, about 3,400 tokens, goes to history, and startup refuses, with the same calculation, a budget that would leave no history. Sizes are estimated at three characters a token; the recorded live runs compared that with the counted input.
 - **Ending.** A conversation ends at 20 questions, or when the newest earlier turn alone doesn't fit. When fewer than all earlier questions are carried, the page says how many the agent sees. A new investigation, or a reload, starts again with nothing carried over.
 
 ## Proposals and approval
