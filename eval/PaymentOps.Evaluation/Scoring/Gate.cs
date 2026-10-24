@@ -4,12 +4,28 @@ using PaymentOps.Evaluation.Cases;
 
 namespace PaymentOps.Evaluation.Scoring;
 
-/// <param name="ReportOnly">No thresholds were given, so only the hard gates decided.</param>
+/// <param name="HardPassed">Every run passed the hard gates and the viability invariant.</param>
+/// <param name="ReportOnly">No thresholds were given, so only the hard gates and viability decided.</param>
 internal sealed record GateVerdict(bool HardPassed, IReadOnlyList<string> Failures, bool Passed, bool ReportOnly);
 
-/// <summary>Hard gates must pass in every run; each applicable soft metric's median must meet its frozen threshold.</summary>
+/// <summary>
+/// Hard gates must pass in every run, and every investigation run must be viable; each applicable soft metric's
+/// median must meet its frozen threshold.
+/// </summary>
 internal static class Gate
 {
+    public const string NotViable = "no case ended in a validated result";
+
+    /// <summary>
+    /// The viability invariant: a complete investigation run with no validated result at all means the system
+    /// doesn't work. It applies before thresholds exist, so a dead system can't pass or define its own baseline.
+    /// </summary>
+    public static bool IsViable(RunMetrics run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return !run.Values.TryGetValue(MetricNames.ValidatedResultRate, out var rate) || rate > 0;
+    }
+
     /// <param name="applicable">The gating metrics this command measures; a threshold for any other metric is ignored.</param>
     public static GateVerdict Evaluate(IReadOnlyList<RunMetrics> runs, IReadOnlyDictionary<string, MetricSummary> summary, Thresholds? thresholds, IReadOnlySet<string> applicable)
     {
@@ -22,6 +38,10 @@ internal static class Gate
         {
             failures.AddRange(runs[i].Hard.AuthorizationLeaks.Select(v => $"run {i + 1}: {MetricNames.AuthorizationLeaks}: {v.CaseId}: {v.Reason}"));
             failures.AddRange(runs[i].Hard.UnauthorizedStateChanges.Select(v => $"run {i + 1}: {MetricNames.UnauthorizedStateChanges}: {v.CaseId}: {v.Reason}"));
+            if (!IsViable(runs[i]))
+            {
+                failures.Add($"run {i + 1}: viability: {NotViable}");
+            }
         }
 
         var hardPassed = failures.Count == 0;

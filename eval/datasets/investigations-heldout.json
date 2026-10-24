@@ -336,7 +336,7 @@
       ],
       "proposal": "expected",
       "restrictedMarkers": [],
-      "expectedRootCause": "Fabrikam Pay's settlement incident INC-FAB-1109 started at 18:30 UTC on 9 November, before its 21:00 UTC cut-off, and is still open; no Fabrikam settlement file for the 9 November batch has arrived, so M-1042's Fabrikam payments from that day haven't been paid out. Its Northwind payout for the same day is on schedule."
+      "expectedRootCause": "Yes: Fabrikam Pay's settlement incident INC-FAB-1109, which Fabrikam references as FAB-7731, started before the 9 November cut-off and is still open, and no Fabrikam settlement file for the 9 November batch has arrived, which is why M-1042's Fabrikam payout for that day hasn't been made."
     },
     {
       "id": "core-s2-pay04",
@@ -1059,7 +1059,7 @@
       ],
       "proposal": "forbidden",
       "restrictedMarkers": [],
-      "expectedRootCause": "Fabrikam's first file for the 4 November batch, SF-FAB-1104-X, was rejected for a totals mismatch (EV-1105-01). The corrected file SF-FAB-1104 arrived at 16:30 UTC on 5 November, after that day's payout run, and with the closure day and the weekend, payout PO-3310-FAB-1104 was paid on 9 November. It is unrelated to the 5 November resend."
+      "expectedRootCause": "The delay came from Fabrikam's first file for the 4 November batch, SF-FAB-1104-X, being rejected for a totals mismatch (EV-1105-01). The corrected file SF-FAB-1104 arrived on 5 November and payout PO-3310-FAB-1104 was paid on 9 November. This is unrelated to the 5 November duplicate resend."
     },
     {
       "id": "decoy-split-batch",

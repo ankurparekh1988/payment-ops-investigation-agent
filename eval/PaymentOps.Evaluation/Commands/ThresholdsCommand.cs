@@ -1,3 +1,4 @@
+using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Reporting;
 using PaymentOps.Evaluation.Scoring;
 
@@ -25,8 +26,9 @@ internal static class ThresholdsCommand
         Expect(investigations.Commit == retrieval.Commit, "Both baseline reports must come from the same commit.");
         Expect(RepositoryCommit.IsClean(investigations.Commit), $"The baseline came from '{investigations.Commit}', not a committed tree; run it again from a clean checkout.");
 
-        // A hard-gate failure in the baseline is a finding to fix and re-run, never a baseline.
+        // A hard-gate failure in the baseline is a finding to fix and re-run, never a baseline; nor is a run that didn't work at all.
         Expect(investigations.Runs.Concat(retrieval.Runs).All(r => r.HardGates.Passed), "The baseline failed a hard gate; fix it and run the baseline again.");
+        Expect(investigations.Runs.All(r => r.Metrics.GetValueOrDefault(MetricNames.ValidatedResultRate) > 0), $"A baseline run failed viability ({Gate.NotViable}); fix the system and run the baseline again.");
 
         var metrics = new Dictionary<string, ThresholdEntry>(StringComparer.Ordinal);
         foreach (var report in new[] { investigations, retrieval })

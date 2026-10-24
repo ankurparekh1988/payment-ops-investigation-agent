@@ -96,7 +96,7 @@ internal static class ReportMarkdown
         md.AppendLine(gate.Verdict switch
         {
             GateReport.Passed => "Gate: **passed**.",
-            GateReport.ReportOnly => "Gate: **report-only** (no thresholds); hard gates passed.",
+            GateReport.ReportOnly => "Gate: **report-only** (no thresholds); hard gates and viability passed.",
             _ => "Gate: **FAILED**.",
         }).AppendLine();
         foreach (var failure in gate.Failures)

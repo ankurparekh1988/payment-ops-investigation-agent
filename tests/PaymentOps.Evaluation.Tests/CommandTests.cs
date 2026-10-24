@@ -231,4 +231,42 @@ public sealed class CommandTests
 
         Assert.Equal(2, await ThresholdsCommand.RunAsync(["--investigations", Temp(dirty.ToJson()), "--retrieval", Temp(retrieval.ToJson()), "--out", Path.GetTempFileName()]));
     }
+
+    private static RunOutcome Unverified() => new([new CaseResult("c1", "not-assessed:assessment-unverified")], 0);
+
+    [Fact]
+    public async Task A_report_only_run_with_no_validated_result_fails()
+    {
+        var summary = Path.GetTempFileName();
+
+        var exit = await Investigations([.. Args(Dataset())[..^2], "--summary", summary], Run(), Unverified(), Run());
+
+        Assert.Equal(1, exit);
+        Assert.Contains("no case ended in a validated result", File.ReadAllText(summary), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_report_only_run_with_a_validated_result_stays_report_only()
+    {
+        var output = Path.GetTempFileName();
+
+        var exit = await Investigations([.. Args(Dataset())[..^4], "--out", output, "--summary", Path.GetTempFileName()], Run(), Run(), Run());
+
+        Assert.Equal(0, exit);
+        Assert.Equal(GateReport.ReportOnly, EvaluationReport.Load(output).Gate.Verdict);
+    }
+
+    [Fact]
+    public async Task A_baseline_run_with_no_validated_result_defines_no_thresholds()
+    {
+        var dead = new RunOutcome([new CaseResult("reg-1", "not-assessed:assessment-unverified"), new CaseResult("held-1", "not-assessed:limit-reached")], 0);
+        var baseline = EvaluationReportTests.Report(EvaluationReportTests.Run(), dead, EvaluationReportTests.Run());
+        var output = Path.GetTempFileName();
+        File.Delete(output);
+
+        var exit = await ThresholdsCommand.RunAsync(["--investigations", Temp(baseline.ToJson()), "--retrieval", Temp(RetrievalReport(recall: 0.9).ToJson()), "--out", output]);
+
+        Assert.Equal(2, exit);
+        Assert.False(File.Exists(output));
+    }
 }
