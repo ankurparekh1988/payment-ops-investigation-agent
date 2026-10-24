@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\RepositoryRoot.cs" Link="Shared\RepositoryRoot.cs" />
+    <Compile Include="..\PaymentOps.Agent.Tests\ScriptedChatClient.cs" Link="Shared\ScriptedChatClient.cs" />
   </ItemGroup>
 
 </Project>

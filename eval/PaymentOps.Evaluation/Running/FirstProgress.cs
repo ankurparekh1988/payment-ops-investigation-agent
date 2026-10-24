@@ -1,6 +1,6 @@
 using PaymentOps.Agent.Contracts;
 
-namespace PaymentOps.Evaluation.Agent;
+namespace PaymentOps.Evaluation.Running;
 
 /// <summary>
 /// Time to first progress: from submit to the first event the agent's own choice caused, a read tool starting or a

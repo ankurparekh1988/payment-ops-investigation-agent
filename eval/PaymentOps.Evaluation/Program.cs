@@ -10,18 +10,12 @@ using System.Globalization;
 
 using Azure.Identity;
 
-using PaymentOps.Evaluation.Agent;
 using PaymentOps.Evaluation.Retrieval;
 using PaymentOps.Knowledge.Corpus;
 using PaymentOps.Knowledge.Indexing;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Tools.Shared;
-
-if (args is ["agent-run", .. var agentArgs])
-{
-    return await AgentRunCommand.RunAsync(agentArgs);
-}
 
 if (args is not ["retrieval-compare", "--endpoint", var url, "--ai", var ai, "--dataset", var datasetPath, "--sources", var sources, "--out", var outPath, "--summary", var summaryPath]
     || !Uri.TryCreate(url, UriKind.Absolute, out var endpoint) || endpoint.Scheme != Uri.UriSchemeHttps)
