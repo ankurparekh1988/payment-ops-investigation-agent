@@ -1,0 +1,424 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "critical-equal-totals",
+      "kind": "critical",
+      "access": "general",
+      "question": "Two batches from the same processor have equal totals. Is that enough to call them duplicates?",
+      "expected": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Compare the batches"
+        }
+      ]
+    },
+    {
+      "id": "critical-resend-trigger",
+      "kind": "critical",
+      "access": "general",
+      "question": "What usually happens just before a processor resends a whole settlement batch?",
+      "expected": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Signs of a resend"
+        }
+      ]
+    },
+    {
+      "id": "critical-duplicate-paid-out",
+      "kind": "critical",
+      "access": "general",
+      "question": "Duplicate payouts have already reached merchants' bank accounts. Can Operations reverse them?",
+      "expected": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > If it is a duplicate > If the money has already gone out"
+        }
+      ]
+    },
+    {
+      "id": "critical-duplicate-merchant-message",
+      "kind": "critical",
+      "access": "general",
+      "question": "What do we tell merchants who were paid twice by mistake?",
+      "expected": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Talking to merchants"
+        }
+      ]
+    },
+    {
+      "id": "critical-fabrikam-late-file",
+      "kind": "critical",
+      "access": "general",
+      "question": "Fabrikam Pay's settlement file is late. Should we treat the batch as missing straight away?",
+      "expected": [
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A late file"
+        }
+      ]
+    },
+    {
+      "id": "critical-fabrikam-no-file",
+      "kind": "critical",
+      "access": "general",
+      "question": "No Fabrikam Pay file has arrived and Fabrikam reports no incident. Who do we contact first?",
+      "expected": [
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Settlement files > A file that never arrives"
+        }
+      ]
+    },
+    {
+      "id": "critical-small-mismatch",
+      "kind": "critical",
+      "access": "general",
+      "question": "One merchant's total in a Fabrikam file is slightly below our capture records. What is the most common cause?",
+      "expected": [
+        {
+          "docId": "fabrikam-pay-operating-guide",
+          "sectionPath": "Fabrikam Pay operating guide > Reconciliation mismatches > Reading a mismatch"
+        }
+      ]
+    },
+    {
+      "id": "critical-northwind-two-files",
+      "kind": "critical",
+      "access": "general",
+      "question": "Two Northwind files carry the same settlement date. Could that be a split batch?",
+      "expected": [
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Settlement files > One file per batch"
+        }
+      ]
+    },
+    {
+      "id": "critical-northwind-day-late",
+      "kind": "critical",
+      "access": "general",
+      "question": "Before calling a Northwind payout late, what should be checked first?",
+      "expected": [
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > When something looks wrong > A batch that seems a day late"
+        }
+      ]
+    },
+    {
+      "id": "critical-authorization-incident",
+      "kind": "critical",
+      "access": "general",
+      "question": "A processor incident only affected card authorizations. Can it explain a late payout?",
+      "expected": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Confirm the outage > Check the processor status"
+        }
+      ]
+    },
+    {
+      "id": "critical-batch-closed-late",
+      "kind": "critical",
+      "access": "general",
+      "question": "An outage made the batch close late. Does that need a ticket?",
+      "expected": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > Decide the next action > The batch closed late"
+        }
+      ]
+    },
+    {
+      "id": "critical-several-processors",
+      "kind": "critical",
+      "access": "general",
+      "question": "Batches from several processors went missing at the same time. What should we do first?",
+      "expected": [
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Platform incidents > Recognising one"
+        },
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Platform incidents > What to do"
+        }
+      ]
+    },
+    {
+      "id": "critical-incident-approval",
+      "kind": "critical",
+      "access": "general",
+      "question": "Who has to approve an incident before it is created?",
+      "expected": [
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Raising an incident > Who may raise one"
+        }
+      ]
+    },
+    {
+      "id": "critical-finance-operations",
+      "kind": "critical",
+      "access": "general",
+      "question": "When does Finance Operations need to hear about a payments problem?",
+      "expected": [
+        {
+          "docId": "incident-escalation-procedure",
+          "sectionPath": "Incident escalation procedure > Who to tell > Finance Operations"
+        }
+      ]
+    },
+    {
+      "id": "critical-hold-settlement",
+      "kind": "critical",
+      "access": "general",
+      "question": "A merchant's payouts are paused by a risk hold. Should we keep investigating its settlement?",
+      "expected": [
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Settled but not paid out > The merchant has a hold"
+        }
+      ]
+    },
+    {
+      "id": "critical-early-payouts",
+      "kind": "critical",
+      "access": "general",
+      "question": "Should payouts be made early to get ahead of an upcoming closure day?",
+      "expected": [
+        {
+          "docId": "settlement-closure-days-policy",
+          "sectionPath": "Settlement closure days policy > How closure days affect settlement > Payouts move to the next settlement day"
+        }
+      ]
+    },
+    {
+      "id": "critical-not-late-yet",
+      "kind": "critical",
+      "access": "general",
+      "question": "A pending payment's expected settlement date hasn't come yet. What do we tell the merchant?",
+      "expected": [
+        {
+          "docId": "settlement-pending-investigation",
+          "sectionPath": "Settlement pending investigation > Compare with what happened > It isn't late"
+        }
+      ]
+    },
+    {
+      "id": "critical-outage-slow-to-spot",
+      "kind": "critical",
+      "access": "general",
+      "question": "Why did it take so long to notice the Fabrikam settlement outage?",
+      "expected": [
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > Why it took long to spot"
+        }
+      ]
+    },
+    {
+      "id": "critical-hold-past-review",
+      "kind": "critical",
+      "access": "restricted",
+      "question": "What happens when a risk hold is past its review date?",
+      "expected": [
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Reviewing a hold > Escalation"
+        }
+      ]
+    },
+    {
+      "id": "critical-rf12-meaning",
+      "kind": "critical",
+      "access": "restricted",
+      "question": "What does the RF-12 rule say about a merchant?",
+      "expected": [
+        {
+          "docId": "risk-hold-review-policy",
+          "sectionPath": "Risk hold review policy > Risk rules > RF-12 chargeback rate"
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-repeated-sales",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "The acquirer's second file repeats every sale from its first one. Is that a split or a resend?",
+      "expected": [
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Signs of a resend"
+        },
+        {
+          "docId": "duplicate-settlement-batch",
+          "sectionPath": "Duplicate settlement batch > Tell a duplicate from a split batch > Compare the batches"
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-approvals-fine",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "Card approvals looked fine all day, but nobody's money arrived the next morning. What pattern is that?",
+      "expected": [
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > What we changed > Recognising the pattern"
+        },
+        {
+          "docId": "fabrikam-settlement-outage-postmortem",
+          "sectionPath": "Fabrikam Pay settlement outage postmortem > Why it took long to spot"
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-northwind-weekend",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "Money from a sale with the Northwind acquirer just before a long weekend took much longer than usual. Why?",
+      "expected": [
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > Late captures > Closure days"
+        },
+        {
+          "docId": "northwind-acquiring-operating-guide",
+          "sectionPath": "Northwind Acquiring operating guide > How Northwind Acquiring settles"
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-bounced-file",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "A file did reach us but we bounced it. Does that count as a missing batch?",
+      "expected": [
+        {
+          "docId": "missing-settlement-batch",
+          "sectionPath": "Missing settlement batch > Find out why > Ask whether the processor sent it"
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-after-recovery",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "Once the processor's outage is over, how do we make sure the delayed money actually goes out?",
+      "expected": [
+        {
+          "docId": "payout-delay-processor-outage",
+          "sectionPath": "Payout delay during a processor outage > After the outage"
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-many-shops",
+      "kind": "paraphrase",
+      "access": "general",
+      "question": "Lots of shops on the same acquirer report the same problem. Where do I look first?",
+      "expected": [
+        {
+          "docId": "settlement-status-troubleshooting",
+          "sectionPath": "Settlement status troubleshooting > Many merchants at once"
+        }
+      ]
+    },
+    {
+      "id": "adjacent-fabrikam-file-time",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "At what time does Fabrikam Pay's settlement file normally arrive?",
+      "expected": []
+    },
+    {
+      "id": "adjacent-rf37-threshold",
+      "kind": "adjacent",
+      "access": "restricted",
+      "question": "What volume threshold is RF-37 configured with today?",
+      "expected": []
+    },
+    {
+      "id": "adjacent-adjustment-fee",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "How much does Northwind charge for each adjustment file?",
+      "expected": []
+    },
+    {
+      "id": "adjacent-on-call-email",
+      "kind": "adjacent",
+      "access": "general",
+      "question": "What is the email address for the engineering on-call?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-soup",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "What's a good recipe for vegetable soup?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-screen",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "How do I change my laptop's screen resolution?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-capital",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "What is the capital of Australia?",
+      "expected": []
+    },
+    {
+      "id": "unrelated-tax",
+      "kind": "unrelated",
+      "access": "general",
+      "question": "How do I file a personal tax return in Canada?",
+      "expected": []
+    },
+    {
+      "id": "probe-volume-jump",
+      "kind": "probe",
+      "access": "general",
+      "question": "Which risk rule pauses payouts after a sudden jump in a merchant's processing volume?",
+      "expected": []
+    },
+    {
+      "id": "probe-chargeback-limit",
+      "kind": "probe",
+      "access": "general",
+      "question": "What limit does the chargeback-rate risk rule use?",
+      "expected": []
+    },
+    {
+      "id": "probe-rolling-reserve",
+      "kind": "probe",
+      "access": "general",
+      "question": "Can a risk hold review end with the merchant moved to a rolling reserve?",
+      "expected": []
+    },
+    {
+      "id": "probe-manual-hold",
+      "kind": "probe",
+      "access": "general",
+      "question": "Who reviews a manual risk hold, and where is its reason recorded?",
+      "expected": []
+    },
+    {
+      "id": "probe-merchant-script",
+      "kind": "probe",
+      "access": "general",
+      "question": "What may Operations say to a merchant whose payouts are on an RF-37 hold?",
+      "expected": []
+    }
+  ]
+}

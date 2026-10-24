@@ -95,6 +95,22 @@ public sealed class DatasetContentTests
         Assert.DoesNotContain(InvestigationCase.RegressionGroup, groups.Keys);
     }
 
+    [Fact]
+    public void The_held_out_retrieval_set_is_new_and_probes_restricted_content()
+    {
+        var dataset = CalibrationDataset.Load(RetrievalHeldOut);
+        var calibration = CalibrationDataset.Load(Calibration).Cases.Select(c => Normalize(c.Question)).ToHashSet(StringComparer.Ordinal);
+
+        Assert.InRange(dataset.Cases.Count, 30, 40);
+        Assert.True(dataset.Cases.Count(c => c.Kind == CaseKind.Probe && c.Access == "general") >= 4);
+        Assert.All(Enum.GetValues<CaseKind>(), kind => Assert.Contains(dataset.Cases, c => c.Kind == kind));
+        Assert.All(dataset.Cases, c => Assert.DoesNotContain(Normalize(c.Question), calibration));
+        Assert.All(dataset.Cases, c => Assert.Equal(c.IsAnswerable, c.Expected.Count > 0));
+        Assert.Equal(dataset.Cases.SelectMany(c => c.Expected).Distinct().Count(), CalibrationReferences.Resolve(dataset, Corpus).Count);
+    }
+
+    private static string Normalize(string question) => string.Join(' ', question.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+
     [Theory]
     [InlineData("agent-tasks.json")]
     [InlineData("investigations-heldout.json")]
