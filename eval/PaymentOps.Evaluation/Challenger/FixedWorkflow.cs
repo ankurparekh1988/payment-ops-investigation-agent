@@ -50,36 +50,20 @@ internal sealed class FixedWorkflow(
         var turn = new TurnState();
         var guard = new ToolGuard(turn, _limits, time, user, progress);
         var readTools = tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).ToDictionary(tool => tool.Name, guard.Wrap, StringComparer.Ordinal);
-        using var turnTimeout = new CancellationTokenSource(_limits.TurnTimeout, time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turnTimeout.Token);
-        try
-        {
-            var fanOut = new FanOut(readTools, _limits.MaxToolCalls);
-            await GatherAsync(question, fanOut, linked.Token);
-            await AssessAsync(question, fanOut, turn, progress, linked.Token);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return new NotAssessed(NotAssessedReason.Cancelled);
-        }
-        catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested)
-        {
-            if (turn.Stop())
+        var fanOut = new FanOut(readTools, _limits.MaxToolCalls);
+        return await TurnOutcome.RunAsync(
+            turn,
+            _limits,
+            time,
+            progress,
+            async token =>
             {
-                progress?.Report(new InvestigationProgress.LimitReached());
-            }
-        }
-        catch (Exception ex) when (ex is OperationCanceledException || ModelFailure.IsServiceFailure(ex))
-        {
-            return new NotAssessed(NotAssessedReason.ModelUnavailable);
-        }
-        catch (Exception)
-        {
-            return new NotAssessed(NotAssessedReason.AssessmentUnverified);
-        }
-
-        return turn.Accepted is { } submission ? AssessmentPolicy.Apply(submission, turn)
-            : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
+                await GatherAsync(question, fanOut, token);
+                await AssessAsync(question, fanOut, turn, progress, token);
+                return null;
+            },
+            null,
+            cancellationToken);
     }
 
     // Profiles, then each merchant's batches, then status and errors for every processor involved, then knowledge.

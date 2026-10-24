@@ -28,6 +28,7 @@ internal static class EvaluationServices
 {
     /// <param name="substituteModel">Tests only: replaces the Foundry client with a scripted one.</param>
     /// <param name="substituteKnowledge">Tests only: replaces the release's Search lookup.</param>
+    /// <param name="configure">Tests only: adjusts the app's options, such as a shorter turn timeout.</param>
     public static ServiceProvider Build(
         AiRelease release,
         InvestigationEndpoints endpoints,
@@ -35,7 +36,8 @@ internal static class EvaluationServices
         InvestigationCase c,
         CaseRecorder recorder,
         Func<IChatClient, IChatClient>? substituteModel,
-        Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge)
+        Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(release);
@@ -49,6 +51,7 @@ internal static class EvaluationServices
         Wrap<IKnowledgeLookup>(services, (sp, lookup) => recorder.Observe(substituteKnowledge?.Invoke(sp) ?? lookup));
         Wrap<IInvestigationTool>(services, (_, tool) => recorder.Observe(tool));
         Wrap<IIncidentStore>(services, (_, store) => recorder.Observe(store));
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 

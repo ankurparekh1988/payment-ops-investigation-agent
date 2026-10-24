@@ -75,57 +75,43 @@ internal sealed class InvestigationAgentRunner(
             },
         });
 
-        using var turnTimeout = new CancellationTokenSource(_limits.TurnTimeout, time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turnTimeout.Token);
-        try
-        {
-            // A fresh session every turn: earlier turns arrive only as the plain-text history, never as tool messages.
-            var session = await agent.CreateSessionAsync(linked.Token);
-            var first = await agent.RunAsync([.. history, new ChatMessage(ChatRole.User, question)], session, Run([.. readTools, submit], null), linked.Token);
-
-            // A call no tool answered (an unknown tool) ends the investigation: fail closed, and that history can't be sent again.
-            if (turn.Accepted is null && HasUnansweredCall(first.Messages))
+        return await TurnOutcome.RunAsync(
+            turn,
+            _limits,
+            time,
+            progress,
+            async token =>
             {
-                return Unverified;
-            }
+                // A fresh session every turn: earlier turns arrive only as the plain-text history, never as tool messages.
+                var session = await agent.CreateSessionAsync(token);
+                var first = await agent.RunAsync([.. history, new ChatMessage(ChatRole.User, question)], session, Run([.. readTools, submit], null), token);
 
-            // One more request either way: to correct a rejected submission, or to submit at all.
-            if (turn.Accepted is null)
-            {
-                await agent.RunAsync([], session, Run([submit], ChatToolMode.RequireSpecific(ToolNames.SubmitAssessment)), linked.Token);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return new NotAssessed(NotAssessedReason.Cancelled);
-        }
-        catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested)
-        {
-            if (turn.Stop())
-            {
-                progress?.Report(new InvestigationProgress.LimitReached());
-            }
-        }
-        catch (OperationCanceledException ex)
-        {
-            // Cancelled by neither the caller nor our turn timeout: the model or Search client timed out on its own.
-            InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
-            return new NotAssessed(NotAssessedReason.ModelUnavailable);
-        }
-        catch (Exception ex) when (ModelFailure.IsServiceFailure(ex))
-        {
-            InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
-            return new NotAssessed(NotAssessedReason.ModelUnavailable);
-        }
-        catch (Exception ex)
-        {
-            // A tool or the loop failed unexpectedly; the framework ended the loop without retrying, and so do we.
-            InvestigationLog.Aborted(logger, investigationId, ex, timer.ElapsedMilliseconds);
-            return new NotAssessed(NotAssessedReason.AssessmentUnverified);
-        }
+                // A call no tool answered (an unknown tool) ends the investigation: fail closed, and that history can't be sent again.
+                if (turn.Accepted is null && HasUnansweredCall(first.Messages))
+                {
+                    return Unverified;
+                }
 
-        return turn.Accepted is { } submission ? AssessmentPolicy.Apply(submission, turn)
-            : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
+                // One more request either way: to correct a rejected submission, or to submit at all.
+                if (turn.Accepted is null)
+                {
+                    await agent.RunAsync([], session, Run([submit], ChatToolMode.RequireSpecific(ToolNames.SubmitAssessment)), token);
+                }
+
+                return null;
+            },
+            (failure, ex) =>
+            {
+                if (failure == TurnFailure.ServiceFailed)
+                {
+                    InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                }
+                else
+                {
+                    InvestigationLog.Aborted(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                }
+            },
+            cancellationToken);
     }
 
     private static readonly NotAssessed Unverified = new(NotAssessedReason.AssessmentUnverified);

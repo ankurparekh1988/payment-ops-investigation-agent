@@ -23,7 +23,8 @@ internal abstract class CaseRunner(
     InvestigationEndpoints endpoints,
     TokenCredential credential,
     Func<IChatClient, IChatClient>? substituteModel,
-    Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge) : ICaseRunner
+    Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge,
+    Action<IServiceCollection>? configure) : ICaseRunner
 {
     public async Task<RunOutcome> RunAsync(IReadOnlyList<InvestigationCase> cases, CancellationToken cancellationToken)
     {
@@ -32,7 +33,7 @@ internal abstract class CaseRunner(
         foreach (var c in cases)
         {
             var recorder = new CaseRecorder();
-            using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge);
+            using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge, configure);
             using var scope = provider.CreateScope();
 
             var timer = Stopwatch.StartNew();
@@ -74,8 +75,9 @@ internal sealed class AgentCaseRunner(
     InvestigationEndpoints endpoints,
     TokenCredential credential,
     Func<IChatClient, IChatClient>? substituteModel = null,
-    Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge = null)
-    : CaseRunner(release, endpoints, credential, substituteModel, substituteKnowledge)
+    Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge = null,
+    Action<IServiceCollection>? configure = null)
+    : CaseRunner(release, endpoints, credential, substituteModel, substituteKnowledge, configure)
 {
     protected override Task<AssessmentResult> InvestigateAsync(IServiceProvider services, string question, IProgress<InvestigationProgress> progress, CancellationToken cancellationToken) =>
         services.GetRequiredService<IInvestigationService>().InvestigateAsync(question, progress, cancellationToken);
