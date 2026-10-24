@@ -14,15 +14,16 @@ using PaymentOps.Tools.Knowledge;
 namespace PaymentOps.Evaluation.Running;
 
 /// <summary>
-/// Runs each case through the app's investigation service against the deployed model and index. Each case gets
-/// its own services, so nothing (conversation, proposals, tickets) carries from one case to the next.
+/// Runs each case against the deployed model and index in the app's own services, recorded from outside. Each
+/// case gets its own services, so nothing (conversation, proposals, tickets) carries from one case to the next.
+/// A system under evaluation differs only in how it investigates; proposals are settled the same way for both.
 /// </summary>
-internal sealed class AgentCaseRunner(
+internal abstract class CaseRunner(
     AiRelease release,
     InvestigationEndpoints endpoints,
     TokenCredential credential,
-    Func<IChatClient, IChatClient>? substituteModel = null,
-    Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge = null) : ICaseRunner
+    Func<IChatClient, IChatClient>? substituteModel,
+    Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge) : ICaseRunner
 {
     public async Task<RunOutcome> RunAsync(IReadOnlyList<InvestigationCase> cases, CancellationToken cancellationToken)
     {
@@ -39,7 +40,7 @@ internal sealed class AgentCaseRunner(
             AssessmentResult result;
             try
             {
-                result = await scope.ServiceProvider.GetRequiredService<IInvestigationService>().InvestigateAsync(c.Question, first, cancellationToken);
+                result = await InvestigateAsync(scope.ServiceProvider, c.Question, first, cancellationToken);
             }
             catch (Exception ex) when (InfrastructureFailures.Of(ex) is { } failure)
             {
@@ -62,4 +63,20 @@ internal sealed class AgentCaseRunner(
 
         return new RunOutcome(results, tickets);
     }
+
+    /// <summary>One question, with an Engineer's proposal already kept by the app's proposal store.</summary>
+    protected abstract Task<AssessmentResult> InvestigateAsync(IServiceProvider services, string question, IProgress<InvestigationProgress> progress, CancellationToken cancellationToken);
+}
+
+/// <summary>The investigation agent, through the app's investigation service.</summary>
+internal sealed class AgentCaseRunner(
+    AiRelease release,
+    InvestigationEndpoints endpoints,
+    TokenCredential credential,
+    Func<IChatClient, IChatClient>? substituteModel = null,
+    Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge = null)
+    : CaseRunner(release, endpoints, credential, substituteModel, substituteKnowledge)
+{
+    protected override Task<AssessmentResult> InvestigateAsync(IServiceProvider services, string question, IProgress<InvestigationProgress> progress, CancellationToken cancellationToken) =>
+        services.GetRequiredService<IInvestigationService>().InvestigateAsync(question, progress, cancellationToken);
 }

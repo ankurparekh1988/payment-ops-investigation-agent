@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Judging\judge.md" LogicalName="prompts/judge.md" />
+    <EmbeddedResource Include="Challenger\fixed-workflow.md" LogicalName="prompts/fixed-workflow.md" />
+    <EmbeddedResource Include="Challenger\scope-extraction.md" LogicalName="prompts/scope-extraction.md" />
   </ItemGroup>
 
   <ItemGroup>

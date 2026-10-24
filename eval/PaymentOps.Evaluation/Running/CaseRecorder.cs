@@ -26,6 +26,7 @@ internal sealed class CaseRecorder
 
     private readonly Lock _lock = new();
     private readonly List<ToolCallRecord> _calls = [];
+    private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RetrievedSection> _retrieved = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _facts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tickets = new(StringComparer.Ordinal);
@@ -105,7 +106,8 @@ internal sealed class CaseRecorder
         }
     }
 
-    private void Response(ChatResponse response)
+    // Calls the model made, and calls it was shown that it didn't make (a fixed workflow's), each once by call id.
+    private void Exchange(IEnumerable<ChatMessage> sent, ChatResponse response)
     {
         lock (_lock)
         {
@@ -113,7 +115,10 @@ internal sealed class CaseRecorder
             _inputTokens += response.Usage?.InputTokenCount ?? 0;
             _cachedInputTokens += response.Usage?.CachedInputTokenCount ?? 0;
             _outputTokens += response.Usage?.OutputTokenCount ?? 0;
-            _calls.AddRange(response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Select(Record));
+            foreach (var call in sent.Concat(response.Messages).SelectMany(m => m.Contents).OfType<FunctionCallContent>().Where(call => _callIds.Add(call.CallId)))
+            {
+                _calls.Add(Record(call));
+            }
         }
     }
 
@@ -183,8 +188,9 @@ internal sealed class CaseRecorder
     {
         public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var response = await base.GetResponseAsync(messages, options, cancellationToken);
-            recorder.Response(response);
+            var sent = messages.ToList();
+            var response = await base.GetResponseAsync(sent, options, cancellationToken);
+            recorder.Exchange(sent, response);
             return response;
         }
     }
