@@ -61,6 +61,9 @@ internal sealed record CaseResult(string CaseId, string Outcome)
 
     public long InputTokens { get; init; }
 
+    /// <summary>The part of <see cref="InputTokens"/> the service served from its prompt cache, billed at a lower rate.</summary>
+    public long CachedInputTokens { get; init; }
+
     public long OutputTokens { get; init; }
 
     /// <summary>Summary, claims, root cause and next steps: what the judge reads.</summary>

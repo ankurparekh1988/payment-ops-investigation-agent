@@ -22,6 +22,8 @@ internal sealed record JudgeScore(int? Groundedness, int? Relevance, int? RootCa
 
     public long InputTokens { get; init; }
 
+    public long CachedInputTokens { get; init; }
+
     public long OutputTokens { get; init; }
 
     public static JudgeScore Skipped(string reason) => new(null, null, null, NotScored, reason);
@@ -67,13 +69,15 @@ internal sealed class Judge(IChatClient judgeModel)
             return JudgeScore.Skipped($"the judge call failed ({ex.GetType().Name})");
         }
 
-        var tokens = (Input: response.Usage?.InputTokenCount ?? 0, Output: response.Usage?.OutputTokenCount ?? 0);
-        if (!TryResult(response, out var verdict) || !InRange(verdict.Groundedness, verdict.Relevance, verdict.RootCauseAgreement))
+        var score = TryResult(response, out var verdict) && InRange(verdict.Groundedness, verdict.Relevance, verdict.RootCauseAgreement)
+            ? new JudgeScore(verdict.Groundedness, verdict.Relevance, verdict.RootCauseAgreement, JudgeScore.Scored, null)
+            : JudgeScore.Skipped("the judge's answer wasn't three scores from 1 to 5");
+        return score with
         {
-            return JudgeScore.Skipped("the judge's answer wasn't three scores from 1 to 5") with { InputTokens = tokens.Input, OutputTokens = tokens.Output };
-        }
-
-        return new JudgeScore(verdict.Groundedness, verdict.Relevance, verdict.RootCauseAgreement, JudgeScore.Scored, null) with { InputTokens = tokens.Input, OutputTokens = tokens.Output };
+            InputTokens = response.Usage?.InputTokenCount ?? 0,
+            CachedInputTokens = response.Usage?.CachedInputTokenCount ?? 0,
+            OutputTokens = response.Usage?.OutputTokenCount ?? 0,
+        };
     }
 
     private static bool TryResult(ChatResponse<JudgeVerdict> response, out JudgeVerdict verdict)

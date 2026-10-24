@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "prices": [
+    {
+      "model": "gpt-5.4-mini",
+      "version": "2026-03-17",
+      "deploymentType": "GlobalStandard",
+      "currency": "USD",
+      "inputPerMillion": 0.75,
+      "cachedInputPerMillion": 0.075,
+      "outputPerMillion": 4.50,
+      "effectiveDate": "2026-03-01",
+      "retrieved": "2026-10-23",
+      "source": "https://prices.azure.com/api/retail/prices?$filter=productName%20eq%20'Azure%20OpenAI%20GPT5'%20and%20contains(meterName,'5.4%20mini')"
+    }
+  ]
+}

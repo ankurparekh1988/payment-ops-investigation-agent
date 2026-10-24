@@ -31,6 +31,7 @@ internal sealed class CaseRecorder
     private readonly HashSet<string> _tickets = new(StringComparer.Ordinal);
     private int _requests;
     private long _inputTokens;
+    private long _cachedInputTokens;
     private long _outputTokens;
     private string? _failure;
 
@@ -94,6 +95,7 @@ internal sealed class CaseRecorder
                 TtfpMs = ttfpMs,
                 ModelRequests = _requests,
                 InputTokens = _inputTokens,
+                CachedInputTokens = _cachedInputTokens,
                 OutputTokens = _outputTokens,
                 AssessmentText = assessmentText,
                 UserVisibleText = proposal is null ? assessmentText : $"{assessmentText}\n{proposal.Title}\n{proposal.Summary}",
@@ -109,6 +111,7 @@ internal sealed class CaseRecorder
         {
             _requests++;
             _inputTokens += response.Usage?.InputTokenCount ?? 0;
+            _cachedInputTokens += response.Usage?.CachedInputTokenCount ?? 0;
             _outputTokens += response.Usage?.OutputTokenCount ?? 0;
             _calls.AddRange(response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Select(Record));
         }
