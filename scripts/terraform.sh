@@ -53,6 +53,10 @@ while IFS='=' read -r name _; do
   if [[ -z "${!name}" ]]; then unset "$name"; fi
 done < <(env | grep '^TF_VAR_' || true)
 
+# Git Bash on Windows rewrites values starting with "/" into Windows paths for native programs, which
+# would turn resource IDs such as /subscriptions/... into C:/Program Files/Git/subscriptions/....
+export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}TF_VAR_"
+
 missing=()
 for name in ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_environment TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER; do
   [[ -n "${!name:-}" ]] || missing+=("$name")
