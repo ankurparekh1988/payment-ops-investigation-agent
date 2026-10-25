@@ -59,12 +59,6 @@ variable "eval_search_service_id" {
   default     = null
 }
 
-variable "eval_search_index_scope" {
-  description = "The evaluation index, as <search_service_id>/indexes/<retrieval.evaluationIndex>; the only index the evaluation publisher may write."
-  type        = string
-  default     = null
-}
-
 variable "eval_dcr_id" {
   description = "Evaluation history rule resource ID (platform output evaluation_dcr_id); the evaluation publisher may write through it."
   type        = string

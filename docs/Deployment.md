@@ -287,7 +287,7 @@ A pull request that needs evaluating therefore waits for two approvals, one per 
 **Setting it up**, after the change that adds it is merged:
 
 1. Let CD run: it creates `knowledge-eval-v1`, the `AiEvaluation_CL` table and its data collection rule.
-2. Copy `foundry_account_id`, `search_service_id` and `evaluation_dcr_id` from `scripts/terraform.sh platform output` into `.env` as `TF_VAR_eval_foundry_account_id`, `TF_VAR_eval_search_service_id` and `TF_VAR_eval_dcr_id`, and set `TF_VAR_eval_search_index_scope` to the search service ID followed by `/indexes/knowledge-eval-v1`.
+2. Copy `foundry_account_id`, `search_service_id` and `evaluation_dcr_id` from `scripts/terraform.sh platform output` into `.env` as `TF_VAR_eval_foundry_account_id`, `TF_VAR_eval_search_service_id` and `TF_VAR_eval_dcr_id`. The evaluation index's writer role takes the index name from `ai/manifest.yaml`.
 3. Re-run `scripts/bootstrap.sh`. Its plan adds two identities, four federated credentials and four role assignments, and nothing else.
 4. Run `scripts/configure-github.sh`: it sets the two client-id secrets, creates the four environments and gives them the endpoints they need.
 5. Prove the gate: a docs-only pull request reports "not required"; a manual run of `main` reproduces the baseline on the evaluation index and writes history rows; a harmless knowledge edit passes.

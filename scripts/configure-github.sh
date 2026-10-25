@@ -78,23 +78,9 @@ done
 # --- Environments ------------------------------------------------------------------------------
 
 reviewer_id="$(gh api user --jq .id)"
-for name in "$environment-infra" "$environment"; do
-  reviewers='[]'
-  [[ "$name" == "$environment-infra" ]] && reviewers="[{\"type\":\"User\",\"id\":$reviewer_id}]"
-  gh api -X PUT "repos/$repo/environments/$name" --input - >/dev/null <<EOF
-{
-  "reviewers": $reviewers,
-  "prevent_self_review": false,
-  "deployment_branch_policy": { "protected_branches": true, "custom_branch_policies": false }
-}
-EOF
-  echo "Environment $name configured"
-done
+reviewed="[{\"type\":\"User\",\"id\":$reviewer_id}]"
+protected='{ "protected_branches": true, "custom_branch_policies": false }'
 
-# --- Evaluation environments -------------------------------------------------------------------
-
-# Reviewed environments allow any branch, because pull request refs must be able to deploy to them;
-# the owner's approval is the control. Scheduled ones need no approval, so they're limited to protected branches.
 configure_environment() {
   local name="$1" reviewers="$2" branch_policy="$3"
   gh api -X PUT "repos/$repo/environments/$name" --input - >/dev/null <<EOF
@@ -107,8 +93,13 @@ EOF
   echo "Environment $name configured"
 }
 
-reviewed="[{\"type\":\"User\",\"id\":$reviewer_id}]"
-protected='{ "protected_branches": true, "custom_branch_policies": false }'
+configure_environment "$environment-infra" "$reviewed" "$protected"
+configure_environment "$environment" '[]' "$protected"
+
+# --- Evaluation environments -------------------------------------------------------------------
+
+# The reviewed pair allows any branch, because pull request refs must be able to deploy to it; the
+# reviewer's approval is the control. The scheduled pair needs no approval, so it's limited to protected branches.
 configure_environment "$environment-eval" "$reviewed" null
 configure_environment "$environment-eval-publish" "$reviewed" null
 configure_environment "$environment-eval-scheduled" '[]' "$protected"

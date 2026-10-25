@@ -1,6 +1,8 @@
 using PaymentOps.Evaluation.Classification;
 using PaymentOps.Evaluation.Commands;
 
+using static PaymentOps.Evaluation.Tests.EvaluationFakes;
+
 namespace PaymentOps.Evaluation.Tests;
 
 public sealed class ChangeClassifierTests
@@ -126,12 +128,5 @@ public sealed class ChangeClassifierTests
 
         Assert.Equal(2, await ClassifyChangeCommand.RunAsync(["--changed", Temp("README.md"), "--base-manifest", bad, "--head-manifest", bad, "--same-repository", "true", "--actor-type", "User", "--github-output", output]));
         Assert.Equal(2, await ClassifyChangeCommand.RunAsync(["--changed", Temp("README.md"), "--base-manifest", bad, "--head-manifest", bad, "--same-repository", "maybe", "--actor-type", "User", "--github-output", output]));
-    }
-
-    private static string Temp(string content)
-    {
-        var path = Path.GetTempFileName();
-        File.WriteAllText(path, content);
-        return path;
     }
 }

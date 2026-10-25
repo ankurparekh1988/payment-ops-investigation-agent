@@ -37,17 +37,10 @@ internal static partial class ReleaseManifestValidator
             errors.Add($"Deployment name '{duplicate.Key}' is used more than once.");
         }
 
-        if (!SearchIndexName().IsMatch(manifest.Retrieval.Index))
-        {
-            errors.Add($"retrieval.index '{manifest.Retrieval.Index}' must be lowercase letters and digits in hyphen-separated words, 2 to 128 characters.");
-        }
-
+        RequireIndexName("retrieval.index", manifest.Retrieval.Index, errors);
         var evaluationIndex = manifest.Retrieval.EvaluationIndex;
-        if (!SearchIndexName().IsMatch(evaluationIndex))
-        {
-            errors.Add($"retrieval.evaluationIndex '{evaluationIndex}' must be lowercase letters and digits in hyphen-separated words, 2 to 128 characters.");
-        }
-        else if (evaluationIndex == manifest.Retrieval.Index || evaluationIndex == AiReleaseLoader.SelfTestIndex)
+        if (RequireIndexName("retrieval.evaluationIndex", evaluationIndex, errors)
+            && (evaluationIndex == manifest.Retrieval.Index || evaluationIndex == AiReleaseLoader.SelfTestIndex))
         {
             errors.Add($"retrieval.evaluationIndex '{evaluationIndex}' must differ from retrieval.index and from '{AiReleaseLoader.SelfTestIndex}'; evaluations rewrite its documents.");
         }
@@ -144,4 +137,15 @@ internal static partial class ReleaseManifestValidator
     // Search allows 2-128 characters and underscores too; hyphen-separated words keep names uniform.
     [GeneratedRegex("^(?=.{2,128}$)[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.CultureInvariant)]
     private static partial Regex SearchIndexName();
+
+    private static bool RequireIndexName(string field, string name, List<string> errors)
+    {
+        if (SearchIndexName().IsMatch(name))
+        {
+            return true;
+        }
+
+        errors.Add($"{field} '{name}' must be lowercase letters and digits in hyphen-separated words, 2 to 128 characters.");
+        return false;
+    }
 }

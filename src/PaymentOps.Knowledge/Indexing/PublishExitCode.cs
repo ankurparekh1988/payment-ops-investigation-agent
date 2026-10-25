@@ -4,10 +4,10 @@ using Azure.Identity;
 namespace PaymentOps.Knowledge.Indexing;
 
 /// <summary>
-/// Exit codes for a documents-only publish, so the evaluation workflow can tell its failures apart:
+/// The knowledge publisher's exit codes, so the evaluation workflow can tell its failures apart:
 /// 0 published, 1 corpus, release or publish failure, 3 sign-in or Search unavailable, 4 scope violation.
 /// </summary>
-public static class DocumentsOnlyExitCode
+public static class PublishExitCode
 {
     public const int Published = 0;
     public const int Failed = 1;

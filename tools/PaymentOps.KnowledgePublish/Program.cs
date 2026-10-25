@@ -34,9 +34,11 @@ if (options is not { } parsed
 
 var (corpusDirectory, _, aiDirectory, mode) = parsed;
 var documentsOnly = mode == "--documents-only";
+var ensureEvaluationIndex = mode == "--ensure-evaluation-index";
 
 // In the pipeline, azure/login has signed the CLI in as the deploy or evaluation-publish identity through OIDC.
 var credential = new AzureCliCredential();
+Exception? failure = null;
 
 try
 {
@@ -49,25 +51,21 @@ try
             Console.WriteLine($"Passed: {line}");
         }
 
-        return 0;
+        return PublishExitCode.Published;
     }
 
     KnowledgeSelfTest.RequireDistinctFrom(indexName);
     var documents = IndexedCorpus.Load(corpusDirectory);
-    PublishPlan plan;
     if (documentsOnly)
     {
         // The live index's client is used for the probe only.
         await PublisherScope.RequireNoWriteAsync(SearchKnowledgeIndexClient.Create(endpoint, indexName, credential), indexName, CancellationToken.None);
         Console.WriteLine($"Scope check passed: writing '{indexName}' was refused (403).");
         indexName = release.EvaluationIndex;
-        plan = await new KnowledgeIndexPublisher(SearchKnowledgeIndexClient.Create(endpoint, indexName, credential)).PublishDocumentsAsync(documents);
-    }
-    else
-    {
-        plan = await new KnowledgeIndexPublisher(SearchKnowledgeIndexClient.Create(endpoint, indexName, credential)).PublishAsync(documents);
     }
 
+    var publisher = new KnowledgeIndexPublisher(SearchKnowledgeIndexClient.Create(endpoint, indexName, credential));
+    var plan = documentsOnly ? await publisher.PublishDocumentsAsync(documents) : await publisher.PublishAsync(documents);
     foreach (var change in plan.Changes())
     {
         Console.WriteLine(change);
@@ -77,41 +75,43 @@ try
         $"Published {documents.Count} sections from {documents.Select(d => d.DocId).Distinct().Count()} documents to '{indexName}': "
         + $"{plan.Tighten.Count} tightened, {plan.Upload.Count} uploaded, {plan.Delete.Count} deleted. The index holds exactly the corpus.");
 
-    if (mode == "--ensure-evaluation-index")
+    if (ensureEvaluationIndex)
     {
         await SearchKnowledgeIndexClient.Create(endpoint, release.EvaluationIndex, credential).EnsureIndexAsync(CancellationToken.None);
         Console.WriteLine($"The evaluation index '{release.EvaluationIndex}' exists; evaluations publish its documents.");
     }
 
-    return 0;
+    return PublishExitCode.Published;
 }
 catch (KnowledgeCorpusException ex)
 {
     GitHubAnnotation.Errors("Knowledge corpus", ex.Errors);
-    return documentsOnly ? DocumentsOnlyExitCode.For(ex) : 1;
+    failure = ex;
 }
 catch (AiReleaseException ex)
 {
     GitHubAnnotation.Errors("AI release", ex.Errors);
-    return documentsOnly ? DocumentsOnlyExitCode.For(ex) : 1;
+    failure = ex;
 }
 catch (PublisherScopeException ex)
 {
     GitHubAnnotation.Error("Publisher scope", ex.Message);
-    return DocumentsOnlyExitCode.For(ex);
+    failure = ex;
 }
 catch (KnowledgePublishException ex)
 {
     GitHubAnnotation.Error("Knowledge publish", ex.Message);
-    return documentsOnly ? DocumentsOnlyExitCode.For(ex) : 1;
+    failure = ex;
 }
 catch (AuthenticationFailedException ex)
 {
     GitHubAnnotation.Error("Knowledge publish", $"Couldn't get an Entra token from the Azure CLI: {ex.Message}");
-    return documentsOnly ? DocumentsOnlyExitCode.For(ex) : 1;
+    failure = ex;
 }
-catch (HttpRequestException ex) when (documentsOnly)
+catch (HttpRequestException ex)
 {
     GitHubAnnotation.Error("Knowledge publish", $"Search couldn't be reached: {ex.Message}");
-    return DocumentsOnlyExitCode.For(ex);
+    failure = ex;
 }
+
+return PublishExitCode.For(failure);

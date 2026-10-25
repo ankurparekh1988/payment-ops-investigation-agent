@@ -1,6 +1,5 @@
 using Azure;
 using Azure.Core;
-using Azure.Identity;
 using Azure.Monitor.Ingestion;
 
 using PaymentOps.Evaluation.Running;
@@ -33,7 +32,8 @@ internal sealed class LogsIngestionSink(Uri ingestionEndpoint, string ruleImmuta
         {
             throw new CouldNotEvaluateException($"Log ingestion was refused ({ex.Status} {ex.ErrorCode}); the publisher needs Monitoring Metrics Publisher on the evaluation rule.");
         }
-        catch (Exception ex) when (ex is AuthenticationFailedException or HttpRequestException or AggregateException)
+        catch (Exception ex) when (InfrastructureFailures.Of(ex) is not null
+            || (ex is AggregateException batch && batch.InnerExceptions.All(e => InfrastructureFailures.Of(e) is not null)))
         {
             throw new CouldNotEvaluateException($"Log ingestion couldn't be reached or signed in to: {ex.Message}");
         }

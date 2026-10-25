@@ -37,6 +37,34 @@ locals {
     "Monitoring Metrics Publisher"   = "3913510d-42f4-4e42-8a64-420c390055eb"
   }
   delegable_role_ids = join(", ", values(local.delegable_roles))
+  delegable_role_definition_ids = {
+    for name, id in local.delegable_roles :
+    name => "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${id}"
+  }
+
+  # The publisher's writer role is on the evaluation index only: every gate run proves the live index refuses it.
+  eval_grants = {
+    openai-user = {
+      scope        = var.eval_foundry_account_id
+      role         = "Cognitive Services OpenAI User"
+      principal_id = module.eval_identity.principal_id
+    }
+    search-reader = {
+      scope        = var.eval_search_service_id
+      role         = "Search Index Data Reader"
+      principal_id = module.eval_identity.principal_id
+    }
+    publish-index-writer = {
+      scope        = var.eval_search_service_id == null ? null : "${var.eval_search_service_id}/indexes/${var.eval_search_index_name}"
+      role         = "Search Index Data Contributor"
+      principal_id = module.eval_publish_identity.principal_id
+    }
+    publish-metrics-publisher = {
+      scope        = var.eval_dcr_id
+      role         = "Monitoring Metrics Publisher"
+      principal_id = module.eval_publish_identity.principal_id
+    }
+  }
 
   # What a developer needs to run the app locally against the environment's services.
   developer_roles = [
@@ -196,7 +224,7 @@ resource "azurerm_role_assignment" "deploy_search" {
   for_each = toset(["Search Service Contributor", "Search Index Data Contributor"])
 
   scope              = azurerm_resource_group.workload.id
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles[each.value]}"
+  role_definition_id = local.delegable_role_definition_ids[each.value]
   principal_id       = module.deploy_identity.principal_id
   principal_type     = "ServicePrincipal"
 }
@@ -329,39 +357,11 @@ resource "azurerm_role_assignment" "operator_only_state_contributor" {
 
 # Set from platform outputs after the platform exists; re-run after a rebuild, because exact-resource
 # grants go with the resources. Each is skipped until its scope is set, so the first bootstrap works.
-resource "azurerm_role_assignment" "eval_openai_user" {
-  count = var.eval_foundry_account_id == null ? 0 : 1
+resource "azurerm_role_assignment" "eval" {
+  for_each = { for name, grant in local.eval_grants : name => grant if grant.scope != null }
 
-  scope              = var.eval_foundry_account_id
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles["Cognitive Services OpenAI User"]}"
-  principal_id       = module.eval_identity.principal_id
-  principal_type     = "ServicePrincipal"
-}
-
-resource "azurerm_role_assignment" "eval_search_reader" {
-  count = var.eval_search_service_id == null ? 0 : 1
-
-  scope              = var.eval_search_service_id
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles["Search Index Data Reader"]}"
-  principal_id       = module.eval_identity.principal_id
-  principal_type     = "ServicePrincipal"
-}
-
-# The evaluation index only: every gate run proves the live index refuses this identity's writes.
-resource "azurerm_role_assignment" "eval_publish_index_writer" {
-  count = var.eval_search_index_scope == null ? 0 : 1
-
-  scope              = var.eval_search_index_scope
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles["Search Index Data Contributor"]}"
-  principal_id       = module.eval_publish_identity.principal_id
-  principal_type     = "ServicePrincipal"
-}
-
-resource "azurerm_role_assignment" "eval_publish_metrics_publisher" {
-  count = var.eval_dcr_id == null ? 0 : 1
-
-  scope              = var.eval_dcr_id
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles["Monitoring Metrics Publisher"]}"
-  principal_id       = module.eval_publish_identity.principal_id
+  scope              = each.value.scope
+  role_definition_id = local.delegable_role_definition_ids[each.value.role]
+  principal_id       = each.value.principal_id
   principal_type     = "ServicePrincipal"
 }

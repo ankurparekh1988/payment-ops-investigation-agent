@@ -33,7 +33,7 @@ internal static class RetrievalEvalCommand
         var endpoint = options.Https("endpoint");
         var thresholdsPath = options.Optional("thresholds");
         var (outPath, summaryPath) = (options.OutputFile("out"), options.OutputFile("summary"));
-        var release = Options.Reading(AiReleaseLoader.Load(new DirectoryAiReleaseSource(options.One("ai"))), options.EvaluationIndex());
+        var release = options.Release();
         var dataset = CalibrationDataset.Load(options.One("dataset"));
         var keys = CalibrationReferences.Resolve(dataset, IndexedCorpus.FromSourceDirectory(options.One("sources")));
         var thresholds = thresholdsPath is null ? null : Thresholds.Load(thresholdsPath);

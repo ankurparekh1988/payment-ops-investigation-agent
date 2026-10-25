@@ -201,7 +201,7 @@ public sealed class SearchKnowledgeIndexClient : IKnowledgeIndexClient
         ex.Status switch
         {
             401 => new($"{operation} wasn't authenticated (401): Search didn't accept the Entra token. Check the Azure sign-in step and that the token is for Search.", ex),
-            403 => new($"{operation} was forbidden (403). The deploy identity needs {role}: re-run scripts/bootstrap.sh.", ex),
+            403 => new($"{operation} was forbidden (403). The signed-in identity needs {role} here: re-run scripts/bootstrap.sh.", ex),
             400 when schemaHint is not null && ex.ErrorCode == "OperationNotAllowed" => new($"{operation} failed ({ex.Status} {ex.ErrorCode}): {schemaHint}.", ex),
             _ => new($"{operation} failed ({ex.Status} {ex.ErrorCode}).", ex),
         };

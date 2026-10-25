@@ -1,3 +1,5 @@
+# Evaluation history lives outside the app, so it's readable when the app isn't.
+
 locals {
   # Matches the harness's EvaluationRow, one row per metric per run.
   evaluation_columns = {
@@ -23,7 +25,7 @@ locals {
   evaluation_stream = "Custom-${local.evaluation_table}"
 }
 
-# Evaluation history lives outside the app, so it's readable when the app isn't. Retention is the workspace's.
+# Retention is the workspace's.
 resource "azurerm_log_analytics_workspace_table_custom_log" "evaluation" {
   name         = local.evaluation_table
   workspace_id = azurerm_log_analytics_workspace.this.id
@@ -39,7 +41,7 @@ resource "azurerm_log_analytics_workspace_table_custom_log" "evaluation" {
   }
 }
 
-# Evaluation history lives outside the app, so it's readable when the app isn't. The Logs Ingestion API needs an endpoint.
+# The Logs Ingestion API needs an endpoint.
 resource "azurerm_monitor_data_collection_endpoint" "evaluation" {
   name                          = var.evaluation_endpoint_name
   resource_group_name           = var.resource_group_name
@@ -50,7 +52,7 @@ resource "azurerm_monitor_data_collection_endpoint" "evaluation" {
   tags = var.tags
 }
 
-# Evaluation history lives outside the app, so it's readable when the app isn't. The publisher's only write role is on this rule.
+# The publisher's only write role in Azure Monitor is on this rule.
 resource "azurerm_monitor_data_collection_rule" "evaluation" {
   name                        = var.evaluation_rule_name
   resource_group_name         = var.resource_group_name

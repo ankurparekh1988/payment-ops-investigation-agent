@@ -9,6 +9,7 @@ using PaymentOps.Evaluation.Retrieval;
 using PaymentOps.Evaluation.Running;
 using PaymentOps.Evaluation.Scoring;
 
+using static PaymentOps.Evaluation.Tests.EvaluationFakes;
 using static PaymentOps.Evaluation.Tests.EvaluationReportTests;
 
 namespace PaymentOps.Evaluation.Tests;
@@ -197,13 +198,6 @@ public sealed class EvaluationRowsTests
         "--investigations", investigations, "--retrieval", retrieval, "--ingestion-endpoint", "https://dce.invalid",
         "--rule", "dcr-00000000000000000000000000000000", "--evaluation-id", "42-1", "--trigger", "workflow_dispatch",
     ];
-
-    private static string Temp(string content)
-    {
-        var path = Path.GetTempFileName();
-        File.WriteAllText(path, content);
-        return path;
-    }
 
     private sealed class RecordingSink : IEvaluationSink
     {

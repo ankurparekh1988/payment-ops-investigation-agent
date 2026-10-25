@@ -27,7 +27,7 @@ internal static class ClassifyChangeCommand
         var actorIsBot = options.One("actor-type") switch
         {
             "Bot" => true,
-            "User" or "Organization" => false,
+            "User" => false,
             _ => throw new UsageException("--actor-type must be User or Bot."),
         };
 

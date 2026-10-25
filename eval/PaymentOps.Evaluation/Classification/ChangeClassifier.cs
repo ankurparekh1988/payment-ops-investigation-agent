@@ -27,10 +27,13 @@ internal static class ChangeClassifier
 
     public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*"];
 
+    private static readonly Regex[] Behaviour = Globs(BehaviourPaths);
+    private static readonly Regex[] GatePolicy = Globs(GatePolicyPaths);
+
     // Labels live in the datasets, so a label change is a dataset change.
-    private static readonly string[] AdrRequiredPaths = ["eval/thresholds.json", "eval/datasets/**"];
-    private static readonly string[] AdrPaths = ["docs/adr/*.md"];
-    private static readonly string[] KnowledgePaths = ["data/knowledge/**"];
+    private static readonly Regex[] AdrRequired = Globs(["eval/thresholds.json", "eval/datasets/**"]);
+    private static readonly Regex[] Adr = Globs(["docs/adr/*.md"]);
+    private static readonly Regex[] Knowledge = Globs(["data/knowledge/**"]);
 
     public static ChangeClassification Classify(IReadOnlyList<string> changedPaths, string baseIndex, string headIndex, bool sameRepository, bool actorIsBot)
     {
@@ -42,8 +45,8 @@ internal static class ChangeClassifier
 
         var violation =
             behaviour && policy ? MixedChange
-            : changedPaths.Any(p => Matches(AdrRequiredPaths, p)) && !changedPaths.Any(p => Matches(AdrPaths, p)) ? MissingAdr
-            : indexSwitch && changedPaths.Any(p => Matches(KnowledgePaths, p)) ? IndexSwitchWithKnowledge
+            : changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(p => Matches(Adr, p)) ? MissingAdr
+            : indexSwitch && changedPaths.Any(p => Matches(Knowledge, p)) ? IndexSwitchWithKnowledge
             : null;
 
         var reason = violation
@@ -53,11 +56,13 @@ internal static class ChangeClassifier
         return new ChangeClassification(behaviour || policy, trusted, violation, indexSwitch, reason);
     }
 
-    public static bool IsBehaviour(string path) => Matches(BehaviourPaths, path);
+    public static bool IsBehaviour(string path) => Matches(Behaviour, path);
 
-    public static bool IsGatePolicy(string path) => Matches(GatePolicyPaths, path);
+    public static bool IsGatePolicy(string path) => Matches(GatePolicy, path);
 
-    private static bool Matches(string[] patterns, string path) => patterns.Any(p => Glob(p).IsMatch(path));
+    private static bool Matches(Regex[] globs, string path) => globs.Any(g => g.IsMatch(path));
+
+    private static Regex[] Globs(string[] patterns) => [.. patterns.Select(Glob)];
 
     // "**/" is any number of whole folders, a trailing "**" is anything below, and "*" stays within one name.
     private static Regex Glob(string pattern)

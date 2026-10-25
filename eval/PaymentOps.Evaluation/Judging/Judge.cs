@@ -6,6 +6,7 @@ using Microsoft.Extensions.AI;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Prompts;
 using PaymentOps.Evaluation.Running;
+using PaymentOps.Evaluation.Scoring;
 using PaymentOps.Tools;
 
 namespace PaymentOps.Evaluation.Judging;
@@ -26,6 +27,21 @@ internal sealed record JudgeScore(int? Groundedness, int? Relevance, int? RootCa
     public long OutputTokens { get; init; }
 
     public static JudgeScore Skipped(string reason) => new(null, null, null, NotScored, reason);
+
+    /// <summary>The three dimensions, by the name they're recorded under and the label the report shows.</summary>
+    public static IReadOnlyList<(string Metric, string Label, Func<JudgeScore, int> Score)> Dimensions { get; } =
+    [
+        ("judge_groundedness", "groundedness", s => s.Groundedness!.Value),
+        ("judge_relevance", "relevance", s => s.Relevance!.Value),
+        ("judge_root_cause_agreement", "root-cause agreement", s => s.RootCauseAgreement!.Value),
+    ];
+
+    /// <summary>The median of one dimension over the scored entries and how many there were; null when none was scored.</summary>
+    public static (double Median, int N)? Median(IEnumerable<JudgeScore> scores, Func<JudgeScore, int> dimension)
+    {
+        var sorted = scores.Where(s => s.Status == Scored).Select(s => (double)dimension(s)).Order().ToList();
+        return sorted.Count == 0 ? null : (Aggregation.Median(sorted), sorted.Count);
+    }
 }
 
 /// <summary>

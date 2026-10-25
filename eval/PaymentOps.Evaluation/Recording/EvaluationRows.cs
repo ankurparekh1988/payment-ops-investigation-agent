@@ -34,11 +34,10 @@ internal static class EvaluationRows
 {
     public const string NotGating = "not-gating";
 
-    private static readonly (string Metric, Func<JudgeScore, int> Score)[] JudgeDimensions =
+    private static readonly (string Metric, Func<HardGates, int> Count)[] HardGateCounts =
     [
-        ("judge_groundedness", s => s.Groundedness!.Value),
-        ("judge_relevance", s => s.Relevance!.Value),
-        ("judge_root_cause_agreement", s => s.RootCauseAgreement!.Value),
+        (MetricNames.AuthorizationLeaks, h => h.AuthorizationLeaks.Count),
+        (MetricNames.UnauthorizedStateChanges, h => h.UnauthorizedStateChanges.Count),
     ];
 
     public static IReadOnlyList<EvaluationRow> From(EvaluationReport investigations, EvaluationReport retrieval, string evaluationId, string trigger, DateTimeOffset at)
@@ -75,11 +74,7 @@ internal static class EvaluationRows
 
         // Every run must pass the hard gates, so each run's count has its own verdict.
         var cases = report.Runs.Select(r => report.System == EvaluationReport.RetrievalSystem ? report.RetrievalCases.Count : r.Cases.Count).ToList();
-        foreach (var (metric, count) in new (string, Func<HardGates, int>)[]
-        {
-            (MetricNames.AuthorizationLeaks, h => h.AuthorizationLeaks.Count),
-            (MetricNames.UnauthorizedStateChanges, h => h.UnauthorizedStateChanges.Count),
-        })
+        foreach (var (metric, count) in HardGateCounts)
         {
             var counts = report.Runs.Select(r => count(r.HardGates)).ToList();
             for (var i = 0; i < report.Runs.Count; i++)
@@ -93,17 +88,17 @@ internal static class EvaluationRows
         // Recorded, not gating; the summary pools every run's scored entries, as the report's judge table does.
         if (report.Judge is not null)
         {
-            foreach (var (metric, score) in JudgeDimensions)
+            foreach (var (metric, _, score) in JudgeScore.Dimensions)
             {
                 foreach (var run in report.Runs)
                 {
-                    if (JudgeMedian(run.Judge.Values, score) is var (median, n))
+                    if (JudgeScore.Median(run.Judge.Values, score) is var (median, n))
                     {
                         yield return Row(run.Run, metric, median, null, n, ThresholdRule.Higher, NotGating);
                     }
                 }
 
-                if (JudgeMedian(report.Runs.SelectMany(r => r.Judge.Values), score) is var (pooled, pooledN))
+                if (JudgeScore.Median(report.Runs.SelectMany(r => r.Judge.Values), score) is var (pooled, pooledN))
                 {
                     yield return Row(0, metric, pooled, null, pooledN, ThresholdRule.Higher, NotGating);
                 }
@@ -119,10 +114,4 @@ internal static class EvaluationRows
         : NotGating;
 
     private static string HardVerdict(int count) => count == 0 ? GateReport.Passed : GateReport.Failed;
-
-    private static (double Median, int N)? JudgeMedian(IEnumerable<JudgeScore> scores, Func<JudgeScore, int> score)
-    {
-        var sorted = scores.Where(s => s.Status == JudgeScore.Scored).Select(s => (double)score(s)).Order().ToList();
-        return sorted.Count == 0 ? null : (Aggregation.Median(sorted), sorted.Count);
-    }
 }

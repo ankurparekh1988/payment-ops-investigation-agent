@@ -80,18 +80,18 @@ public sealed class DocumentsOnlyPublishTests
     }
 
     [Fact]
-    public void Documents_only_exit_codes_name_the_failure_class()
+    public void Publish_exit_codes_name_the_failure_class()
     {
-        Assert.Equal(0, DocumentsOnlyExitCode.For(null));
-        Assert.Equal(4, DocumentsOnlyExitCode.For(new PublisherScopeException("knowledge-v1")));
-        Assert.Equal(1, DocumentsOnlyExitCode.For(new KnowledgePublishException("The index doesn't match the corpus after publishing.")));
-        Assert.Equal(1, DocumentsOnlyExitCode.For(new KnowledgeCorpusException(["bad"])));
-        Assert.Equal(1, DocumentsOnlyExitCode.For(new AiReleaseException(["bad"])));
-        Assert.Equal(3, DocumentsOnlyExitCode.For(new AuthenticationFailedException("no sign-in")));
-        Assert.Equal(3, DocumentsOnlyExitCode.For(new HttpRequestException("no route")));
-        Assert.Equal(3, DocumentsOnlyExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(403, "Forbidden"), "Uploading sections", "Search Index Data Contributor")));
-        Assert.Equal(3, DocumentsOnlyExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(404, "Not found"), "Reading sections", "Search Index Data Contributor")));
-        Assert.Equal(3, DocumentsOnlyExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(503, "Unavailable"), "Reading sections", "Search Index Data Contributor")));
-        Assert.Equal(1, DocumentsOnlyExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(400, "Bad request"), "Uploading sections", "Search Index Data Contributor")));
+        Assert.Equal(0, PublishExitCode.For(null));
+        Assert.Equal(4, PublishExitCode.For(new PublisherScopeException("knowledge-v1")));
+        Assert.Equal(1, PublishExitCode.For(new KnowledgePublishException("The index doesn't match the corpus after publishing.")));
+        Assert.Equal(1, PublishExitCode.For(new KnowledgeCorpusException(["bad"])));
+        Assert.Equal(1, PublishExitCode.For(new AiReleaseException(["bad"])));
+        Assert.Equal(3, PublishExitCode.For(new AuthenticationFailedException("no sign-in")));
+        Assert.Equal(3, PublishExitCode.For(new HttpRequestException("no route")));
+        Assert.Equal(3, PublishExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(403, "Forbidden"), "Uploading sections", "Search Index Data Contributor")));
+        Assert.Equal(3, PublishExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(404, "Not found"), "Reading sections", "Search Index Data Contributor")));
+        Assert.Equal(3, PublishExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(503, "Unavailable"), "Reading sections", "Search Index Data Contributor")));
+        Assert.Equal(1, PublishExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(400, "Bad request"), "Uploading sections", "Search Index Data Contributor")));
     }
 }

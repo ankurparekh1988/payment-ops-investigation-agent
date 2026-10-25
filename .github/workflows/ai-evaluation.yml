@@ -49,7 +49,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           git worktree add base "$BASE_SHA"
-          if grep -q classify-change base/eval/PaymentOps.Evaluation/Program.cs; then
+          if [[ -f base/eval/PaymentOps.Evaluation/Commands/ClassifyChangeCommand.cs ]]; then
             echo "has-classifier=true" >> "$GITHUB_OUTPUT"
           else
             echo "has-classifier=false" >> "$GITHUB_OUTPUT"
@@ -70,32 +70,23 @@ jobs:
           SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           ACTOR_TYPE: ${{ (github.event.pull_request.user.type == 'Bot' || endsWith(github.actor, '[bot]')) && 'Bot' || 'User' }}
         run: |
-          if [[ "$EVENT_NAME" != pull_request ]]; then
-            if [[ "$REF" != refs/heads/main ]]; then
-              echo "::error::Run the evaluation on main; history records only what shipped."
-              exit 1
-            fi
-            {
-              echo "required=true"
-              echo "trusted=true"
-              echo "violation="
-              echo "index-switch=false"
-              echo "reason=required: scheduled evaluation of main"
-            } >> "$GITHUB_OUTPUT"
-          elif [[ "$HAS_CLASSIFIER" != true ]]; then
-            {
-              echo "required=false"
-              echo "trusted=true"
-              echo "violation="
-              echo "index-switch=false"
-              echo "reason=not required: the gate is introduced by this change"
-            } >> "$GITHUB_OUTPUT"
-          else
+          if [[ "$EVENT_NAME" == pull_request && "$HAS_CLASSIFIER" == true ]]; then
             git diff --name-only "$BASE_SHA"...HEAD > "$RUNNER_TEMP/changed.txt"
             dotnet run --project base/eval/PaymentOps.Evaluation --configuration Release -- classify-change \
               --changed "$RUNNER_TEMP/changed.txt" --base-manifest base/ai/manifest.yaml --head-manifest ai/manifest.yaml \
               --same-repository "$SAME_REPOSITORY" --actor-type "$ACTOR_TYPE" --github-output "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            required=false; reason="not required: the gate is introduced by this change"
+          elif [[ "$REF" == refs/heads/main ]]; then
+            required=true; reason="required: scheduled evaluation of main"
+          else
+            echo "::error::Run the evaluation on main; history records only what shipped."
+            exit 1
+          fi
+          printf '%s\n' "required=$required" "trusted=true" "violation=" "index-switch=false" "reason=$reason" >> "$GITHUB_OUTPUT"
 
   publish-eval-index:
     name: Publish the evaluation index
@@ -109,8 +100,6 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      login: ${{ steps.login.outcome }}
-      publish-exit: ${{ steps.publish.outputs.publish-exit }}
       failure-class: ${{ steps.outcome.outputs.failure-class }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -121,6 +110,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Its outcome is read explicitly below, so a build failure is a publish failure.
+      - name: Build the publisher
+        id: build
+        run: |
+          dotnet build tools/PaymentOps.CorpusBuild --configuration Release
+          dotnet build tools/PaymentOps.KnowledgePublish --configuration Release
+
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         id: login
         continue-on-error: true
@@ -129,17 +125,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # After the sign-in, so a build failure is reported as a publish failure rather than as unavailable.
-      - name: Build the publisher
-        if: steps.login.outcome == 'success'
-        run: |
-          dotnet build tools/PaymentOps.CorpusBuild --configuration Release
-          dotnet build tools/PaymentOps.KnowledgePublish --configuration Release
-
       # Proves this identity can't write the live index, then makes the evaluation index hold exactly this change's corpus.
       - name: Publish the change's corpus to the evaluation index
         id: publish
-        if: steps.login.outcome == 'success'
+        if: steps.login.outcome == 'success' && steps.build.outcome == 'success'
         env:
           SEARCH_ENDPOINT: ${{ vars.EVAL_SEARCH_ENDPOINT }}
         run: |
@@ -158,9 +147,12 @@ jobs:
         if: always()
         env:
           LOGIN: ${{ steps.login.outcome }}
+          BUILD: ${{ steps.build.outcome }}
           PUBLISH_EXIT: ${{ steps.publish.outputs.publish-exit }}
         run: |
-          if [[ "$LOGIN" != success ]]; then
+          if [[ "$BUILD" != success ]]; then
+            class=publish-failed
+          elif [[ "$LOGIN" != success ]]; then
             class=login
           else
             case "$PUBLISH_EXIT" in
@@ -198,7 +190,7 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Built first, so a build failure can't be mistaken for a gate failure (both would exit 1).
+      # Built first, so a build failure leaves no exit codes instead of being mistaken for a gate failure (both exit 1).
       - name: Build the harness
         run: dotnet build eval/PaymentOps.Evaluation --configuration Release
 

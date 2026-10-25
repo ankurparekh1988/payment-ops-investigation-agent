@@ -19,13 +19,6 @@ public sealed class CommandTests
     private static readonly string Pricing = Path.Combine(RepositoryRoot.FullPath, "eval", "pricing.json");
     private static readonly string Sources = Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src");
 
-    private static string Temp(string content)
-    {
-        var path = Path.GetTempFileName();
-        File.WriteAllText(path, content);
-        return path;
-    }
-
     private static string Dataset() => Temp(new JsonObject
     {
         ["schemaVersion"] = 2,

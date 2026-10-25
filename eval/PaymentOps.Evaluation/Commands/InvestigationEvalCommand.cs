@@ -20,7 +20,6 @@ namespace PaymentOps.Evaluation.Commands;
 
 internal sealed record InvestigationEvalSettings(
     InvestigationEndpoints Endpoints,
-    string Ai,
     string Sources,
     IReadOnlyList<string> Datasets,
     int Runs,
@@ -30,7 +29,7 @@ internal sealed record InvestigationEvalSettings(
     bool Judge,
     string Out,
     string Summary,
-    bool EvaluationIndex);
+    AiRelease Release);
 
 /// <summary>
 /// investigation-eval: the labelled cases, N times, against the deployed model and index, signed in as whoever
@@ -57,7 +56,7 @@ internal static class InvestigationEvalCommand
         TimeSpan retryDelay) => ExitCodes.GuardAsync("Investigation evaluation", Usage, async () =>
     {
         var settings = Parse(args);
-        var release = Options.Reading(AiReleaseLoader.Load(new DirectoryAiReleaseSource(settings.Ai)), settings.EvaluationIndex);
+        var release = settings.Release;
         var cases = InvestigationDataset.Load(settings.Datasets, IndexedCorpus.FromSourceDirectory(settings.Sources), []);
         var prices = PriceList.Load(settings.Pricing);
         var thresholds = settings.Thresholds is { } path ? Thresholds.Load(path) : null;
@@ -121,7 +120,6 @@ internal static class InvestigationEvalCommand
 
         return new InvestigationEvalSettings(
             new InvestigationEndpoints(options.Https("search"), options.Https("foundry"), options.One("scope")),
-            options.One("ai"),
             options.One("sources"),
             options.All("dataset"),
             options.Positive("runs"),
@@ -131,7 +129,7 @@ internal static class InvestigationEvalCommand
             !options.Flag("no-judge"),
             options.OutputFile("out"),
             options.OutputFile("summary"),
-            options.EvaluationIndex());
+            options.Release());
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.

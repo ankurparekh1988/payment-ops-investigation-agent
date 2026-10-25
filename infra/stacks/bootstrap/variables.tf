@@ -83,15 +83,9 @@ variable "eval_search_service_id" {
   }
 }
 
-variable "eval_search_index_scope" {
-  description = "The evaluation index, as <search_service_id>/indexes/<retrieval.evaluationIndex>; the only index the evaluation publisher may write."
+variable "eval_search_index_name" {
+  description = "The release's evaluation index (retrieval.evaluationIndex in ai/manifest.yaml); the only index the evaluation publisher may write."
   type        = string
-  default     = null
-
-  validation {
-    condition     = var.eval_search_index_scope == null || can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/.+$", var.eval_search_index_scope))
-    error_message = "Use an Azure resource ID from the platform outputs, or leave it unset."
-  }
 }
 
 variable "eval_dcr_id" {

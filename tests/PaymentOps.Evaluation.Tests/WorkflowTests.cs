@@ -80,8 +80,6 @@ public sealed partial class WorkflowTests
     [Fact]
     public void Publish_and_evaluate_use_different_environments()
     {
-        static string Text(string job) => Serialize(Job(job));
-
         Assert.Contains("-eval-publish", Scalar(Job("publish-eval-index"), "environment"), StringComparison.Ordinal);
         Assert.DoesNotContain("-eval-publish", Scalar(Job("evaluate"), "environment"), StringComparison.Ordinal);
         Assert.Contains("-eval", Scalar(Job("evaluate"), "environment"), StringComparison.Ordinal);
@@ -92,8 +90,8 @@ public sealed partial class WorkflowTests
             Assert.False(text.Contains("AZURE_EVAL_CLIENT_ID", StringComparison.Ordinal) && text.Contains("AZURE_EVAL_PUBLISH_CLIENT_ID", StringComparison.Ordinal), id);
         }
 
-        Assert.Contains("AZURE_EVAL_PUBLISH_CLIENT_ID", Text("publish-eval-index"), StringComparison.Ordinal);
-        Assert.Contains("AZURE_EVAL_CLIENT_ID", Text("evaluate"), StringComparison.Ordinal);
+        Assert.Contains("AZURE_EVAL_PUBLISH_CLIENT_ID", Serialize(Job("publish-eval-index")), StringComparison.Ordinal);
+        Assert.Contains("AZURE_EVAL_CLIENT_ID", Serialize(Job("evaluate")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -126,7 +124,10 @@ public sealed partial class WorkflowTests
         var script = Scalar(Step("classify", "classify"), "run")!;
 
         Assert.Contains("not required: the gate is introduced by this change", script, StringComparison.Ordinal);
-        Assert.Contains("grep -q classify-change base/eval/PaymentOps.Evaluation/Program.cs", Serialize(Job("classify")), StringComparison.Ordinal);
+        // A renamed classifier would make every later pull request "not required", so the path it checks must exist.
+        var check = Scalar(Step("classify", "base"), "run")!;
+        Assert.Contains("[[ -f base/eval/PaymentOps.Evaluation/Commands/ClassifyChangeCommand.cs ]]", check, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(RepositoryRoot.FullPath, "eval", "PaymentOps.Evaluation", "Commands", "ClassifyChangeCommand.cs")));
     }
 
     [Fact]
