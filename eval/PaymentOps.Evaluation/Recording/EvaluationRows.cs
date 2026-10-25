@@ -11,6 +11,7 @@ namespace PaymentOps.Evaluation.Recording;
 /// </summary>
 /// <param name="Run">1 to 3 for each run; 0 for the summary, whose value is the median.</param>
 /// <param name="Value">Null when the labels give the metric no opportunities, never 0.</param>
+/// <param name="SampleSize">The metric's N: its opportunities, scored judge entries, or cases for a hard gate.</param>
 /// <param name="Verdict"><c>passed</c>, <c>failed</c>, <c>report-only</c> or <c>not-gating</c>.</param>
 internal sealed record EvaluationRow(
     DateTimeOffset TimeGenerated,
@@ -25,7 +26,7 @@ internal sealed record EvaluationRow(
     string Metric,
     double? Value,
     double? Threshold,
-    int N,
+    int SampleSize,
     string Direction,
     string Verdict);
 
@@ -59,8 +60,8 @@ internal static class EvaluationRows
     {
         var prompt = string.Join(",", report.Prompts.Select(p => $"{p.Id}@{p.Version}"));
         var chat = report.Chat is { } c ? $"{c.Deployment}:{c.Model}:{c.Version}" : string.Empty;
-        EvaluationRow Row(int run, string metric, double? value, double? threshold, int n, string direction, string verdict) =>
-            new(at, evaluationId, trigger, report.Commit, report.System, prompt, chat, report.KnowledgeIndex, run, metric, value, threshold, n, direction, verdict);
+        EvaluationRow Row(int run, string metric, double? value, double? threshold, int sampleSize, string direction, string verdict) =>
+            new(at, evaluationId, trigger, report.Commit, report.System, prompt, chat, report.KnowledgeIndex, run, metric, value, threshold, sampleSize, direction, verdict);
 
         foreach (var (metric, summary) in report.Summary.OrderBy(m => m.Key, StringComparer.Ordinal))
         {
