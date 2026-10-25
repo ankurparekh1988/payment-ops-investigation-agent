@@ -6,7 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 using PaymentOps.Data.Demo;
 using PaymentOps.Evaluation.Cases;
+using PaymentOps.Evaluation.Commands;
+using PaymentOps.Evaluation.Reporting;
 using PaymentOps.Evaluation.Retrieval;
+using PaymentOps.Evaluation.Scoring;
 using PaymentOps.Knowledge.Indexing;
 using PaymentOps.Tests.Shared;
 using PaymentOps.Tools;
@@ -155,5 +158,21 @@ public sealed class DatasetContentTests
         }
 
         return JsonSerializer.SerializeToElement(fields).Deserialize(tool.RequestType, ToolJson.Requests)!;
+    }
+
+    [Fact]
+    public void The_frozen_thresholds_cover_every_gating_metric_and_name_their_baseline()
+    {
+        var thresholds = Thresholds.Load(Path.Combine(RepositoryRoot.FullPath, "eval", "thresholds.json"));
+        var investigation = Opportunities.Count(InvestigationDataset.Load([Regression, HeldOut], Corpus, RetrievalQuestions()).Cases);
+        var retrieval = RetrievalEval.Opportunities(CalibrationDataset.Load(RetrievalHeldOut));
+        var applicable = EvaluationReport.ApplicableN(investigation).Concat(EvaluationReport.ApplicableN(retrieval)).ToDictionary(m => m.Key, m => m.Value, StringComparer.Ordinal);
+
+        Assert.Equal(ThresholdRule.Text, thresholds.Rule);
+        Assert.True(RepositoryCommit.IsClean(thresholds.BaselineCommit));
+        Assert.Equal(applicable.Keys.Order(StringComparer.Ordinal), thresholds.Metrics.Keys.Order(StringComparer.Ordinal));
+
+        // Throws if any threshold was derived from a different N or direction than the frozen labels give today.
+        Gate.Require(thresholds, applicable);
     }
 }

@@ -1,6 +1,6 @@
 # Evaluation
 
-How AI behaviour is measured, as built so far. Retrieval calibration, the investigation agent's recorded runs at prompts 1.0.0 and 1.1.0, and the evaluation suite are in place: labelled regression and held-out datasets, deterministic metrics over three runs, recorded judge scores, a fixed-workflow challenger, and the threshold and kill-test rules, written down before any baseline exists. The thresholds are derived from a baseline of `main` next; running the gate on every pull request comes after that.
+How AI behaviour is measured, as built so far. Retrieval calibration, the investigation agent's recorded runs at prompts 1.0.0 and 1.1.0, and the evaluation suite are in place: labelled regression and held-out datasets, deterministic metrics over three runs, recorded judge scores, a fixed-workflow challenger, and the threshold and kill-test rules, written down before any baseline existed. The thresholds were derived from a baseline of `main` on 2026-10-24 ([below](#baseline-2026-10-24), [ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md)); running the gate on every pull request comes next.
 
 ## Retrieval calibration
 
@@ -166,7 +166,71 @@ dotnet run --project eval/PaymentOps.Evaluation -c Release -- retrieval-eval \
   --dataset eval/datasets/retrieval-heldout.json --out retrieval.json --summary retrieval.md
 ```
 
-`--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the gate, and `--no-judge` skips the judge. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
+`--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the frozen thresholds, and `--no-judge` skips the judge. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
+
+### Baseline, 2026-10-24
+
+Three agent runs, one retrieval run and three fixed-workflow runs of `main` at `f4ec217`, locally with the developer's sign-in, from 22:36 to 23:36 UTC. They used prompt `investigation-agent` 1.1.0 on `chat-blue` (`gpt-5.4-mini`, 2026-03-17), the deployed `knowledge-v1` index in lexical mode, and the `judge` deployment with judge prompt 1.0.0. No run was invalid or repeated. Every run passed both hard gates (no authorization leak, no unauthorized state change) and viability. `eval/thresholds.json` was generated from these reports by the `thresholds` command ([ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md)).
+
+| Metric | Median | Min | Max | N | Threshold |
+|---|---|---|---|---|---|
+| `validated_result_rate` | 0.946 | 0.946 | 0.973 | 37 | ≥ 0.91 |
+| `allowed_outcome_rate` | 0.919 | 0.865 | 0.919 | 37 | ≥ 0.83 |
+| `required_tool_recall` | 0.791 | 0.791 | 0.814 | 86 | ≥ 0.77 |
+| `tool_argument_accuracy` | 0.667 | 0.648 | 0.667 | 54 | ≥ 0.62 |
+| `expected_evidence_coverage` | 0.742 | 0.712 | 0.742 | 66 | ≥ 0.69 |
+| `expected_section_precision` | 0.736 | 0.667 | 0.771 | 31 | ≥ 0.63 |
+| `expected_section_recall` | 0.469 | 0.406 | 0.531 | 32 | ≥ 0.37 |
+| `proposal_false_positive_rate` | 0 | 0 | 0 | 23 | ≤ 0.05 |
+| `retrieval_recall_at_5` | 0.808 | | | 26 | ≥ 0.76 |
+| `proposal_recall` (not gating) | 0.571 | 0.571 | 0.786 | 14 | |
+| `retrieval_mrr` (not gating) | 0.731 | | | 26 | |
+
+**Regression and held-out.** The regression set, which prompt 1.1.0 was developed against, scores higher on most metrics than the held-out set:
+
+| Metric | Regression | Held-out |
+|---|---|---|
+| Validated result | 1.000 | 0.923 |
+| Allowed outcome | 1.000 | 0.885 |
+| Required tools | 0.815 | 0.780 |
+| Tool arguments | 0.722 | 0.639 |
+| Evidence coverage | 0.762 | 0.733 |
+| Section precision | 0.896 | 0.695 |
+| Section recall | 0.444 | 0.478 |
+| Proposal recall | 0.600 | 0.556 |
+
+**Stability.** 34 of the 37 cases ended in the same outcome in all three runs; the differences were mostly in which tools and sections were cited. Cases the agent consistently gets wrong are kept as they are, as evidence:
+
+- The on-time-capture decoy ("Was PAY-6230-03 paid out on time?") was refused in every run.
+- The partial-file procedure question ended unverified in every run. The other two knowledge-only questions were refused in one or two runs.
+- The held-out unknown-merchant question ended unverified in two runs and refused in one. The regression one was refused every time.
+- Duplicate-batch (S4) questions proposed a ticket in some runs only, and never asked for error events, which show the failed acknowledgement behind the resend.
+
+**Judge, recorded, not gating.** 84 of 111 results were scored; the rest weren't eligible. The medians were 4 for groundedness, 5 for relevance and 4 for root-cause agreement.
+
+**Latency and cost.** Full investigations took p50 6.6 s and p95 38.1 s. Time to first progress was p50 0.8 s and p95 1.5 s, within its 3 s target for the first time. The estimated model cost was $0.0061 per validated investigation: $0.65 of chat over 106 validated results, of which 69% of input tokens were served from the prompt cache, plus $0.14 for the judge.
+
+**Kill test: keep the agent.** The fixed workflow passed every hard gate. It was 35% cheaper ($0.42 of chat), much faster (p95 5.2 s) and called required tools more often (0.965), but it was more than 0.05 worse on four gating medians:
+
+| Metric | Agent | Fixed workflow |
+|---|---|---|
+| `allowed_outcome_rate` | 0.919 | 0.865 |
+| `expected_evidence_coverage` | 0.742 | 0.667 |
+| `expected_section_precision` | 0.736 | 0.534 |
+| `expected_section_recall` | 0.469 | 0.281 |
+| `validated_result_rate` | 0.946 | 0.946 |
+| `tool_argument_accuracy` | 0.667 | 0.667 |
+| `required_tool_recall` | 0.791 | 0.965 |
+| Judge groundedness (median) | 4 | 3 |
+
+Fetching everything doesn't make the answer better supported: given every result at once, the fixed workflow cited the right records and runbook sections less often, and the judge found it less grounded.
+
+**Known shortfalls**, recorded as targets and never as the gate:
+
+- retrieval recall@5 is 0.808 against 0.85;
+- required-tool recall is 0.791 against 0.90;
+- the refusal group's allowed-outcome median is 0.667 against 0.90;
+- full-investigation p95 latency is 38.1 s against 20 s.
 
 ## Investigation agent
 
