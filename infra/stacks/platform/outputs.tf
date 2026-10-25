@@ -57,3 +57,28 @@ output "action_group_id" {
   description = "Action group for alerts."
   value       = module.cost_guardrail.action_group_id
 }
+
+output "search_service_id" {
+  description = "Resource ID of the search service; the evaluation identities' Search roles are scoped from it."
+  value       = module.search.id
+}
+
+output "foundry_account_id" {
+  description = "Resource ID of the Foundry account, the scope of the evaluation identity's model role."
+  value       = module.foundry.account_id
+}
+
+output "evaluation_dcr_id" {
+  description = "Resource ID of the evaluation history rule, the scope of the publisher's Monitoring Metrics Publisher role."
+  value       = module.monitoring.evaluation_rule_id
+}
+
+output "evaluation_dcr_immutable_id" {
+  description = "Immutable ID record-evaluation writes to."
+  value       = module.monitoring.evaluation_rule_immutable_id
+}
+
+output "evaluation_ingestion_endpoint" {
+  description = "Logs Ingestion API endpoint record-evaluation writes to."
+  value       = module.monitoring.evaluation_ingestion_endpoint
+}

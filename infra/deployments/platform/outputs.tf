@@ -41,3 +41,23 @@ output "application_insights_name" {
 output "search_endpoint" {
   value = module.platform.search_endpoint
 }
+
+output "search_service_id" {
+  value = module.platform.search_service_id
+}
+
+output "foundry_account_id" {
+  value = module.platform.foundry_account_id
+}
+
+output "evaluation_dcr_id" {
+  value = module.platform.evaluation_dcr_id
+}
+
+output "evaluation_dcr_immutable_id" {
+  value = module.platform.evaluation_dcr_immutable_id
+}
+
+output "evaluation_ingestion_endpoint" {
+  value = module.platform.evaluation_ingestion_endpoint
+}
