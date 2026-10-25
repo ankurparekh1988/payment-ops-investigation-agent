@@ -14,13 +14,29 @@ public sealed class KnowledgeIndexPublisher(IKnowledgeIndexClient index, Func<Ti
 
     public async Task<PublishPlan> PublishAsync(IReadOnlyList<KnowledgeSearchDocument> desired, CancellationToken cancellationToken = default)
     {
+        RequireSections(desired);
+        await index.EnsureIndexAsync(cancellationToken);
+        return await ReconcileAsync(desired, cancellationToken);
+    }
+
+    /// <summary>The same reconcile and verify, on an index that must already exist: its definition is never created or changed.</summary>
+    public async Task<PublishPlan> PublishDocumentsAsync(IReadOnlyList<KnowledgeSearchDocument> desired, CancellationToken cancellationToken = default)
+    {
+        RequireSections(desired);
+        return await ReconcileAsync(desired, cancellationToken);
+    }
+
+    private static void RequireSections(IReadOnlyList<KnowledgeSearchDocument> desired)
+    {
         ArgumentNullException.ThrowIfNull(desired);
         if (desired.Count == 0)
         {
             throw new KnowledgePublishException("There are no sections to publish; refusing to empty the index.");
         }
+    }
 
-        await index.EnsureIndexAsync(cancellationToken);
+    private async Task<PublishPlan> ReconcileAsync(IReadOnlyList<KnowledgeSearchDocument> desired, CancellationToken cancellationToken)
+    {
         var plan = PublishPlan.Create(desired, await index.ReadAllAsync(cancellationToken));
 
         // An empty plan means that read already matched every field, so there's nothing to verify again.

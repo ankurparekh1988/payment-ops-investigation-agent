@@ -18,6 +18,9 @@ internal sealed class FakeKnowledgeIndex : IKnowledgeIndexClient
     /// <summary>Index deletes fail once the index has been created, like a cleanup that can't reach Search.</summary>
     public bool FailDeleteOfCreatedIndex { get; set; }
 
+    /// <summary>Thrown by every document delete, like Search refusing a write the identity has no role for.</summary>
+    public Exception? DeleteFailure { get; set; }
+
     /// <summary>How many more key lookups still find every key asked about, like a delete not yet visible.</summary>
     public int LaggingFinds { get; set; }
 
@@ -103,6 +106,11 @@ internal sealed class FakeKnowledgeIndex : IKnowledgeIndexClient
     public Task DeleteAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken)
     {
         Operations.Add("delete:" + Join(keys));
+        if (DeleteFailure is not null)
+        {
+            throw DeleteFailure;
+        }
+
         foreach (var key in keys.Where(k => !StuckKeys.Contains(k)))
         {
             _stored.Remove(key);
