@@ -21,8 +21,8 @@ internal static class ChangeClassifier
     public static readonly string[] BehaviourPaths =
     [
         "ai/**", "src/PaymentOps.Agent/**", "src/PaymentOps.Tools/**", "src/PaymentOps.Knowledge/**", "src/PaymentOps.Data.Demo/**",
-        "src/PaymentOps.Platform/**", "data/knowledge/**", "data/datasets/**", "tools/PaymentOps.CorpusBuild/**",
-        "tools/PaymentOps.KnowledgePublish/**", "Directory.Packages.props", "global.json", "src/**/*.csproj",
+        "src/PaymentOps.Domain/**", "src/PaymentOps.Platform/**", "data/knowledge/**", "data/datasets/**", "tools/PaymentOps.CorpusBuild/**",
+        "tools/PaymentOps.KnowledgePublish/**", "Directory.Build.props", "Directory.Packages.props", "global.json", "src/**/*.csproj",
     ];
 
     public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*"];

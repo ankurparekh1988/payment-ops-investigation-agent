@@ -14,10 +14,12 @@ on:
 permissions:
   contents: read
 
-# One evaluation of the environment at a time: they share the evaluation index. Never cancel one in progress.
+# One run for the environment at a time, from publish to evaluate: they share the evaluation index. Never cancel
+# one in progress, and queue the rest, so a run waiting for approval doesn't cancel the pending ones behind it.
 concurrency:
   group: ai-eval-${{ vars.TERRAFORM_SETTINGS && fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment || 'unconfigured' }}
   cancel-in-progress: false
+  queue: max
 
 env:
   DOTNET_NOLOGO: true

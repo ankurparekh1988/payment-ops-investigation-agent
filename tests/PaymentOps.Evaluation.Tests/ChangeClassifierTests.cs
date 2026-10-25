@@ -30,6 +30,18 @@ public sealed class ChangeClassifierTests
         Assert.Equal("required: AI behaviour changed", result.Reason);
     }
 
+    [Theory]
+    [InlineData("src/PaymentOps.Domain/Security/OpsRoles.cs")]
+    [InlineData("src/PaymentOps.Domain/Incidents/Incident.cs")]
+    [InlineData("Directory.Build.props")]
+    public void Domain_rules_and_build_properties_are_behaviour(string path)
+    {
+        var result = Classify(path);
+
+        Assert.True(result.Required);
+        Assert.Equal("required: AI behaviour changed", result.Reason);
+    }
+
     [Fact]
     public void A_policy_only_change_is_still_evaluated()
     {

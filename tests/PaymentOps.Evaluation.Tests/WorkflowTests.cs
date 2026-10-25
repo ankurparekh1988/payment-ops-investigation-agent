@@ -75,6 +75,9 @@ public sealed partial class WorkflowTests
 
         Assert.StartsWith("ai-eval-", Scalar(concurrency, "group"), StringComparison.Ordinal);
         Assert.Equal("false", Scalar(concurrency, "cancel-in-progress"));
+
+        // Without a queue, a newer pending run cancels the older one while a run waits days for approval.
+        Assert.Equal("max", Scalar(concurrency, "queue"));
     }
 
     [Fact]
