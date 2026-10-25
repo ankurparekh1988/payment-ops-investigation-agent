@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "f4ec2177493dcc18e1b08f8dd8e2310d8194adbd",
+  "rule": "higher: floor_to_0.01(min_b - 1/N); lower: ceil_to_0.01(max_b \u002B 1/N); clamp to [0,1]; gate on median of 3",
+  "metrics": {
+    "validated_result_rate": {
+      "threshold": 0.91,
+      "direction": "higher",
+      "n": 37,
+      "baseline_min": 0.9459459459459459,
+      "baseline_median": 0.9459459459459459,
+      "baseline_max": 0.972972972972973
+    },
+    "allowed_outcome_rate": {
+      "threshold": 0.83,
+      "direction": "higher",
+      "n": 37,
+      "baseline_min": 0.8648648648648649,
+      "baseline_median": 0.918918918918919,
+      "baseline_max": 0.918918918918919
+    },
+    "required_tool_recall": {
+      "threshold": 0.77,
+      "direction": "higher",
+      "n": 86,
+      "baseline_min": 0.7906976744186046,
+      "baseline_median": 0.7906976744186046,
+      "baseline_max": 0.813953488372093
+    },
+    "tool_argument_accuracy": {
+      "threshold": 0.62,
+      "direction": "higher",
+      "n": 54,
+      "baseline_min": 0.6481481481481481,
+      "baseline_median": 0.6666666666666666,
+      "baseline_max": 0.6666666666666666
+    },
+    "expected_evidence_coverage": {
+      "threshold": 0.69,
+      "direction": "higher",
+      "n": 66,
+      "baseline_min": 0.7121212121212122,
+      "baseline_median": 0.7424242424242424,
+      "baseline_max": 0.7424242424242424
+    },
+    "expected_section_precision": {
+      "threshold": 0.63,
+      "direction": "higher",
+      "n": 31,
+      "baseline_min": 0.6672043010752688,
+      "baseline_median": 0.7359447004608296,
+      "baseline_max": 0.7709677419354839
+    },
+    "expected_section_recall": {
+      "threshold": 0.37,
+      "direction": "higher",
+      "n": 32,
+      "baseline_min": 0.40625,
+      "baseline_median": 0.46875,
+      "baseline_max": 0.53125
+    },
+    "proposal_false_positive_rate": {
+      "threshold": 0.05,
+      "direction": "lower",
+      "n": 23,
+      "baseline_min": 0,
+      "baseline_median": 0,
+      "baseline_max": 0
+    },
+    "retrieval_recall_at_5": {
+      "threshold": 0.76,
+      "direction": "higher",
+      "n": 26,
+      "baseline_min": 0.8076923076923077,
+      "baseline_median": 0.8076923076923077,
+      "baseline_max": 0.8076923076923077
+    }
+  }
+}

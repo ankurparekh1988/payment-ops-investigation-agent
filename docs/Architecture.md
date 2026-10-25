@@ -22,7 +22,7 @@
 | Investigation agent | ✅ One agent with five read-only tools, limits enforced in our own code, and an assessment shown only after every statement checks out against what this investigation's tools returned ([below](#investigation-agent)) |
 | Investigation view | ✅ The home page: a live timeline of tool calls written by the server, the validated assessment with each statement's support, cancel, and follow-up questions within an application-owned budget ([below](#investigation-view)) |
 | Ticket approvals | ✅ The agent can propose an incident ticket; the server stores it for the Engineer who ran the investigation, and creates the ticket only when they approve, once ([below](#proposals-and-approval)) |
-| Evaluation suite | ✅ `eval/PaymentOps.Evaluation` runs labelled cases through the app's own registration, observing the model, tools, knowledge and ticket store from outside; deterministic metrics over three runs, recorded judge scores and a fixed-workflow challenger ([Evaluation](Evaluation.md#release-gate)). Thresholds and the pull-request gate aren't in place yet |
+| Evaluation suite | ✅ `eval/PaymentOps.Evaluation` runs labelled cases through the app's own registration, observing the model, tools, knowledge and ticket store from outside; deterministic metrics over three runs, recorded judge scores and a fixed-workflow challenger ([Evaluation](Evaluation.md#release-gate)). Thresholds are frozen from a baseline of `main` ([ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md)); the pull-request gate isn't in place yet |
 
 ## Azure platform
 
