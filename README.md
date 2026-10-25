@@ -26,7 +26,7 @@ More detail: [product notes](docs/PRD.md) · [architecture so far](docs/Architec
 
 ## Running locally
 
-You'll need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+You'll need the [.NET SDK 10.0.402](https://dotnet.microsoft.com/download/dotnet/10.0), the exact version `global.json` pins. A newer SDK is a deliberate change: its pull request goes through the AI evaluation gate.
 
 ```bash
 dotnet build PaymentOps.slnx
