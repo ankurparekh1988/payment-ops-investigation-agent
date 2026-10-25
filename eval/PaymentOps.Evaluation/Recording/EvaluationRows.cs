@@ -9,7 +9,7 @@ namespace PaymentOps.Evaluation.Recording;
 /// One metric of one run of a recorded evaluation, as a row of the AiEvaluation_CL table. Names, numbers and
 /// versions only: never model text, case content, endpoints or ids.
 /// </summary>
-/// <param name="Run">1 to 3 for each run; 0 for the summary, whose value is the median and whose verdict is the gate's.</param>
+/// <param name="Run">1 to 3 for each run; 0 for the summary, whose value is the median.</param>
 /// <param name="Value">Null when the labels give the metric no opportunities, never 0.</param>
 /// <param name="Verdict"><c>passed</c>, <c>failed</c>, <c>report-only</c> or <c>not-gating</c>.</param>
 internal sealed record EvaluationRow(
@@ -33,6 +33,9 @@ internal sealed record EvaluationRow(
 internal static class EvaluationRows
 {
     public const string NotGating = "not-gating";
+
+    /// <summary>The gate's own verdict, which viability can fail when every metric row passes; its value is the number of failures.</summary>
+    public const string GateMetric = "gate";
 
     private static readonly (string Metric, Func<HardGates, int> Count)[] HardGateCounts =
     [
@@ -84,6 +87,8 @@ internal static class EvaluationRows
 
             yield return Row(0, metric, counts.Sum(), 0, cases.Sum(), ThresholdRule.Lower, HardVerdict(counts.Sum()));
         }
+
+        yield return Row(0, GateMetric, report.Gate.Failures.Count, 0, 0, ThresholdRule.Lower, report.Gate.Verdict);
 
         // Recorded, not gating; the summary pools every run's scored entries, as the report's judge table does.
         if (report.Judge is not null)

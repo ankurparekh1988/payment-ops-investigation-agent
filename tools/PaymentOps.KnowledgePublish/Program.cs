@@ -108,7 +108,7 @@ catch (AuthenticationFailedException ex)
     GitHubAnnotation.Error("Knowledge publish", $"Couldn't get an Entra token from the Azure CLI: {ex.Message}");
     failure = ex;
 }
-catch (HttpRequestException ex)
+catch (Exception ex) when (ex is HttpRequestException or AggregateException)
 {
     GitHubAnnotation.Error("Knowledge publish", $"Search couldn't be reached: {ex.Message}");
     failure = ex;

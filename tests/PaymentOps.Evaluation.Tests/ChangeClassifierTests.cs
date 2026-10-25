@@ -76,10 +76,12 @@ public sealed class ChangeClassifierTests
         Assert.Null(result.Violation);
     }
 
-    [Fact]
-    public void An_index_switch_with_a_knowledge_change_is_a_violation()
+    [Theory]
+    [InlineData("data/knowledge/src/general/x.md")]
+    [InlineData("tools/PaymentOps.CorpusBuild/Program.cs")]
+    public void An_index_switch_with_a_corpus_change_is_a_violation(string path)
     {
-        var result = ChangeClassifier.Classify(["ai/manifest.yaml", "data/knowledge/src/general/x.md"], "knowledge-v1", "knowledge-v2", sameRepository: true, actorIsBot: false);
+        var result = ChangeClassifier.Classify(["ai/manifest.yaml", path], "knowledge-v1", "knowledge-v2", sameRepository: true, actorIsBot: false);
 
         Assert.Equal(ChangeClassifier.IndexSwitchWithKnowledge, result.Violation);
     }

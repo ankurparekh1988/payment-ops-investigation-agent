@@ -16,7 +16,7 @@ internal static class ChangeClassifier
 {
     public const string MixedChange = "change gate policy and AI behaviour in separate pull requests";
     public const string MissingAdr = "a change to the thresholds or the evaluation datasets needs an ADR under docs/adr/ in the same pull request";
-    public const string IndexSwitchWithKnowledge = "switch the knowledge index and change the knowledge corpus in separate pull requests";
+    public const string IndexSwitchWithKnowledge = "switch the knowledge index and change the knowledge corpus or how it's built in separate pull requests";
 
     public static readonly string[] BehaviourPaths =
     [
@@ -33,7 +33,8 @@ internal static class ChangeClassifier
     // Labels live in the datasets, so a label change is a dataset change.
     private static readonly Regex[] AdrRequired = Globs(["eval/thresholds.json", "eval/datasets/**"]);
     private static readonly Regex[] Adr = Globs(["docs/adr/*.md"]);
-    private static readonly Regex[] Knowledge = Globs(["data/knowledge/**"]);
+    // What decides the published corpus; a switched index is evaluated as CD built it, so neither may change with the switch.
+    private static readonly Regex[] Corpus = Globs(["data/knowledge/**", "tools/PaymentOps.CorpusBuild/**"]);
 
     public static ChangeClassification Classify(IReadOnlyList<string> changedPaths, string baseIndex, string headIndex, bool sameRepository, bool actorIsBot)
     {
@@ -46,7 +47,7 @@ internal static class ChangeClassifier
         var violation =
             behaviour && policy ? MixedChange
             : changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(p => Matches(Adr, p)) ? MissingAdr
-            : indexSwitch && changedPaths.Any(p => Matches(Knowledge, p)) ? IndexSwitchWithKnowledge
+            : indexSwitch && changedPaths.Any(p => Matches(Corpus, p)) ? IndexSwitchWithKnowledge
             : null;
 
         var reason = violation

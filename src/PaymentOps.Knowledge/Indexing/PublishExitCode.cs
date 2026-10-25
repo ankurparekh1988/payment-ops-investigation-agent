@@ -22,7 +22,9 @@ public static class PublishExitCode
 
         // A missing role or a missing index means the environment isn't set up, not that the change is wrong.
         KnowledgePublishException { InnerException: RequestFailedException { Status: 0 or 401 or 403 or 404 or 429 or >= 500 } } => Unavailable,
-        KnowledgePublishException { InnerException: HttpRequestException } => Unavailable,
+
+        // Azure.Core's retry policy reports exhausted transport retries as an AggregateException.
+        AggregateException retries when retries.InnerExceptions.All(e => e is HttpRequestException or TaskCanceledException or RequestFailedException) => Unavailable,
         _ => Failed,
     };
 }

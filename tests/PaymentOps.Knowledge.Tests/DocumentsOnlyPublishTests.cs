@@ -93,5 +93,7 @@ public sealed class DocumentsOnlyPublishTests
         Assert.Equal(3, PublishExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(404, "Not found"), "Reading sections", "Search Index Data Contributor")));
         Assert.Equal(3, PublishExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(503, "Unavailable"), "Reading sections", "Search Index Data Contributor")));
         Assert.Equal(1, PublishExitCode.For(SearchKnowledgeIndexClient.Explain(new RequestFailedException(400, "Bad request"), "Uploading sections", "Search Index Data Contributor")));
+        Assert.Equal(3, PublishExitCode.For(new AggregateException("Retry failed after 4 tries.", new HttpRequestException("no route"), new TaskCanceledException("timed out"))));
+        Assert.Equal(1, PublishExitCode.For(new AggregateException(new InvalidOperationException("a bug"))));
     }
 }

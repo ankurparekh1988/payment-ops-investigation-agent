@@ -53,8 +53,8 @@ public sealed class EvaluationRowsTests
         var rows = Rows(investigations);
 
         var investigationRows = rows.Where(r => r.System == "agent").ToList();
-        Assert.Equal((3 + 1) * (investigations.Summary.Count + 2), investigationRows.Count);
-        Assert.Equal((1 + 1) * (2 + 2), rows.Count(r => r.System == EvaluationReport.RetrievalSystem));
+        Assert.Equal(((3 + 1) * (investigations.Summary.Count + 2)) + 1, investigationRows.Count);
+        Assert.Equal(((1 + 1) * (2 + 2)) + 1, rows.Count(r => r.System == EvaluationReport.RetrievalSystem));
         Assert.All(investigationRows.Where(r => r.Metric == MetricNames.ValidatedResultRate), r => Assert.Equal(0.91, r.Threshold));
         Assert.All(rows, r => Assert.Equal("123-1", r.EvaluationId));
 
@@ -77,6 +77,18 @@ public sealed class EvaluationRowsTests
         Assert.Equal(1, leaks[2].Value);
         Assert.Equal(GateReport.Passed, leaks[1].Verdict);
         Assert.Equal(GateReport.Failed, leaks[0].Verdict);
+    }
+
+    [Fact]
+    public void The_gate_verdict_is_its_own_summary_row()
+    {
+        var failed = Investigations() with { Gate = Investigations().Gate with { Verdict = GateReport.Failed, Failures = ["run 2: viability"] } };
+
+        var gate = Assert.Single(Rows(failed), r => r.System == "agent" && r.Metric == EvaluationRows.GateMetric);
+
+        Assert.Equal((0, GateReport.Failed, 1.0), (gate.Run, gate.Verdict, gate.Value!.Value));
+        Assert.Equal(GateReport.ReportOnly, Assert.Single(Rows(Investigations()), r => r.System == "agent" && r.Metric == EvaluationRows.GateMetric).Verdict);
+        Assert.Single(Rows(Investigations()), r => r.System == EvaluationReport.RetrievalSystem && r.Metric == EvaluationRows.GateMetric);
     }
 
     [Fact]

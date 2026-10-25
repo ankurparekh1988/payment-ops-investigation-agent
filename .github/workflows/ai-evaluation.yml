@@ -41,15 +41,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # The rules come from the base commit, so a pull request can't change how it's classified.
+      # The rules come from the base commit, so a pull request can't change how it's classified. It's checked out
+      # outside the workspace, so no file the pull request adds (a NuGet.config, a global.json) reaches its build.
       - name: Check out the base
         id: base
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git worktree add base "$BASE_SHA"
-          if [[ -f base/eval/PaymentOps.Evaluation/Commands/ClassifyChangeCommand.cs ]]; then
+          git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+          if [[ -f "$RUNNER_TEMP/base/eval/PaymentOps.Evaluation/Commands/ClassifyChangeCommand.cs" ]]; then
             echo "has-classifier=true" >> "$GITHUB_OUTPUT"
           else
             echo "has-classifier=false" >> "$GITHUB_OUTPUT"
@@ -58,7 +59,7 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         if: steps.base.outputs.has-classifier == 'true'
         with:
-          global-json-file: base/global.json
+          global-json-file: ${{ runner.temp }}/base/global.json
 
       - name: Classify
         id: classify
@@ -71,9 +72,11 @@ jobs:
           ACTOR_TYPE: ${{ (github.event.pull_request.user.type == 'Bot' || endsWith(github.actor, '[bot]')) && 'Bot' || 'User' }}
         run: |
           if [[ "$EVENT_NAME" == pull_request && "$HAS_CLASSIFIER" == true ]]; then
-            git diff --name-only "$BASE_SHA"...HEAD > "$RUNNER_TEMP/changed.txt"
-            dotnet run --project base/eval/PaymentOps.Evaluation --configuration Release -- classify-change \
-              --changed "$RUNNER_TEMP/changed.txt" --base-manifest base/ai/manifest.yaml --head-manifest ai/manifest.yaml \
+            # Both sides of a rename, and paths unquoted, so every changed path is matched as written.
+            git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA"...HEAD > "$RUNNER_TEMP/changed.txt"
+            cd "$RUNNER_TEMP/base"
+            dotnet run --project eval/PaymentOps.Evaluation --configuration Release -- classify-change \
+              --changed "$RUNNER_TEMP/changed.txt" --base-manifest ai/manifest.yaml --head-manifest "$GITHUB_WORKSPACE/ai/manifest.yaml" \
               --same-repository "$SAME_REPOSITORY" --actor-type "$ACTOR_TYPE" --github-output "$GITHUB_OUTPUT"
             exit 0
           fi

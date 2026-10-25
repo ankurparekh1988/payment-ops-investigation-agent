@@ -126,7 +126,7 @@ public sealed partial class WorkflowTests
         Assert.Contains("not required: the gate is introduced by this change", script, StringComparison.Ordinal);
         // A renamed classifier would make every later pull request "not required", so the path it checks must exist.
         var check = Scalar(Step("classify", "base"), "run")!;
-        Assert.Contains("[[ -f base/eval/PaymentOps.Evaluation/Commands/ClassifyChangeCommand.cs ]]", check, StringComparison.Ordinal);
+        Assert.Contains("[[ -f \"$RUNNER_TEMP/base/eval/PaymentOps.Evaluation/Commands/ClassifyChangeCommand.cs\" ]]", check, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(RepositoryRoot.FullPath, "eval", "PaymentOps.Evaluation", "Commands", "ClassifyChangeCommand.cs")));
     }
 
@@ -137,10 +137,20 @@ public sealed partial class WorkflowTests
             .Where(s => (Scalar(s.Step, "uses") ?? string.Empty).StartsWith("actions/setup-dotnet@", StringComparison.Ordinal))
             .ToList();
 
+        // The base is checked out outside the workspace, so no file from the pull request reaches its build.
         var classify = Assert.Single(setups, s => s.Id == "classify");
-        Assert.Equal("base/global.json", Scalar((YamlMappingNode)classify.Step["with"], "global-json-file"));
-        Assert.Contains("dotnet run --project base/eval/PaymentOps.Evaluation", Scalar(Step("classify", "classify"), "run"), StringComparison.Ordinal);
+        Assert.Equal("${{ runner.temp }}/base/global.json", Scalar((YamlMappingNode)classify.Step["with"], "global-json-file"));
+        var script = Scalar(Step("classify", "classify"), "run")!;
+        Assert.Contains("cd \"$RUNNER_TEMP/base\"", script, StringComparison.Ordinal);
+        Assert.Contains("dotnet run --project eval/PaymentOps.Evaluation", script, StringComparison.Ordinal);
+        Assert.Contains("git worktree add \"$RUNNER_TEMP/base\"", Scalar(Step("classify", "base"), "run"), StringComparison.Ordinal);
         Assert.All(setups.Where(s => s.Id != "classify"), s => Assert.Equal("global.json", Scalar((YamlMappingNode)s.Step["with"], "global-json-file")));
+    }
+
+    [Fact]
+    public void The_changed_paths_list_both_sides_of_a_rename_unquoted()
+    {
+        Assert.Contains("git -c core.quotePath=false diff --no-renames --name-only", Scalar(Step("classify", "classify"), "run"), StringComparison.Ordinal);
     }
 
     [Fact]
