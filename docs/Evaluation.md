@@ -1,6 +1,6 @@
 # Evaluation
 
-How AI behaviour is measured, as built so far. Retrieval calibration, the investigation agent's recorded runs at prompts 1.0.0 and 1.1.0, and the evaluation suite are in place: labelled regression and held-out datasets, deterministic metrics over three runs, recorded judge scores, a fixed-workflow challenger, and the threshold and kill-test rules, written down before any baseline existed. The thresholds were derived from a baseline of `main` on 2026-10-24 ([below](#baseline-2026-10-24), [ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md)); running the gate on every pull request comes next.
+How AI behaviour is measured, as built so far. Retrieval calibration, the investigation agent's recorded runs at prompts 1.0.0 and 1.1.0, and the evaluation suite are in place: labelled regression and held-out datasets, deterministic metrics over three runs, recorded judge scores, a fixed-workflow challenger, and the threshold and kill-test rules, written down before any baseline existed. The thresholds were derived from a baseline of `main` on 2026-10-24 ([below](#baseline-2026-10-24), [ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md)), and the `AI evaluation` workflow applies them to pull requests and to a weekly run of `main` ([below](#running-in-ci)).
 
 ## Retrieval calibration
 
@@ -166,7 +166,50 @@ dotnet run --project eval/PaymentOps.Evaluation -c Release -- retrieval-eval \
   --dataset eval/datasets/retrieval-heldout.json --out retrieval.json --summary retrieval.md
 ```
 
-`--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the frozen thresholds, and `--no-judge` skips the judge. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
+`--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the frozen thresholds, `--no-judge` skips the judge, and `--index evaluation` reads the release's evaluation index (`knowledge-eval-v1`) instead of the live one; every report names the index it read. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
+
+### Running in CI
+
+`.github/workflows/ai-evaluation.yml` runs on every pull request to `main`, with no paths filter, and reports the `AI evaluation` check. How it's deployed, and its identities and environments, are in [Deployment](Deployment.md#ai-evaluation).
+
+**When evaluation is required.** The classifier, run from the pull request's base commit, sorts the changed paths:
+
+- **AI behaviour:** `ai/**`, `src/PaymentOps.Agent/**`, `src/PaymentOps.Tools/**`, `src/PaymentOps.Knowledge/**`, `src/PaymentOps.Data.Demo/**`, `src/PaymentOps.Platform/**`, `data/knowledge/**`, `data/datasets/**`, `tools/PaymentOps.CorpusBuild/**`, `tools/PaymentOps.KnowledgePublish/**`, `Directory.Packages.props`, `global.json` and `src/**/*.csproj`.
+- **Gate policy:** `eval/**`, `.github/workflows/ai-evaluation.yml` and `docs/adr/0012-*`.
+
+A change to either is evaluated in full against the pull request's own code; anything else isn't required. A pull request that changes both is refused: gate policy and AI behaviour change in separate pull requests, so the agent and the bar it's judged by never move together. A change to `eval/thresholds.json` or to an evaluation dataset, which is where the labels are, also needs an ADR under `docs/adr/` in the same pull request. A pull request that switches `retrieval.index` is evaluated against that index and may not also change the corpus. Fork and bot pull requests get no Azure access: if they need evaluating, the check fails until a maintainer reproduces the change on a branch.
+
+**What runs.** The publish job makes `knowledge-eval-v1` hold exactly the pull request's corpus, then the evaluate job runs the three investigation runs and the retrieval run against it, gated by `eval/thresholds.json`. Pull requests skip the judge: its scores don't gate, so on every pull request they'd only add cost.
+
+**What the check says.** The check reads the jobs' outputs, in this order, and the first that applies decides:
+
+| Status | Meaning | Check |
+|---|---|---|
+| `policy-violation` | The change breaks a rule above; nothing is evaluated | Fails |
+| `not-required` | No AI behaviour or gate policy changed, or the pull request introduces the gate itself | Passes |
+| `untrusted` | A fork or bot change that needs evaluating | Fails |
+| `scope-violation` | The publisher could write the live index. A workflow failure, not a quality result | Fails |
+| `invalid-input` | A dataset, thresholds file, corpus or command line was wrong (exit 2) | Fails |
+| `unavailable` | The dev environment, a sign-in or the history ingestion was unavailable (exit 3) | Fails, as "dev environment unavailable" |
+| `failed` | The gate failed: a hard gate, viability or a threshold (exit 1) | Fails, as "gate failed" |
+| `passed` | Every gate passed | Passes |
+
+A run that ends in none of these, such as a job that never finished, fails as "the evaluation workflow didn't complete". A failure is never rerun until it passes; a run that fails on variance is recorded as a finding.
+
+**Weekly, on `main`.** Every Monday at 06:00 UTC, and on demand from `main`, the same evaluation runs with the judge, without approvals, and is recorded in Log Analytics. A run that fails, can't complete or can't record its results opens or updates one `ai-evaluation` issue; the next pass closes it. GitHub disables scheduled workflows in a public repository after 60 days without activity, which stops the weekly run without an issue; that's a limit of the host, and the run can still be started by hand.
+
+**Evaluation history.** Only runs of `main` are recorded; a pull request's results stay on the pull request, in its job summary and artifact. Gate failures are recorded too, and nothing is recorded when the reports weren't valid (exit 2 or 3). Each recorded evaluation writes one row per metric per run to the `AiEvaluation_CL` table:
+
+| Column | Holds |
+|---|---|
+| `TimeGenerated`, `EvaluationId`, `Trigger` | When, the workflow run and attempt, and `schedule` or `workflow_dispatch` |
+| `Commit`, `System`, `Prompt`, `ChatModel`, `KnowledgeIndex` | What was evaluated: the commit, `agent` or `retrieval`, prompt versions, the chat deployment and model version, and the index read |
+| `Run` | 1 to 3 for each run; 0 for the summary, whose value is the median and whose verdict is the gate's |
+| `Metric`, `Value`, `Threshold`, `N`, `Direction`, `Verdict` | The metric, its value (empty when the labels give it no opportunities, never 0), its threshold, its N, which way is better, and `passed`, `failed`, `report-only` or `not-gating` |
+
+The hard gates are rows too, with the count of violations as the value. The judge's three dimensions are recorded as `judge_groundedness`, `judge_relevance` and `judge_root_cause_agreement`, never gating: per run, the median of that run's scored cases with N their number, and for the summary, the median of every scored case across the runs, as the report's judge table shows it. An unscored case is left out, never counted as 0. Rows carry no model text, case content, endpoints or identifiers.
+
+There's no evaluation page in the app: the history is meant to be read when the app is down. A workbook in Azure Monitor, readable only by the admin group, will show it.
 
 ### Baseline, 2026-10-24
 
@@ -246,7 +289,7 @@ The runs below came from the earlier `agent-run` command, which `investigation-e
 - **Proposals.** Each question says whether a runbook calls for an incident (S1 and S4 do), and the run records what became of any proposal: none, a Reader's draft, withheld, unavailable, or for the Engineer question, approved through the approval service with the ticket id and the processor's reference.
 - **The history estimate.** For every model request, the application's three-characters-a-token estimate of the input against the tokens the service counted, which checks the conversation budget's arithmetic.
 
-It set no thresholds; those, repeated runs and the fixed-workflow comparison are the release gate's ([above](#release-gate)). It had one guard: if no question produces a trajectory of several tools ending in an assessment that passes validation, the agent isn't considered working. It ran locally with the developer's own sign-in, because no pipeline identity has access to the model; so does `investigation-eval` until the pull-request gate brings its own read-only identity.
+It set no thresholds; those, repeated runs and the fixed-workflow comparison are the release gate's ([above](#release-gate)). It had one guard: if no question produces a trajectory of several tools ending in an assessment that passes validation, the agent isn't considered working. It ran locally with the developer's own sign-in, because no pipeline identity had access to the model; in CI, `investigation-eval` now runs as its own evaluation identity ([Running in CI](#running-in-ci)).
 
 **Pre-merge diagnostic, 2026-10-21.** Run locally from the feature branch against the deployed model and index, before the change merged. It's a check that the agent works, not the recorded result. Nine of ten questions ended in a validated result, eight assessed and one refused, so the guard passed; the model chose two to six tools each time. The question about a merchant that doesn't exist ended unverified, because a lookup that finds nothing registers no evidence to cite. Latencies were 5.6 to 21.9 s. The run came before two rule changes: confidence judged per statement, and refusals shown as the server's fixed notice.
 

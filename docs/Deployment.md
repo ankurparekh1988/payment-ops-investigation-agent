@@ -84,9 +84,12 @@ Later runs apply against the remote state directly. To check for drift, run the 
 | State storage account | Zone-redundant. Entra ID only (account keys disabled), TLS 1.2, versioning, 30-day soft delete for blobs and containers, and a delete lock |
 | `id-<prefix>-gh-plan` | Pipeline identity for read-only plans |
 | `id-<prefix>-gh-deploy` | Pipeline identity for approved deployments |
+| `id-<prefix>-gh-eval` | Evaluation identity that calls the model and reads the indexes ([AI evaluation](#ai-evaluation)) |
+| `id-<prefix>-gh-eval-publish` | Evaluation identity that writes the evaluation index and the evaluation history |
 | *Model Availability Reader* role | Custom role for the model preflight (below) |
 | `gh-deploy` search roles | Search Service Contributor and Search Index Data Contributor on the environment's resource group, so the pipeline can create the knowledge index and publish to it |
 | Developer role assignments | Optional, for `TF_VAR_developer_object_ids`: OpenAI User, Foundry User and Search Index Data Reader |
+| Evaluation role assignments | Each on one exact resource, once its `TF_VAR_eval_*` scope is set from the platform outputs ([AI evaluation](#ai-evaluation)) |
 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
 
@@ -209,7 +212,7 @@ flowchart LR
 | Build and test | Builds and runs the full test suite, then publishes the web app once from those binaries; the same artifact is what gets deployed. A failing test stops the deployment, including one that first appears after merging |
 | Plan | Plans the platform as `gh-plan` with the model preflight. If anything would change, it checks model capacity as early feedback and uploads the plan **encrypted**: saved plans hold sensitive values in plain text, and artifacts in a public repository can be downloaded |
 | Apply | Runs only if the build also succeeded, so infrastructure never changes without a deployable app. Waits for approval in the `<env>-infra` environment, checks model capacity again (quota can change while approval waits), then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
-| Publish knowledge | As `gh-deploy` in the `<env>` environment: builds the corpus, publishes it to the index the AI release names, and verifies every stored field. Runs on every deployment, so a recreated free service is filled again; when the index already matches, no section is uploaded or deleted |
+| Publish knowledge | As `gh-deploy` in the `<env>` environment: builds the corpus, publishes it to the index the AI release names, and verifies every stored field. Runs on every deployment, so a recreated free service is filled again; when the index already matches, no section is uploaded or deleted. It also makes sure the evaluation index (`retrieval.evaluationIndex`) exists, without writing documents to it |
 | Deploy app | Deploys the built artifact to the web app in the `<env>` environment, only after Publish knowledge succeeded: the app reads the index, so it never goes live against one that failed verification |
 | Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry and queries the knowledge index with its managed identity). Readiness is retried for up to 10 minutes, because a Search role assigned in the same deployment can take that long to take effect; it fails if the app still isn't ready after that |
 
@@ -237,7 +240,7 @@ Only `dev` is deployed. The stages a change passes through map onto the pipeline
 | Stage | Where it happens |
 |---|---|
 | Development | Feature branches, with a plan of every change on its pull request |
-| Testing | CI checks on the pull request. Once its thresholds are frozen, the evaluation suite gates changes to AI behaviour, and a new model version is evaluated in the inactive blue/green slot before it serves traffic |
+| Testing | CI checks on the pull request. The `AI evaluation` check gates changes to AI behaviour against the frozen thresholds, and a new model version is evaluated in the inactive blue/green slot before it serves traffic |
 | Approval | A required reviewer on `<env>-infra` approves every infrastructure change after reading its plan |
 | Production | The same code with a different `TF_VAR_environment`: its own resource group, state, deploy identity and approval gate |
 
@@ -256,6 +259,45 @@ The pipeline maps stage for stage onto Azure DevOps:
 | Artifacts | Workflow artifacts | Pipeline artifacts |
 | Merge protection | Rulesets with required checks | Branch policies with build validation |
 | One deployment at a time | Concurrency groups | Exclusive lock check |
+
+## AI evaluation
+
+`.github/workflows/ai-evaluation.yml` runs on every pull request to `main`, every Monday at 06:00 UTC on `main`, and on demand from `main`. It has no paths filter, so the `AI evaluation` check reports on every pull request; the classifier decides what each one needs. What it measures and the thresholds it applies are in [Evaluation](Evaluation.md#running-in-ci).
+
+| Job | What it does |
+|---|---|
+| Classify the change | Runs the change classifier from the **base** commit, with the base's .NET SDK, so a pull request can't change how it's classified. Decides whether evaluation is required, whether the author is trusted (not a fork or a bot) and whether the change breaks a gate-policy rule. Scheduled and manual runs of `main` are always evaluated |
+| Publish the evaluation index | As `gh-eval-publish`: first proves it can't write the live index (a no-op delete there must be refused with 403), then makes `knowledge-eval-v1` hold exactly the change's corpus. It never creates or changes an index definition |
+| Evaluate | As `gh-eval`: three investigation runs and the retrieval run against `knowledge-eval-v1`, gated by `eval/thresholds.json`. Pull requests skip the judge; scheduled and manual runs keep it |
+| Record the evaluation | Scheduled and manual runs only, as `gh-eval-publish`: writes the reports to the evaluation history in Log Analytics, including a gate failure |
+| AI evaluation | The required check. Decides from the other jobs' outputs, with no repository permissions |
+| Report the scheduled evaluation | Scheduled and manual runs only: opens or updates one `ai-evaluation` issue when the run fails or can't complete, and closes it after a pass. The only job that can write to the repository, and it never runs on a pull request |
+
+Publishing and evaluating run in **different environments as different identities**, so the job that runs a pull request's code with model access can't get a token that writes, and the job that writes never calls the model.
+
+| Environment | Identity | Protection |
+|---|---|---|
+| `<env>-eval-publish` | `gh-eval-publish` | Required reviewer; any branch, because pull request refs must be able to deploy |
+| `<env>-eval` | `gh-eval` | Required reviewer; any branch |
+| `<env>-eval-publish-scheduled` | `gh-eval-publish` | No approval; protected branches only, so pull requests can't use it |
+| `<env>-eval-scheduled` | `gh-eval` | No approval; protected branches only |
+
+A pull request that needs evaluating therefore waits for two approvals, one per environment. One evaluation runs at a time for the environment, and a run in progress is never cancelled: the evaluation index is shared.
+
+**Setting it up**, after the change that adds it is merged:
+
+1. Let CD run: it creates `knowledge-eval-v1`, the `AiEvaluation_CL` table and its data collection rule.
+2. Copy `foundry_account_id`, `search_service_id` and `evaluation_dcr_id` from `scripts/terraform.sh platform output` into `.env` as `TF_VAR_eval_foundry_account_id`, `TF_VAR_eval_search_service_id` and `TF_VAR_eval_dcr_id`, and set `TF_VAR_eval_search_index_scope` to the search service ID followed by `/indexes/knowledge-eval-v1`.
+3. Re-run `scripts/bootstrap.sh`. Its plan adds two identities, four federated credentials and four role assignments, and nothing else.
+4. Run `scripts/configure-github.sh`: it sets the two client-id secrets, creates the four environments and gives them the endpoints they need.
+5. Prove the gate: a docs-only pull request reports "not required"; a manual run of `main` reproduces the baseline on the evaluation index and writes history rows; a harmless knowledge edit passes.
+6. Add `AI evaluation` to the `main` ruleset's required checks.
+
+**After a rebuild.** The evaluation roles are granted on exact resources, so they go with the resources. After recreating the platform, update the `TF_VAR_eval_*` values from the new outputs, re-run `scripts/bootstrap.sh`, then `scripts/configure-github.sh`.
+
+**Changing the index schema.** A schema change Search can't apply in place gets a new index name, and the pull request that switches `retrieval.index` is evaluated against that index as CD built it, not through the evaluation index; it may not also change the corpus. While the old and new indexes both exist, the free tier's third index slot is taken, so the knowledge self-test can't run until the old index is removed.
+
+**When the weekly run stops.** GitHub disables scheduled workflows in a public repository after 60 days without repository activity. The weekly evaluation then stops without failing or opening an issue. That's a limit of the host, not of the evaluation: re-enable the workflow from the Actions tab, or run it by hand.
 
 ## Pipeline identities
 
@@ -279,8 +321,10 @@ flowchart LR
 |---|---|---|
 | `gh-plan` | Pull requests; the `main` branch | Reader on the subscription; Web App Configuration Reader on the environment's resource group, to refresh the web app; read-only access to state (plans run with `-lock=false`) |
 | `gh-deploy` | GitHub environments `<env>-infra` and `<env>` only | Contributor on the environment's resource group; Search Service Contributor and Search Index Data Contributor there; read/write state; limited role granting (below); Model Availability Reader |
+| `gh-eval` | GitHub environments `<env>-eval` and `<env>-eval-scheduled` only | Cognitive Services OpenAI User on the Foundry account; Search Index Data Reader on the search service |
+| `gh-eval-publish` | GitHub environments `<env>-eval-publish` and `<env>-eval-publish-scheduled` only | Search Index Data Contributor on the `knowledge-eval-v1` index only; Monitoring Metrics Publisher on the evaluation history's data collection rule only |
 
-A pull request can show what *would* change, but cannot change anything. Only jobs running in the named GitHub environments can use `gh-deploy`. Protection rules on those environments, including required reviewers, are set up together with the deployment workflows.
+A pull request can show what *would* change, but cannot change anything. Only jobs running in the named GitHub environments can use `gh-deploy`. Neither evaluation identity has any role on state, on role assignments or on the resource group itself. Protection rules on those environments, including required reviewers, are set up together with the deployment workflows.
 
 **Limited role granting.** The platform uses managed identities with key-based access disabled everywhere, so deploying it involves assigning roles. `gh-deploy` holds *Role Based Access Control Administrator* with a condition attached. It may assign only these allow-listed platform roles, and only to service principals such as managed identities:
 
