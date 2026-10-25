@@ -287,11 +287,12 @@ A pull request that needs evaluating therefore waits for two approvals, one per 
 **Setting it up**, after the change that adds it is merged:
 
 1. Let CD run: it creates `knowledge-eval-v1`, the `AiEvaluation_CL` table and its data collection rule.
-2. Copy `foundry_account_id`, `search_service_id` and `evaluation_dcr_id` from `scripts/terraform.sh platform output` into `.env` as `TF_VAR_eval_foundry_account_id`, `TF_VAR_eval_search_service_id` and `TF_VAR_eval_dcr_id`. The evaluation index's writer role takes the index name from `ai/manifest.yaml`.
-3. Re-run `scripts/bootstrap.sh`. Its plan adds two identities, four federated credentials and four role assignments, and nothing else.
-4. Run `scripts/configure-github.sh`: it sets the two client-id secrets, creates the four environments and gives them the endpoints they need.
-5. Prove the gate: a docs-only pull request reports "not required"; a manual run of `main` reproduces the baseline on the evaluation index and writes history rows; a harmless knowledge edit passes.
-6. Add `AI evaluation` to the `main` ruleset's required checks.
+2. Run `scripts/configure-github.sh` first. It creates the four environments with their protection before any identity trusts them; a pull request that names an environment that doesn't exist yet makes GitHub create it unprotected. The client-id secrets are skipped on this run.
+3. Copy `foundry_account_id`, `search_service_id` and `evaluation_dcr_id` from `scripts/terraform.sh platform output` into `.env` as `TF_VAR_eval_foundry_account_id`, `TF_VAR_eval_search_service_id` and `TF_VAR_eval_dcr_id`. The evaluation index's writer role takes the index name from `ai/manifest.yaml`.
+4. Re-run `scripts/bootstrap.sh`. Its plan adds two identities, four federated credentials and four role assignments, and nothing else.
+5. Run `scripts/configure-github.sh` again: it sets the two client-id secrets and gives the environments the endpoints they need. Allow a couple of minutes for the new roles to take effect before the first run.
+6. Prove the gate: a docs-only pull request reports "not required"; a manual run of `main` reproduces the baseline on the evaluation index and writes history rows; a harmless knowledge edit passes.
+7. Add `AI evaluation` to the `main` ruleset's required checks.
 
 **After a rebuild.** The evaluation roles are granted on exact resources, so they go with the resources. After recreating the platform, update the `TF_VAR_eval_*` values from the new outputs, re-run `scripts/bootstrap.sh`, then `scripts/configure-github.sh`.
 
