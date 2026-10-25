@@ -12,14 +12,14 @@ using PaymentOps.Tools.Shared;
 namespace PaymentOps.Evaluation.Commands;
 
 /// <summary>
-/// retrieval-eval: the held-out retrieval cases against the live index in the release's mode, query only.
+/// retrieval-eval: the held-out retrieval cases against the live or evaluation index in the release's mode, query only.
 /// It calls no model and writes nothing to Search.
 /// </summary>
 internal static class RetrievalEvalCommand
 {
-    public const string Usage = "retrieval-eval --endpoint <url> --ai <dir> --sources <dir> --dataset <file> [--thresholds <file>] --out <file> --summary <file>";
+    public const string Usage = "retrieval-eval --endpoint <url> --ai <dir> --sources <dir> --dataset <file> [--thresholds <file>] [--index live|evaluation] --out <file> --summary <file>";
 
-    private static readonly string[] Valued = ["endpoint", "ai", "sources", "dataset", "thresholds", "out", "summary"];
+    private static readonly string[] Valued = ["endpoint", "ai", "sources", "dataset", "thresholds", "index", "out", "summary"];
 
     public static Task<int> RunAsync(string[] args) => RunAsync(args, null, TimeSpan.FromMinutes(1));
 
@@ -33,7 +33,7 @@ internal static class RetrievalEvalCommand
         var endpoint = options.Https("endpoint");
         var thresholdsPath = options.Optional("thresholds");
         var (outPath, summaryPath) = (options.OutputFile("out"), options.OutputFile("summary"));
-        var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(options.One("ai")));
+        var release = Options.Reading(AiReleaseLoader.Load(new DirectoryAiReleaseSource(options.One("ai"))), options.EvaluationIndex());
         var dataset = CalibrationDataset.Load(options.One("dataset"));
         var keys = CalibrationReferences.Resolve(dataset, IndexedCorpus.FromSourceDirectory(options.One("sources")));
         var thresholds = thresholdsPath is null ? null : Thresholds.Load(thresholdsPath);
@@ -51,7 +51,7 @@ internal static class RetrievalEvalCommand
         var startedAt = DateTimeOffset.UtcNow;
         var result = await RunPlan.OnceMoreIfInvalidAsync("The retrieval run", () => RetrievalEval.RunAsync(dataset, keys, release, retrieve), _ => null, retryDelay, CancellationToken.None);
 
-        var context = new ReportContext(EvaluationReport.RetrievalSystem, RepositoryCommit.Current(), [], null, null, null, startedAt);
+        var context = new ReportContext(EvaluationReport.RetrievalSystem, RepositoryCommit.Current(), [], null, null, null, startedAt, release.KnowledgeIndex);
         var report = EvaluationReport.ForRetrieval(context, result, thresholds, thresholdsPath);
         await File.WriteAllTextAsync(outPath, report.ToJson());
         await File.AppendAllTextAsync(summaryPath, ReportMarkdown.Retrieval(report));

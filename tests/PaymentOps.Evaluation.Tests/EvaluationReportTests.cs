@@ -29,7 +29,8 @@ public sealed class EvaluationReportTests
         new ModelInfo("chat-blue", "gpt-5.4-mini", "2026-03-17", "GlobalStandard"),
         new ModelInfo("judge", "gpt-5.4-mini", "2026-03-17", "GlobalStandard"),
         "1.0.0",
-        new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero));
+        new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero),
+        "knowledge-v1");
 
     internal static RunOutcome Run(string heldOutcome = "assessed", bool leak = false) => new(
         [
