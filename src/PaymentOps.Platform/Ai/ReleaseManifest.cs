@@ -55,6 +55,9 @@ internal sealed class ManifestRetrieval
     // A breaking schema change gets a new name, so a live index is never changed incompatibly.
     public required string Index { get; init; }
 
+    // Only evaluations read it; each one first makes it hold the change's own corpus.
+    public required string EvaluationIndex { get; init; }
+
     public required string Mode { get; init; }
 
     // Optional: absent means no reranker-score floor. Only meaningful with semantic mode.

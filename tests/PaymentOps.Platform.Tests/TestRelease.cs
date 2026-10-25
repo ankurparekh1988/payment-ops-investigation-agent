@@ -41,7 +41,7 @@ internal sealed class TestRelease : IAiReleaseSource
     public static string PromptFile(string id = "grounded-answer", string version = "0.1.0", string body = Body) =>
         $"---\nid: {id}\nversion: {version}\n---\n{body}";
 
-    public const string Retrieval = "retrieval:\n  index: knowledge-v1\n  mode: lexical";
+    public const string Retrieval = "retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1\n  mode: lexical";
 
     public static string Manifest(string prompts = "prompts: {}", string models = Models, string schema = "schemaVersion: 1", string retrieval = Retrieval) =>
         $"{schema}\n{models}\n{retrieval}\n{prompts}\n";

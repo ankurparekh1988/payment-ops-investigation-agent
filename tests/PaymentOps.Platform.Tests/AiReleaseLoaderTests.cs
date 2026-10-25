@@ -212,7 +212,7 @@ public sealed class AiReleaseLoaderTests
     [InlineData("knowledge_v1")]
     public void An_invalid_index_name_fails(string name)
     {
-        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: {name}\n  mode: lexical")).LoadErrors();
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: {name}\n  evaluationIndex: knowledge-eval-v1\n  mode: lexical")).LoadErrors();
 
         Assert.Contains(errors, e => e.Contains("retrieval.index", StringComparison.Ordinal));
     }
@@ -229,7 +229,7 @@ public sealed class AiReleaseLoaderTests
     public void The_retrieval_mode_and_floor_are_loaded()
     {
         var release = AiReleaseLoader.Load(new TestRelease()
-            .With("manifest.yaml", TestRelease.Manifest(TestRelease.PromptEntry(), retrieval: "retrieval:\n  index: knowledge-v1\n  mode: semantic\n  semanticFloor: 1.75"))
+            .With("manifest.yaml", TestRelease.Manifest(TestRelease.PromptEntry(), retrieval: "retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1\n  mode: semantic\n  semanticFloor: 1.75"))
             .With("prompts/grounded-answer.md", TestRelease.PromptFile()));
 
         Assert.Equal(RetrievalMode.Semantic, release.RetrievalMode);
@@ -249,7 +249,7 @@ public sealed class AiReleaseLoaderTests
     public void Semantic_mode_without_a_floor_is_valid()
     {
         var release = AiReleaseLoader.Load(new TestRelease()
-            .With("manifest.yaml", TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1\n  mode: semantic")));
+            .With("manifest.yaml", TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1\n  mode: semantic")));
 
         Assert.Null(release.SemanticFloor);
     }
@@ -259,7 +259,7 @@ public sealed class AiReleaseLoaderTests
     [InlineData("mode: Lexical")]
     public void An_unknown_mode_fails(string mode)
     {
-        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  {mode}")).LoadErrors();
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1\n  {mode}")).LoadErrors();
 
         Assert.Contains(errors, e => e.Contains("retrieval.mode", StringComparison.Ordinal));
     }
@@ -267,7 +267,7 @@ public sealed class AiReleaseLoaderTests
     [Fact]
     public void A_floor_with_lexical_mode_fails()
     {
-        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1\n  mode: lexical\n  semanticFloor: 2")).LoadErrors();
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1\n  mode: lexical\n  semanticFloor: 2")).LoadErrors();
 
         Assert.Contains(errors, e => e.Contains("semanticFloor", StringComparison.Ordinal) && e.Contains("lexical", StringComparison.Ordinal));
     }
@@ -279,7 +279,7 @@ public sealed class AiReleaseLoaderTests
     [InlineData(".inf")]
     public void A_floor_outside_the_reranker_scale_fails(string floor)
     {
-        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  mode: semantic\n  semanticFloor: {floor}")).LoadErrors();
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1\n  mode: semantic\n  semanticFloor: {floor}")).LoadErrors();
 
         Assert.Contains(errors, e => e.Contains("between 0 and 4", StringComparison.Ordinal));
     }
@@ -287,8 +287,45 @@ public sealed class AiReleaseLoaderTests
     [Fact]
     public void A_missing_mode_fails()
     {
-        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1")).LoadErrors();
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1")).LoadErrors();
 
         Assert.Contains(errors, e => e.Contains("mode", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("knowledge-v1")]
+    [InlineData(AiReleaseLoader.SelfTestIndex)]
+    public void The_evaluation_index_must_differ_from_the_live_and_self_test_indexes(string name)
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  evaluationIndex: {name}\n  mode: lexical")).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("retrieval.evaluationIndex", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Knowledge-eval-v1")]
+    [InlineData("knowledge_eval")]
+    public void An_evaluation_index_name_follows_search_naming(string name)
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  evaluationIndex: {name}\n  mode: lexical")).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("retrieval.evaluationIndex", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_over_long_evaluation_index_name_fails()
+    {
+        var name = string.Join('-', Enumerable.Repeat("abcdefghi", 13));
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: $"retrieval:\n  index: knowledge-v1\n  evaluationIndex: {name}\n  mode: lexical")).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("retrieval.evaluationIndex", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_missing_evaluation_index_fails()
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1\n  mode: lexical")).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("evaluationIndex", StringComparison.OrdinalIgnoreCase));
     }
 }

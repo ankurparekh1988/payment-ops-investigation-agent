@@ -42,6 +42,16 @@ internal static partial class ReleaseManifestValidator
             errors.Add($"retrieval.index '{manifest.Retrieval.Index}' must be lowercase letters and digits in hyphen-separated words, 2 to 128 characters.");
         }
 
+        var evaluationIndex = manifest.Retrieval.EvaluationIndex;
+        if (!SearchIndexName().IsMatch(evaluationIndex))
+        {
+            errors.Add($"retrieval.evaluationIndex '{evaluationIndex}' must be lowercase letters and digits in hyphen-separated words, 2 to 128 characters.");
+        }
+        else if (evaluationIndex == manifest.Retrieval.Index || evaluationIndex == AiReleaseLoader.SelfTestIndex)
+        {
+            errors.Add($"retrieval.evaluationIndex '{evaluationIndex}' must differ from retrieval.index and from '{AiReleaseLoader.SelfTestIndex}'; evaluations rewrite its documents.");
+        }
+
         var mode = ParseRetrievalMode(manifest.Retrieval.Mode);
         if (mode is null)
         {
