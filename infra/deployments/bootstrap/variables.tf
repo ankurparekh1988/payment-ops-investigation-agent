@@ -46,3 +46,27 @@ variable "state_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "eval_foundry_account_id" {
+  description = "Foundry account resource ID (platform output foundry_account_id); the evaluation identity may call its models."
+  type        = string
+  default     = null
+}
+
+variable "eval_search_service_id" {
+  description = "Search service resource ID (platform output search_service_id); the evaluation identity may read its indexes."
+  type        = string
+  default     = null
+}
+
+variable "eval_search_index_scope" {
+  description = "The evaluation index, as <search_service_id>/indexes/<retrieval.evaluationIndex>; the only index the evaluation publisher may write."
+  type        = string
+  default     = null
+}
+
+variable "eval_dcr_id" {
+  description = "Evaluation history rule resource ID (platform output evaluation_dcr_id); the evaluation publisher may write through it."
+  type        = string
+  default     = null
+}
