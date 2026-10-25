@@ -18,7 +18,7 @@ If the payment was captured before the processor's configured cut-off and the ba
 
 ### Captured after the cut-off
 
-The payment belongs to the next settlement day's batch. This is expected, and the payout follows that batch. Check whether the next day was a closure day, because that pushes it out again.
+The payment belongs to the next settlement day's batch. This is expected: the payout follows that batch. Check whether the next day was a closure day, because that pushes it out again.
 
 ### No batch at all
 
