@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Commands;
@@ -8,6 +9,7 @@ using PaymentOps.Evaluation.Reporting;
 using PaymentOps.Evaluation.Retrieval;
 using PaymentOps.Evaluation.Running;
 using PaymentOps.Evaluation.Scoring;
+using PaymentOps.Tests.Shared;
 
 using static PaymentOps.Evaluation.Tests.EvaluationFakes;
 using static PaymentOps.Evaluation.Tests.EvaluationReportTests;
@@ -100,7 +102,7 @@ public sealed class EvaluationRowsTests
         Assert.All(rows, r =>
         {
             Assert.Null(r.Value);
-            Assert.Equal(0, r.N);
+            Assert.Equal(0, r.SampleSize);
         });
     }
 
@@ -115,10 +117,10 @@ public sealed class EvaluationRowsTests
             ["judge_groundedness", "judge_relevance", "judge_root_cause_agreement"],
             rows.Select(r => r.Metric).Distinct().Order(StringComparer.Ordinal));
         var groundedness = rows.Where(r => r.Metric == "judge_groundedness").ToDictionary(r => r.Run);
-        Assert.Equal((4.5, 2), (groundedness[1].Value!.Value, groundedness[1].N));
-        Assert.Equal((3.0, 1), (groundedness[2].Value!.Value, groundedness[2].N));
-        Assert.Equal((5.0, 2), (groundedness[3].Value!.Value, groundedness[3].N));
-        Assert.Equal((5.0, 5), (groundedness[0].Value!.Value, groundedness[0].N));
+        Assert.Equal((4.5, 2), (groundedness[1].Value!.Value, groundedness[1].SampleSize));
+        Assert.Equal((3.0, 1), (groundedness[2].Value!.Value, groundedness[2].SampleSize));
+        Assert.Equal((5.0, 2), (groundedness[3].Value!.Value, groundedness[3].SampleSize));
+        Assert.Equal((5.0, 5), (groundedness[0].Value!.Value, groundedness[0].SampleSize));
         Assert.All(rows, r =>
         {
             Assert.Null(r.Threshold);
@@ -139,9 +141,9 @@ public sealed class EvaluationRowsTests
         var rows = Rows(Investigations(Scored(4, 5, null), Scored(null, null), Scored(4)))
             .Where(r => r.Metric == "judge_groundedness").ToDictionary(r => r.Run);
 
-        Assert.Equal((4.5, 2), (rows[1].Value!.Value, rows[1].N));
+        Assert.Equal((4.5, 2), (rows[1].Value!.Value, rows[1].SampleSize));
         Assert.False(rows.ContainsKey(2));
-        Assert.Equal((4.0, 3), (rows[0].Value!.Value, rows[0].N));
+        Assert.Equal((4.0, 3), (rows[0].Value!.Value, rows[0].SampleSize));
         Assert.DoesNotContain(rows.Values, r => r.Value == 0);
     }
 
@@ -167,6 +169,19 @@ public sealed class EvaluationRowsTests
         Assert.Equal(
             typeof(EvaluationRow).GetProperties().Select(p => p.Name).Order(StringComparer.Ordinal),
             JsonDocument.Parse(json).RootElement[0].EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void The_table_columns_are_the_row_fields_with_names_Log_Analytics_accepts()
+    {
+        var terraform = File.ReadAllText(Path.Combine(RepositoryRoot.FullPath, "infra", "modules", "monitoring", "evaluation.tf"));
+        var columns = Regex.Matches(terraform, @"^\s+(?<name>\w+)\s+= ""(?:datetime|string|int|real)""
+?$", RegexOptions.Multiline).Select(m => m.Groups["name"].Value).ToList();
+
+        Assert.Equal(typeof(EvaluationRow).GetProperties().Select(p => p.Name).Order(StringComparer.Ordinal), columns.Order(StringComparer.Ordinal));
+
+        // Log Analytics refuses a one-character column name such as "N".
+        Assert.All(columns, c => Assert.True(c.Length > 1, c));
     }
 
     [Fact]

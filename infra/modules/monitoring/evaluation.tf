@@ -15,7 +15,7 @@ locals {
     Metric         = "string"
     Value          = "real"
     Threshold      = "real"
-    N              = "int"
+    SampleSize     = "int"
     Direction      = "string"
     Verdict        = "string"
   }
