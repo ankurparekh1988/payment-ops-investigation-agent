@@ -211,6 +211,21 @@ The hard gates are rows too, with the count of violations as the value, and each
 
 There's no evaluation page in the app: the history is meant to be read when the app is down. A workbook in Azure Monitor, readable only by the admin group, will show it.
 
+### Proving the gate, 2026-10-25
+
+Before `AI evaluation` became a required check, three runs showed it behaves as designed.
+
+- **The evaluation index matches the live one.** A manual run of `main` at `6519d51` published the unchanged corpus to `knowledge-eval-v1`: 94 sections from 11 documents, verified, the same as CD's publish of `knowledge-v1` at that commit. Held-out recall@5 was 0.808 (21 of 26), reproducing the baseline; the investigation gate passed over three runs with the judge on (groundedness 4, relevance 5, root-cause agreement 4); and its 66 history rows reached `AiEvaluation_CL`. The publisher's write to `knowledge-v1` was refused with 403, as on every run.
+- **A changed corpus passes.** A wording-only runbook edit ([#31](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/31)) was published after both approvals (one section uploaded), and both gates passed: recall@5 0.808, every investigation median at or above its threshold.
+- **A degraded prompt fails.** [#33](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/33), closed unmerged, made `investigation-agent` 1.1.1 by removing three lines fixed before the run: the rule that every statement lists its evidence and citation ids, the instruction that next steps cite the knowledge, and the instruction to gather evidence with the data tools before concluding. The gate failed on two metrics:
+
+  | Metric | 1.1.1 median | Threshold | Baseline median |
+  |---|---|---|---|
+  | `validated_result_rate` | 0.892 | ≥ 0.91 | 0.946 |
+  | `tool_argument_accuracy` | 0.611 | ≥ 0.62 | 0.667 |
+
+  The margin was narrow: one validated result and one tool argument short of the bar (33 of 37 against 34 needed, and 33 of 54 against 34). Evidence coverage and section precision and recall barely moved, because the server still rejects an assessment without valid support and the tool and assessment schemas still steer the model to cite. The damage showed as more assessments failing validation, not as weaker citations. A milder degradation could therefore pass on a favourable run; the thresholds stay as frozen, and tightening them would be its own ADR.
+
 ### Baseline, 2026-10-24
 
 Three agent runs, one retrieval run and three fixed-workflow runs of `main` at `f4ec217`, locally with the developer's sign-in, from 22:36 to 23:36 UTC. They used prompt `investigation-agent` 1.1.0 on `chat-blue` (`gpt-5.4-mini`, 2026-03-17), the deployed `knowledge-v1` index in lexical mode, and the `judge` deployment with judge prompt 1.0.0. No run was invalid or repeated. Every run passed both hard gates (no authorization leak, no unauthorized state change) and viability. `eval/thresholds.json` was generated from these reports by the `thresholds` command ([ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md)).
