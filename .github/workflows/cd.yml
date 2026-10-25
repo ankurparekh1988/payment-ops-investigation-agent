@@ -268,11 +268,12 @@ jobs:
       - name: Build the knowledge corpus
         run: dotnet run --project tools/PaymentOps.CorpusBuild --configuration Release -- data/knowledge/src --out "$RUNNER_TEMP/knowledge"
 
-      # Every run, so a recreated free service is refilled. No document changes when the index already matches.
+      # Every run: publishes the live index and makes sure the evaluation index exists, without writing documents to it.
+      # A recreated free service is refilled; no document changes when the index already matches.
       - name: Publish
         env:
           SEARCH_ENDPOINT: ${{ steps.target.outputs.search-endpoint }}
-        run: dotnet run --project tools/PaymentOps.KnowledgePublish --configuration Release -- "$RUNNER_TEMP/knowledge" --endpoint "$SEARCH_ENDPOINT" --ai ai
+        run: dotnet run --project tools/PaymentOps.KnowledgePublish --configuration Release -- "$RUNNER_TEMP/knowledge" --endpoint "$SEARCH_ENDPOINT" --ai ai --ensure-evaluation-index
 
   smoke:
     name: Smoke test

@@ -1,6 +1,7 @@
 using System.Text;
 
 using PaymentOps.Knowledge.Corpus;
+using PaymentOps.Platform.Ai;
 
 namespace PaymentOps.Knowledge.Indexing;
 
@@ -10,7 +11,7 @@ namespace PaymentOps.Knowledge.Indexing;
 /// </summary>
 public static class KnowledgeSelfTest
 {
-    public const string IndexName = "knowledge-selftest";
+    public const string IndexName = AiReleaseLoader.SelfTestIndex;
 
     private const string RunbookA = """
         ---

@@ -47,6 +47,14 @@ public static class ReleaseChangeCheck
             }
         }
 
+        // A rename is a new schema generation; the evaluation index must take the same schema, so it's renamed too.
+        if (before.Index is { } baseIndex && before.EvaluationIndex is { } baseEvaluationIndex
+            && baseIndex != head.KnowledgeIndex && baseEvaluationIndex == head.EvaluationIndex)
+        {
+            errors.Add($"retrieval.index changes from '{baseIndex}' to '{head.KnowledgeIndex}' but retrieval.evaluationIndex stays '{baseEvaluationIndex}'. "
+                + "Give the evaluation index a new name too, so it's created with the new schema.");
+        }
+
         foreach (var used in before.InUseDeployments.OrderBy(d => d.Name, StringComparer.Ordinal))
         {
             if (!head.Deployments.TryGetValue(used.Name, out var current))
@@ -76,7 +84,9 @@ public static class ReleaseChangeCheck
 
     private sealed record BaseRelease(
         IReadOnlyDictionary<string, (string? Version, string? Sha256)> Prompts,
-        IReadOnlyList<BaseDeployment> InUseDeployments);
+        IReadOnlyList<BaseDeployment> InUseDeployments,
+        string? Index,
+        string? EvaluationIndex);
 
     private sealed record BaseDeployment(string Name, string? Model, string? Version, string? DeploymentType, string? ContentFilterPolicy);
 
@@ -106,7 +116,12 @@ public static class ReleaseChangeCheck
         var activeSlot = Child(Child(chat, "deployments"), Scalar(Child(chat, "active")) ?? string.Empty);
         YamlNode?[] inUse = [activeSlot, Child(models, "embedding"), Child(models, "judge")];
 
-        return new BaseRelease(prompts, inUse.Select(ReadDeployment).OfType<BaseDeployment>().ToList());
+        var retrieval = Child(root, "retrieval");
+        return new BaseRelease(
+            prompts,
+            inUse.Select(ReadDeployment).OfType<BaseDeployment>().ToList(),
+            Scalar(Child(retrieval, "index")),
+            Scalar(Child(retrieval, "evaluationIndex")));
     }
 
     private static BaseDeployment? ReadDeployment(YamlNode? node) =>

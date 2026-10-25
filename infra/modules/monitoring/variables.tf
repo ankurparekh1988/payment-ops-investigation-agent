@@ -43,3 +43,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "evaluation_endpoint_name" {
+  description = "Data collection endpoint for evaluation history."
+  type        = string
+}
+
+variable "evaluation_rule_name" {
+  description = "Data collection rule that writes evaluation history to its table."
+  type        = string
+}

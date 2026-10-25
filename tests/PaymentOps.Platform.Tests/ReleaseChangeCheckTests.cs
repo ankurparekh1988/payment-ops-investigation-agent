@@ -119,6 +119,26 @@ public sealed class ReleaseChangeCheckTests
         Assert.Contains(errors, e => e.StartsWith("The base branch's manifest isn't valid YAML", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Renaming_the_live_index_renames_the_evaluation_index_too()
+    {
+        static AiRelease HeadWith(string retrieval) => AiReleaseLoader.Load(new TestRelease().With("manifest.yaml", TestRelease.Manifest(retrieval: retrieval)));
+
+        var kept = ReleaseChangeCheck.Compare(Base(TestRelease.Manifest()), HeadWith("retrieval:\n  index: knowledge-v2\n  evaluationIndex: knowledge-eval-v1\n  mode: lexical"));
+        var renamed = ReleaseChangeCheck.Compare(Base(TestRelease.Manifest()), HeadWith("retrieval:\n  index: knowledge-v2\n  evaluationIndex: knowledge-eval-v2\n  mode: lexical"));
+
+        Assert.Contains(kept, e => e.Contains("retrieval.evaluationIndex", StringComparison.Ordinal));
+        Assert.Empty(renamed);
+    }
+
+    [Fact]
+    public void A_base_without_an_evaluation_index_allows_any()
+    {
+        var older = TestRelease.Manifest(retrieval: "retrieval:\n  index: knowledge-v1\n  mode: lexical");
+
+        Assert.Empty(ReleaseChangeCheck.Compare(Base(older), Head(TestRelease.Models)));
+    }
+
     private static byte[] Base(string manifest) => Encoding.UTF8.GetBytes(manifest);
 
     private static byte[] BaseWithPrompt(string version, string body) =>

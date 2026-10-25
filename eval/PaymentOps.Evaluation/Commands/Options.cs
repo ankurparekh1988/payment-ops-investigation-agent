@@ -74,6 +74,21 @@ internal sealed class Options
 
     public int Positive(string name) =>
         int.TryParse(One(name), NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0 ? n : throw new UsageException($"--{name} must be a positive whole number.");
+
+    /// <summary>
+    /// The release from --ai, reading the index --index names: live by default, or the release's evaluation index,
+    /// so every reader measures the change's own corpus.
+    /// </summary>
+    public AiRelease Release()
+    {
+        var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(One("ai")));
+        return Optional("index") switch
+        {
+            null or "live" => release,
+            "evaluation" => release with { KnowledgeIndex = release.EvaluationIndex },
+            _ => throw new UsageException("--index must be live or evaluation."),
+        };
+    }
 }
 
 /// <summary>

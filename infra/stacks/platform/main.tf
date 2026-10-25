@@ -65,6 +65,8 @@ module "monitoring" {
   location                  = var.location
   retention_days            = var.log_retention_days
   daily_quota_gb            = var.log_daily_quota_gb
+  evaluation_endpoint_name  = "dce-${local.base}-eval"
+  evaluation_rule_name      = "dcr-${local.base}-eval"
   tags                      = local.tags
 }
 

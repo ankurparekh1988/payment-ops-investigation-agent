@@ -1,0 +1,413 @@
+name: AI evaluation
+
+# The release gate for AI behaviour: every pull request is classified, and one that changes behaviour or gate
+# policy is evaluated against the frozen thresholds in eval/thresholds.json. Weekly and on demand, main is
+# evaluated the same way and the result is recorded in Log Analytics. No paths filter: the required check
+# must report on every pull request, so the classifier decides what's needed.
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run for the environment at a time, from publish to evaluate: they share the evaluation index. Never cancel
+# one in progress, and queue the rest, so a run waiting for approval doesn't cancel the pending ones behind it.
+concurrency:
+  group: ai-eval-${{ vars.TERRAFORM_SETTINGS && fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment || 'unconfigured' }}
+  cancel-in-progress: false
+  queue: max
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  classify:
+    name: Classify the change
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      required: ${{ steps.classify.outputs.required }}
+      trusted: ${{ steps.classify.outputs.trusted }}
+      violation: ${{ steps.classify.outputs.violation }}
+      index-switch: ${{ steps.classify.outputs.index-switch }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The rules come from the base commit, so a pull request can't change how it's classified. It's checked out
+      # outside the workspace, so no file the pull request adds (a NuGet.config, a global.json) reaches its build.
+      - name: Check out the base
+        id: base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+          if [[ -f "$RUNNER_TEMP/base/eval/PaymentOps.Evaluation/Commands/ClassifyChangeCommand.cs" ]]; then
+            echo "has-classifier=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-classifier=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: steps.base.outputs.has-classifier == 'true'
+        with:
+          global-json-file: ${{ runner.temp }}/base/global.json
+
+      - name: Classify
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          HAS_CLASSIFIER: ${{ steps.base.outputs.has-classifier }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          ACTOR_TYPE: ${{ (github.event.pull_request.user.type == 'Bot' || endsWith(github.actor, '[bot]')) && 'Bot' || 'User' }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request && "$HAS_CLASSIFIER" == true ]]; then
+            # Both sides of a rename, and paths unquoted, so every changed path is matched as written.
+            git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA"...HEAD > "$RUNNER_TEMP/changed.txt"
+            cd "$RUNNER_TEMP/base"
+            dotnet run --project eval/PaymentOps.Evaluation --configuration Release -- classify-change \
+              --changed "$RUNNER_TEMP/changed.txt" --base-manifest ai/manifest.yaml --head-manifest "$GITHUB_WORKSPACE/ai/manifest.yaml" \
+              --same-repository "$SAME_REPOSITORY" --actor-type "$ACTOR_TYPE" --github-output "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            required=false; reason="not required: the gate is introduced by this change"
+          elif [[ "$REF" == refs/heads/main ]]; then
+            required=true; reason="required: scheduled evaluation of main"
+          else
+            echo "::error::Run the evaluation on main; history records only what shipped."
+            exit 1
+          fi
+          printf '%s\n' "required=$required" "trusted=true" "violation=" "index-switch=false" "reason=$reason" >> "$GITHUB_OUTPUT"
+
+  publish-eval-index:
+    name: Publish the evaluation index
+    needs: classify
+    if: >-
+      needs.classify.outputs.required == 'true' && needs.classify.outputs.trusted == 'true'
+      && needs.classify.outputs.violation == '' && needs.classify.outputs.index-switch != 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ format(github.event_name == 'pull_request' && '{0}-eval-publish' || '{0}-eval-publish-scheduled', fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment) }}
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      failure-class: ${{ steps.outcome.outputs.failure-class }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Its outcome is read explicitly below, so a build failure is a publish failure.
+      - name: Build the publisher
+        id: build
+        run: |
+          dotnet build tools/PaymentOps.CorpusBuild --configuration Release
+          dotnet build tools/PaymentOps.KnowledgePublish --configuration Release
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        id: login
+        continue-on-error: true
+        with:
+          client-id: ${{ secrets.AZURE_EVAL_PUBLISH_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Proves this identity can't write the live index, then makes the evaluation index hold exactly this change's corpus.
+      - name: Publish the change's corpus to the evaluation index
+        id: publish
+        if: steps.login.outcome == 'success' && steps.build.outcome == 'success'
+        env:
+          SEARCH_ENDPOINT: ${{ vars.EVAL_SEARCH_ENDPOINT }}
+        run: |
+          set +e
+          if dotnet run --project tools/PaymentOps.CorpusBuild --configuration Release --no-build -- data/knowledge/src --out "$RUNNER_TEMP/knowledge"; then
+            dotnet run --project tools/PaymentOps.KnowledgePublish --configuration Release --no-build -- \
+              "$RUNNER_TEMP/knowledge" --endpoint "$SEARCH_ENDPOINT" --ai ai --documents-only
+            code=$?
+          else
+            code=1
+          fi
+          echo "publish-exit=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Classify the outcome
+        id: outcome
+        if: always()
+        env:
+          LOGIN: ${{ steps.login.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          PUBLISH_EXIT: ${{ steps.publish.outputs.publish-exit }}
+        run: |
+          if [[ "$BUILD" != success ]]; then
+            class=publish-failed
+          elif [[ "$LOGIN" != success ]]; then
+            class=login
+          else
+            case "$PUBLISH_EXIT" in
+              0) class=none ;;
+              3) class=unavailable ;;
+              4) class=scope-violation ;;
+              *) class=publish-failed ;;
+            esac
+          fi
+          echo "failure-class=$class" >> "$GITHUB_OUTPUT"
+
+  evaluate:
+    name: Evaluate
+    needs: [classify, publish-eval-index]
+    if: >-
+      always() && needs.classify.outputs.required == 'true' && needs.classify.outputs.trusted == 'true'
+      && needs.classify.outputs.violation == ''
+      && (needs.publish-eval-index.outputs.failure-class == 'none' || needs.classify.outputs.index-switch == 'true')
+    runs-on: ubuntu-latest
+    environment: ${{ format(github.event_name == 'pull_request' && '{0}-eval' || '{0}-eval-scheduled', fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment) }}
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      login: ${{ steps.login.outcome }}
+      investigation-exit: ${{ steps.evaluate.outputs.investigation-exit }}
+      retrieval-exit: ${{ steps.evaluate.outputs.retrieval-exit }}
+      reports-valid: ${{ steps.reports.outputs.reports-valid }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Built first, so a build failure leaves no exit codes instead of being mistaken for a gate failure (both exit 1).
+      - name: Build the harness
+        run: dotnet build eval/PaymentOps.Evaluation --configuration Release
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        id: login
+        continue-on-error: true
+        with:
+          client-id: ${{ secrets.AZURE_EVAL_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Judge scores don't gate, so pull requests skip the judge; the weekly run keeps it for the history.
+      - name: Run the evaluations
+        id: evaluate
+        if: steps.login.outcome == 'success'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INDEX: ${{ needs.classify.outputs.index-switch == 'true' && 'live' || 'evaluation' }}
+          FOUNDRY_ENDPOINT: ${{ vars.EVAL_FOUNDRY_ENDPOINT }}
+          SEARCH_ENDPOINT: ${{ vars.EVAL_SEARCH_ENDPOINT }}
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/eval"
+          judge=()
+          [[ "$EVENT_NAME" == pull_request ]] && judge=(--no-judge)
+          dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- investigation-eval \
+            --foundry "$FOUNDRY_ENDPOINT" --search "$SEARCH_ENDPOINT" --scope https://cognitiveservices.azure.com/.default \
+            --ai ai --sources data/knowledge/src \
+            --dataset eval/datasets/agent-tasks.json --dataset eval/datasets/investigations-heldout.json \
+            --runs 3 --system agent --pricing eval/pricing.json --thresholds eval/thresholds.json --index "$INDEX" "${judge[@]}" \
+            --out "$RUNNER_TEMP/eval/investigations.json" --summary "$GITHUB_STEP_SUMMARY"
+          echo "investigation-exit=$?" >> "$GITHUB_OUTPUT"
+          dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- retrieval-eval \
+            --endpoint "$SEARCH_ENDPOINT" --ai ai --sources data/knowledge/src \
+            --dataset eval/datasets/retrieval-heldout.json --thresholds eval/thresholds.json --index "$INDEX" \
+            --out "$RUNNER_TEMP/eval/retrieval.json" --summary "$GITHUB_STEP_SUMMARY"
+          echo "retrieval-exit=$?" >> "$GITHUB_OUTPUT"
+
+      # Valid reports exist after a pass or a gate failure (0 or 1); exits 2 and 3 produce nothing to record.
+      - name: Check the reports
+        id: reports
+        if: always()
+        env:
+          INVESTIGATION_EXIT: ${{ steps.evaluate.outputs.investigation-exit }}
+          RETRIEVAL_EXIT: ${{ steps.evaluate.outputs.retrieval-exit }}
+        run: |
+          valid=false
+          case "$INVESTIGATION_EXIT/$RETRIEVAL_EXIT" in
+            0/0|0/1|1/0|1/1)
+              if [[ -f "$RUNNER_TEMP/eval/investigations.json" && -f "$RUNNER_TEMP/eval/retrieval.json" ]]; then valid=true; fi ;;
+          esac
+          echo "reports-valid=$valid" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.reports.outputs.reports-valid == 'true'
+        with:
+          name: ai-evaluation-reports
+          path: |
+            ${{ runner.temp }}/eval/investigations.json
+            ${{ runner.temp }}/eval/retrieval.json
+          if-no-files-found: error
+
+  record:
+    name: Record the evaluation
+    needs: evaluate
+    # A gate failure is recorded too, so the history isn't pass-only.
+    if: always() && github.event_name != 'pull_request' && needs.evaluate.outputs.reports-valid == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ format('{0}-eval-publish-scheduled', fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment) }}
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      login: ${{ steps.login.outcome }}
+      record-exit: ${{ steps.record.outputs.record-exit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ai-evaluation-reports
+          path: ${{ runner.temp }}/eval
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        id: login
+        continue-on-error: true
+        with:
+          client-id: ${{ secrets.AZURE_EVAL_PUBLISH_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Write the evaluation history
+        id: record
+        if: steps.login.outcome == 'success'
+        env:
+          INGESTION_ENDPOINT: ${{ vars.EVAL_INGESTION_ENDPOINT }}
+          RULE_ID: ${{ vars.EVAL_DCR_IMMUTABLE_ID }}
+          EVALUATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          TRIGGER: ${{ github.event_name }}
+        run: |
+          set +e
+          dotnet run --project eval/PaymentOps.Evaluation --configuration Release -- record-evaluation \
+            --investigations "$RUNNER_TEMP/eval/investigations.json" --retrieval "$RUNNER_TEMP/eval/retrieval.json" \
+            --ingestion-endpoint "$INGESTION_ENDPOINT" --rule "$RULE_ID" --evaluation-id "$EVALUATION_ID" --trigger "$TRIGGER"
+          echo "record-exit=$?" >> "$GITHUB_OUTPUT"
+
+  verdict:
+    name: AI evaluation
+    needs: [classify, publish-eval-index, evaluate, record]
+    if: always()
+    runs-on: ubuntu-latest
+    # The required check runs on pull requests, so it gets no repository permissions at all.
+    permissions: {}
+    outputs:
+      status: ${{ steps.verdict.outputs.status }}
+      message: ${{ steps.verdict.outputs.message }}
+    steps:
+      # Decides from the jobs' outputs only, first match wins; never from job results, which can't say why.
+      - name: Verdict
+        id: verdict
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUIRED: ${{ needs.classify.outputs.required }}
+          TRUSTED: ${{ needs.classify.outputs.trusted }}
+          VIOLATION: ${{ needs.classify.outputs.violation }}
+          REASON: ${{ needs.classify.outputs.reason }}
+          PUBLISH_FAILURE: ${{ needs.publish-eval-index.outputs.failure-class }}
+          EVALUATE_LOGIN: ${{ needs.evaluate.outputs.login }}
+          INVESTIGATION_EXIT: ${{ needs.evaluate.outputs.investigation-exit }}
+          RETRIEVAL_EXIT: ${{ needs.evaluate.outputs.retrieval-exit }}
+          REPORTS_VALID: ${{ needs.evaluate.outputs.reports-valid }}
+          RECORD_LOGIN: ${{ needs.record.outputs.login }}
+          RECORD_EXIT: ${{ needs.record.outputs.record-exit }}
+        run: |
+          incomplete="the evaluation workflow didn't complete"
+          either_exit() { [[ "$INVESTIGATION_EXIT" == "$1" || "$RETRIEVAL_EXIT" == "$1" ]]; }
+
+          if [[ -z "$REQUIRED" ]]; then
+            status=error; message="$incomplete"
+          elif [[ -n "$VIOLATION" ]]; then
+            status=policy-violation; message="$VIOLATION"
+          elif [[ "$REQUIRED" != true ]]; then
+            status=not-required; message="$REASON"
+          elif [[ "$TRUSTED" != true ]]; then
+            status=untrusted; message="reproduce this change on a branch in this repository"
+          elif [[ "$PUBLISH_FAILURE" == scope-violation ]]; then
+            status=scope-violation; message="the evaluation publisher can write the live index; fix its role before evaluating"
+          elif [[ "$PUBLISH_FAILURE" == publish-failed ]] || either_exit 2; then
+            status=invalid-input; message="invalid evaluation input"
+          elif [[ "$PUBLISH_FAILURE" == login || "$PUBLISH_FAILURE" == unavailable || "$EVALUATE_LOGIN" == failure ]] || either_exit 3; then
+            status=unavailable; message="dev environment unavailable"
+          elif [[ -z "$INVESTIGATION_EXIT" || -z "$RETRIEVAL_EXIT" ]]; then
+            status=error; message="$incomplete"
+          elif either_exit 1; then
+            status=failed; message="gate failed"
+          elif [[ "$INVESTIGATION_EXIT" != 0 || "$RETRIEVAL_EXIT" != 0 ]]; then
+            status=error; message="$incomplete"
+          else
+            status=passed; message=passed
+          fi
+
+          # On main, valid reports must reach the history; a run that couldn't record them isn't a success.
+          if [[ "$EVENT_NAME" != pull_request && "$REPORTS_VALID" == true ]] && [[ "$RECORD_LOGIN" != success || "$RECORD_EXIT" != 0 ]]; then
+            case "$status" in
+              passed) status=unavailable; message="passed, but evaluation history wasn't recorded" ;;
+              failed) message="gate failed; evaluation history wasn't recorded" ;;
+            esac
+          fi
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "message=$message" >> "$GITHUB_OUTPUT"
+          echo "**AI evaluation:** $message" >> "$GITHUB_STEP_SUMMARY"
+          case "$status" in
+            passed|not-required) exit 0 ;;
+            *) echo "::error::$message"; exit 1 ;;
+          esac
+
+  report-scheduled:
+    name: Report the scheduled evaluation
+    needs: verdict
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Reading is only for scripts/report-issue.sh; issues is this workflow's only write permission.
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Open, update or close the evaluation issue
+        env:
+          STATUS: ${{ needs.verdict.outputs.status }}
+          MESSAGE: ${{ needs.verdict.outputs.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "$STATUS" == passed ]]; then
+            scripts/report-issue.sh close ai-evaluation
+            exit 0
+          fi
+          {
+            echo "The scheduled AI evaluation of main didn't pass: ${MESSAGE:-the evaluation workflow didn't complete}."
+            echo
+            echo "Run: $RUN_URL"
+          } > issue.md
+          scripts/report-issue.sh open ai-evaluation "AI evaluation of main: ${MESSAGE:-the evaluation workflow didn't complete}" issue.md

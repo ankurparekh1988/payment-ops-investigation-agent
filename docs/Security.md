@@ -34,6 +34,8 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 |---|---|---|
 | `id-<prefix>-gh-plan` | User-assigned managed identity, GitHub OIDC | Pull request and `main` plan jobs |
 | `id-<prefix>-gh-deploy` | User-assigned managed identity, GitHub OIDC | Approved apply and deploy jobs |
+| `id-<prefix>-gh-eval` | User-assigned managed identity, GitHub OIDC | Evaluation runs: calls the model, reads the indexes |
+| `id-<prefix>-gh-eval-publish` | User-assigned managed identity, GitHub OIDC | Publishing the evaluation index and recording evaluation history |
 | `id-<prefix>-<env>-app` | User-assigned managed identity | The web app |
 | Foundry project identity | System-assigned managed identity | Foundry's trace views |
 | Developers | Entra ID users | Running the app locally against Azure (optional) |
@@ -58,6 +60,10 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Bootstrap operator | Operator-only state container | Storage Blob Data Contributor | The identity deployment's state, which holds demo user passwords and the local sign-in secret. No pipeline identity has any role on this container |
 | `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog, quota and regional capacity for the preflight and the pre-apply capacity check; nothing else |
 | Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader | Run the app locally |
+| `gh-eval` | Foundry account | Cognitive Services OpenAI User | Run the evaluated agent and the judge |
+| `gh-eval` | Search service | Search Index Data Reader | Read the evaluation index, or the live index for a pull request that switches it |
+| `gh-eval-publish` | The `knowledge-eval-v1` index only | Search Index Data Contributor | Make the evaluation index hold the evaluated change's corpus. Every run first proves the live index refuses its writes |
+| `gh-eval-publish` | The evaluation history's data collection rule only | Monitoring Metrics Publisher | Write evaluation history rows; no other write in Azure Monitor |
 
 ## Keyless controls
 
@@ -88,7 +94,7 @@ Model choices, content filters and prompts are part of the build ([ADR 0004](adr
 
 Knowledge documents are `general` (every signed-in user) or `restricted` (the Risk and Compliance group as well). The classification comes from the folder a source file is in, so it's visible in review and can't be set from inside a document. In the search index, each section carries its document's classification, and every query filters on it before anything reaches the model.
 
-When a document becomes restricted, the publisher deletes its sections and confirms they're gone before uploading them again as restricted, so none of them is readable as general, even briefly. This follows the doc id: content moved into a restricted document with a different doc id leaves the old general sections in place until the end of the run, so a document is restricted by moving its file and keeping its doc id. The index holds restricted text, so it's readable only by identities with a Search data role: developers and the web app (Search Index Data Reader) and `gh-deploy`. Only `gh-deploy` can write to it. The publish log names doc ids and section paths, never section text.
+When a document becomes restricted, the publisher deletes its sections and confirms they're gone before uploading them again as restricted, so none of them is readable as general, even briefly. This follows the doc id: content moved into a restricted document with a different doc id leaves the old general sections in place until the end of the run, so a document is restricted by moving its file and keeping its doc id. The index holds restricted text, so it's readable only by identities with a Search data role: developers, the web app and `gh-eval` (Search Index Data Reader), and `gh-deploy`. Only `gh-deploy` can write to it. The evaluation index, which only evaluations read, holds the same kind of text; only `gh-eval-publish` writes it. The publish log names doc ids and section paths, never section text.
 
 The repository is public, so restricted sources are readable by anyone there. "Restricted" controls what the assistant shows to whom; it doesn't make the text secret, and nothing in the corpus may be real or sensitive. The build rejects numbers that pass the card checksum, and email addresses and `http`, `https` or `ftp` URLs outside reserved example domains. A bare host name in prose isn't checked, so review still matters.
 
@@ -159,6 +165,26 @@ Known limits:
 - The content policy blocks card-like and account-like numbers. It isn't data-loss prevention for bank details ([ProductionGapAnalysis](ProductionGapAnalysis.md)).
 - Proposals and tickets are lost on restart, deploy or slot swap, and the app runs as one instance.
 - A Reader's draft can't be handed to an Engineer; the Engineer runs the investigation themselves.
+
+## AI evaluation gate
+
+The `AI evaluation` check runs a pull request's own code with access to the model, so its controls are about what that code can reach.
+
+| Threat | Control | Residual |
+|---|---|---|
+| A pull request runs arbitrary code with Azure access | A required reviewer approves each environment before any token is issued. `gh-eval` can only call the model and read the indexes in dev; `gh-eval-publish` can only write `knowledge-eval-v1` and the evaluation history | An approved pull request's code can spend tokens and read the dev indexes for the length of a run. Approval is the boundary |
+| A fork or bot pull request | Untrusted: no environment, no token. The check fails if the change needs evaluating | A maintainer reproduces the change on a branch here |
+| A pull request edits the classifier to skip evaluation | The classifier runs from the base commit, with the base's toolchain | — |
+| A pull request edits `ai-evaluation.yml` | `pull_request` runs the pull request's own workflow file. The file is a gate-policy path, so under the base classifier's rule the same pull request can't change AI behaviour | A pull request that rewrites the workflow can also remove that rule; rulesets on a personal account can't pin a required workflow to `main`'s version. The control is the maintainer's review of every `.github/workflows` change |
+| The gate is weakened alongside a behaviour change | Gate policy and behaviour change in separate pull requests, and a threshold or dataset change needs an ADR ([Evaluation](Evaluation.md#running-in-ci)) | A policy-only weakening is visible in its own pull request and ADR |
+| An approved pull request's code writes to Search | Only `gh-eval-publish` can write, only in the publish job, and only to `knowledge-eval-v1`. Every run first deletes a key that doesn't exist from the live index and requires a 403, so a widened role fails the run instead of going unnoticed | It can put anything in the evaluation index, which only evaluations read. Each run reconciles it first |
+| The model-calling identity changes Search or the history | `gh-eval` has read roles only, and the identity that writes is federated to different environments | — |
+| Two evaluations interleave in the shared index | One workflow-wide concurrency group for the environment, held from publishing to evaluating, never cancelled mid-run, with later runs queued | — |
+| Evaluation reads Restricted knowledge | `gh-eval` is a service principal in no group; the harness's simulated users decide access, exactly as the app does | Same as the app: access is enforced in the knowledge tool, not by Search roles |
+| A scheduled run is used to skip approval | The `-scheduled` environments have no reviewer but deploy from protected branches only, so only `main` can use them | — |
+| The required check writes to the repository | `AI evaluation` has no permissions. Only `report-scheduled`, which never runs on a pull request, can write issues | — |
+
+Evaluation history rows carry metric names, numbers, verdicts, the commit, prompt and model versions, and the trigger. They never carry model text, case content, endpoints or identifiers. Only runs of `main` are recorded.
 
 ## Content safety
 

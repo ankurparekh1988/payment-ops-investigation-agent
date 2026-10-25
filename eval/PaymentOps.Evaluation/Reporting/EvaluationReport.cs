@@ -26,7 +26,7 @@ internal sealed record ModelInfo(string Deployment, string Model, string Version
     }
 }
 
-/// <summary>What was evaluated: the system, the commit, its prompts and models, and when.</summary>
+/// <summary>What was evaluated: the system, the commit, its prompts and models, the knowledge index it read, and when.</summary>
 internal sealed record ReportContext(
     string System,
     string Commit,
@@ -34,7 +34,8 @@ internal sealed record ReportContext(
     ModelInfo? Chat,
     ModelInfo? Judge,
     string? JudgePromptVersion,
-    DateTimeOffset StartedAt);
+    DateTimeOffset StartedAt,
+    string KnowledgeIndex);
 
 /// <param name="Judge">Case id to its judge score in this run; empty when the judge didn't run.</param>
 internal sealed record RunReport(
@@ -92,6 +93,7 @@ internal sealed record EvaluationReport(
     ModelInfo? Judge,
     string? JudgePromptVersion,
     DateTimeOffset StartedAt,
+    string KnowledgeIndex,
     IReadOnlyList<RunReport> Runs,
     IReadOnlyDictionary<string, MetricSummary> Summary,
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, MetricSummary>> Breakdown,
@@ -180,6 +182,7 @@ internal sealed record EvaluationReport(
             context.Judge,
             context.JudgePromptVersion,
             context.StartedAt,
+            context.KnowledgeIndex,
             [.. runs.Select((run, i) => new RunReport(i + 1, run.Results, judged[i], metrics[i].Values, metrics[i].Hard, run.TicketsInStore))],
             summary,
             breakdown,
@@ -207,6 +210,7 @@ internal sealed record EvaluationReport(
             context.Judge,
             context.JudgePromptVersion,
             context.StartedAt,
+            context.KnowledgeIndex,
             [new RunReport(1, [], new Dictionary<string, JudgeScore>(), result.Metrics.Values, result.Metrics.Hard, 0)],
             summary,
             new Dictionary<string, IReadOnlyDictionary<string, MetricSummary>>(),

@@ -37,6 +37,34 @@ locals {
     "Monitoring Metrics Publisher"   = "3913510d-42f4-4e42-8a64-420c390055eb"
   }
   delegable_role_ids = join(", ", values(local.delegable_roles))
+  delegable_role_definition_ids = {
+    for name, id in local.delegable_roles :
+    name => "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${id}"
+  }
+
+  # The publisher's writer role is on the evaluation index only: every gate run proves the live index refuses it.
+  eval_grants = {
+    openai-user = {
+      scope        = var.eval_foundry_account_id
+      role         = "Cognitive Services OpenAI User"
+      principal_id = module.eval_identity.principal_id
+    }
+    search-reader = {
+      scope        = var.eval_search_service_id
+      role         = "Search Index Data Reader"
+      principal_id = module.eval_identity.principal_id
+    }
+    publish-index-writer = {
+      scope        = var.eval_search_service_id == null ? null : "${var.eval_search_service_id}/indexes/${var.eval_search_index_name}"
+      role         = "Search Index Data Contributor"
+      principal_id = module.eval_publish_identity.principal_id
+    }
+    publish-metrics-publisher = {
+      scope        = var.eval_dcr_id
+      role         = "Monitoring Metrics Publisher"
+      principal_id = module.eval_publish_identity.principal_id
+    }
+  }
 
   # What a developer needs to run the app locally against the environment's services.
   developer_roles = [
@@ -118,6 +146,43 @@ module "deploy_identity" {
   }
 }
 
+# Evaluation runs only. gh-eval calls the model and reads the indexes; gh-eval-publish writes the
+# evaluation index and the evaluation history. Separate identities in separate environments, so the
+# job that runs PR code with model access can't mint the token that writes.
+module "eval_identity" {
+  source = "../../modules/github-oidc-identity"
+
+  name                 = "id-${var.name_prefix}-gh-eval"
+  resource_group_name  = azurerm_resource_group.bootstrap.name
+  location             = var.location
+  github_repository    = var.github_repository
+  github_owner_id      = var.github_owner_id
+  github_repository_id = var.github_repository_id
+  tags                 = local.tags
+
+  subjects = {
+    eval           = "environment:${var.environment}-eval"
+    eval-scheduled = "environment:${var.environment}-eval-scheduled"
+  }
+}
+
+module "eval_publish_identity" {
+  source = "../../modules/github-oidc-identity"
+
+  name                 = "id-${var.name_prefix}-gh-eval-publish"
+  resource_group_name  = azurerm_resource_group.bootstrap.name
+  location             = var.location
+  github_repository    = var.github_repository
+  github_owner_id      = var.github_owner_id
+  github_repository_id = var.github_repository_id
+  tags                 = local.tags
+
+  subjects = {
+    eval-publish           = "environment:${var.environment}-eval-publish"
+    eval-publish-scheduled = "environment:${var.environment}-eval-publish-scheduled"
+  }
+}
+
 # --- Plan identity: read-only -------------------------------------------------------------------
 
 # Subscription-wide read, so plans can also detect drift in the bootstrap itself (subscription role
@@ -159,7 +224,7 @@ resource "azurerm_role_assignment" "deploy_search" {
   for_each = toset(["Search Service Contributor", "Search Index Data Contributor"])
 
   scope              = azurerm_resource_group.workload.id
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${local.delegable_roles[each.value]}"
+  role_definition_id = local.delegable_role_definition_ids[each.value]
   principal_id       = module.deploy_identity.principal_id
   principal_type     = "ServicePrincipal"
 }
@@ -286,4 +351,17 @@ resource "azurerm_role_assignment" "operator_only_state_contributor" {
   scope                = module.state.operator_container_id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.operator_object_id
+}
+
+# --- Evaluation identities: exact-resource roles ----------------------------------------------
+
+# Set from platform outputs after the platform exists; re-run after a rebuild, because exact-resource
+# grants go with the resources. Each is skipped until its scope is set, so the first bootstrap works.
+resource "azurerm_role_assignment" "eval" {
+  for_each = { for name, grant in local.eval_grants : name => grant if grant.scope != null }
+
+  scope              = each.value.scope
+  role_definition_id = local.delegable_role_definition_ids[each.value.role]
+  principal_id       = each.value.principal_id
+  principal_type     = "ServicePrincipal"
 }

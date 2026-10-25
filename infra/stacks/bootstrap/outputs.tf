@@ -36,9 +36,21 @@ output "deploy_identity_client_id" {
 output "federated_subjects" {
   description = "Exact GitHub OIDC subjects each identity trusts."
   value = {
-    plan   = module.plan_identity.federated_subjects
-    deploy = module.deploy_identity.federated_subjects
+    plan         = module.plan_identity.federated_subjects
+    deploy       = module.deploy_identity.federated_subjects
+    eval         = module.eval_identity.federated_subjects
+    eval_publish = module.eval_publish_identity.federated_subjects
   }
+}
+
+output "eval_identity_client_id" {
+  description = "Client ID for evaluation runs: calls the model and reads the indexes."
+  value       = module.eval_identity.client_id
+}
+
+output "eval_publish_identity_client_id" {
+  description = "Client ID for publishing the evaluation index and recording evaluation history."
+  value       = module.eval_publish_identity.client_id
 }
 
 output "tenant_id" {

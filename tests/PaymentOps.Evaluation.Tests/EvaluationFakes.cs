@@ -24,6 +24,14 @@ internal static class EvaluationFakes
 
     public static readonly AiRelease Release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
 
+    /// <summary>A temporary file holding the content, for commands that read their input from disk.</summary>
+    public static string Temp(string content)
+    {
+        var path = Path.GetTempFileName();
+        File.WriteAllText(path, content);
+        return path;
+    }
+
     public static readonly IReadOnlyList<KnowledgeSearchDocument> Corpus =
         IndexedCorpus.FromSourceDirectory(Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src"));
 

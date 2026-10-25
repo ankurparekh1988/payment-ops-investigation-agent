@@ -20,7 +20,6 @@ namespace PaymentOps.Evaluation.Commands;
 
 internal sealed record InvestigationEvalSettings(
     InvestigationEndpoints Endpoints,
-    string Ai,
     string Sources,
     IReadOnlyList<string> Datasets,
     int Runs,
@@ -29,7 +28,8 @@ internal sealed record InvestigationEvalSettings(
     string? Thresholds,
     bool Judge,
     string Out,
-    string Summary);
+    string Summary,
+    AiRelease Release);
 
 /// <summary>
 /// investigation-eval: the labelled cases, N times, against the deployed model and index, signed in as whoever
@@ -39,9 +39,9 @@ internal static class InvestigationEvalCommand
 {
     public const string Usage =
         "investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] " +
-        "--runs <n> --system agent|fixed-workflow --pricing <file> [--thresholds <file>] [--no-judge] --out <file> --summary <file>";
+        "--runs <n> --system agent|fixed-workflow --pricing <file> [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
 
-    private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "out", "summary"];
+    private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "index", "out", "summary"];
     private static readonly string[] Flags = ["no-judge"];
 
     public static Task<int> RunAsync(string[] args) => RunAsync(args, null, null, TimeSpan.FromMinutes(1));
@@ -56,7 +56,7 @@ internal static class InvestigationEvalCommand
         TimeSpan retryDelay) => ExitCodes.GuardAsync("Investigation evaluation", Usage, async () =>
     {
         var settings = Parse(args);
-        var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(settings.Ai));
+        var release = settings.Release;
         var cases = InvestigationDataset.Load(settings.Datasets, IndexedCorpus.FromSourceDirectory(settings.Sources), []);
         var prices = PriceList.Load(settings.Pricing);
         var thresholds = settings.Thresholds is { } path ? Thresholds.Load(path) : null;
@@ -76,7 +76,8 @@ internal static class InvestigationEvalCommand
             ModelInfo.From(release, release.ActiveChatDeployment),
             judge is null ? null : ModelInfo.From(release, release.JudgeDeployment),
             judge is null ? null : Judge.Prompt.Version,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            release.KnowledgeIndex);
 
         var runs = await RunPlan.RunAsync(runner, cases.Cases, settings.Runs, retryDelay, CancellationToken.None);
         var byId = cases.Cases.ToDictionary(c => c.Id, StringComparer.Ordinal);
@@ -119,7 +120,6 @@ internal static class InvestigationEvalCommand
 
         return new InvestigationEvalSettings(
             new InvestigationEndpoints(options.Https("search"), options.Https("foundry"), options.One("scope")),
-            options.One("ai"),
             options.One("sources"),
             options.All("dataset"),
             options.Positive("runs"),
@@ -128,7 +128,8 @@ internal static class InvestigationEvalCommand
             options.Optional("thresholds"),
             !options.Flag("no-judge"),
             options.OutputFile("out"),
-            options.OutputFile("summary"));
+            options.OutputFile("summary"),
+            options.Release());
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.

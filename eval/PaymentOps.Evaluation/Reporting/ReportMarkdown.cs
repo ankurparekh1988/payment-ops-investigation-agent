@@ -60,9 +60,11 @@ internal static class ReportMarkdown
             var scored = scores.Where(s => s.Status == JudgeScore.Scored).ToList();
             md.AppendLine(CultureInfo.InvariantCulture, $"{report.Judge.Deployment} ({report.Judge.Model} {report.Judge.Version}), prompt {report.JudgePromptVersion}; {scored.Count} scored, {scores.Count - scored.Count} not scored.").AppendLine();
             md.AppendLine("| Dimension | Median |").AppendLine("|---|---|");
-            md.AppendLine(CultureInfo.InvariantCulture, $"| groundedness | {Median(scored.Select(s => s.Groundedness!.Value))} |");
-            md.AppendLine(CultureInfo.InvariantCulture, $"| relevance | {Median(scored.Select(s => s.Relevance!.Value))} |");
-            md.AppendLine(CultureInfo.InvariantCulture, $"| root-cause agreement | {Median(scored.Select(s => s.RootCauseAgreement!.Value))} |");
+            foreach (var (_, label, dimension) in JudgeScore.Dimensions)
+            {
+                var median = JudgeScore.Median(scored, dimension) is { } m ? m.Median.ToString("0.#", CultureInfo.InvariantCulture) : "n/a";
+                md.AppendLine(CultureInfo.InvariantCulture, $"| {label} | {median} |");
+            }
         }
 
         md.AppendLine().AppendLine("### Latency and cost").AppendLine();
@@ -104,7 +106,7 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"- {failure}");
         }
 
-        md.AppendLine(CultureInfo.InvariantCulture, $"Commit `{report.Commit}`; prompts {string.Join(", ", report.Prompts.Select(p => $"{p.Id} {p.Version}"))}; chat {report.Chat?.Deployment ?? "none"} ({report.Chat?.Model} {report.Chat?.Version}); started {report.StartedAt:yyyy-MM-dd HH:mm} UTC; {report.Runs.Count} run(s).").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"Commit `{report.Commit}`; prompts {string.Join(", ", report.Prompts.Select(p => $"{p.Id} {p.Version}"))}; chat {report.Chat?.Deployment ?? "none"} ({report.Chat?.Model} {report.Chat?.Version}); index {report.KnowledgeIndex}; started {report.StartedAt:yyyy-MM-dd HH:mm} UTC; {report.Runs.Count} run(s).").AppendLine();
 
         md.AppendLine("### Hard gates").AppendLine();
         var leaks = report.Runs.Sum(r => r.HardGates.AuthorizationLeaks.Count);
@@ -133,11 +135,6 @@ internal static class ReportMarkdown
 
     private static string Value(double? value) => value is { } v ? v.ToString("F3", CultureInfo.InvariantCulture) : "n/a";
 
-    private static string Median(IEnumerable<int> scores)
-    {
-        var sorted = scores.Select(s => (double)s).Order().ToList();
-        return sorted.Count == 0 ? "n/a" : Aggregation.Median(sorted).ToString("0.#", CultureInfo.InvariantCulture);
-    }
 
     private static string Seconds(long? ms) => ms is { } v ? string.Create(CultureInfo.InvariantCulture, $"{v / 1000.0:0.0} s") : "n/a";
 

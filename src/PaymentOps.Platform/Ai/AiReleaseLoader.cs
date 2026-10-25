@@ -15,6 +15,9 @@ public static class AiReleaseLoader
     /// <summary>The manifest format this build reads.</summary>
     public const int SupportedSchemaVersion = 1;
 
+    /// <summary>The index the knowledge self-test creates and deletes, so no release may name it.</summary>
+    public const string SelfTestIndex = "knowledge-selftest";
+
     public static AiRelease Load(IAiReleaseSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -54,6 +57,7 @@ public static class AiReleaseLoader
             models.Embedding.Deployment,
             models.Judge.Deployment,
             manifest.Retrieval.Index,
+            manifest.Retrieval.EvaluationIndex,
             ReleaseManifestValidator.ParseRetrievalMode(manifest.Retrieval.Mode)!.Value,
             manifest.Retrieval.SemanticFloor,
             ReleaseManifestValidator.AllDeployments(manifest).ToFrozenDictionary(

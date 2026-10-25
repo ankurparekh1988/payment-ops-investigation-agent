@@ -37,3 +37,11 @@ output "tenant_id" {
 output "subscription_id" {
   value = module.bootstrap.subscription_id
 }
+
+output "eval_identity_client_id" {
+  value = module.bootstrap.eval_identity_client_id
+}
+
+output "eval_publish_identity_client_id" {
+  value = module.bootstrap.eval_publish_identity_client_id
+}

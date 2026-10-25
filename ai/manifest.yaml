@@ -50,6 +50,8 @@ models:
 # reads it. mode is lexical or semantic; semanticFloor (semantic only, 0-4) drops weaker hits.
 retrieval:
   index: knowledge-v1
+  # Only evaluations read it; each one first makes it hold the change's own corpus.
+  evaluationIndex: knowledge-eval-v1
   mode: lexical
 
 # Prompts embedded in the application, keyed by id. A prompt's body can't change without a higher

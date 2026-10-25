@@ -35,6 +35,12 @@ public sealed class ShippedReleaseTests
     }
 
     [Fact]
+    public void The_release_names_its_evaluation_index()
+    {
+        Assert.Equal("knowledge-eval-v1", AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).EvaluationIndex);
+    }
+
+    [Fact]
     public void The_shipped_release_retrieves_lexically_without_a_floor()
     {
         var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());

@@ -19,13 +19,6 @@ public sealed class CommandTests
     private static readonly string Pricing = Path.Combine(RepositoryRoot.FullPath, "eval", "pricing.json");
     private static readonly string Sources = Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src");
 
-    private static string Temp(string content)
-    {
-        var path = Path.GetTempFileName();
-        File.WriteAllText(path, content);
-        return path;
-    }
-
     private static string Dataset() => Temp(new JsonObject
     {
         ["schemaVersion"] = 2,
@@ -90,6 +83,65 @@ public sealed class CommandTests
         Assert.Equal(2, exit);
         Assert.Equal(0, runner.Calls);
     }
+
+    [Fact]
+    public async Task The_evaluation_index_option_points_every_reader_at_it()
+    {
+        var releases = new List<AiRelease>();
+        var output = Path.GetTempFileName();
+        var args = Args(Dataset(), "--index", "evaluation");
+        args[Array.IndexOf(args, "--out") + 1] = output;
+
+        var exit = await InvestigationEvalCommand.RunAsync(args, (release, _) =>
+        {
+            releases.Add(release);
+            return new ScriptedRunner(Run(), Run(), Run());
+        }, _ => null, TimeSpan.Zero);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("knowledge-eval-v1", Assert.Single(releases).KnowledgeIndex);
+        Assert.Equal("knowledge-eval-v1", JsonNode.Parse(File.ReadAllText(output))!["knowledge_index"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task The_live_index_is_the_default()
+    {
+        var releases = new List<AiRelease>();
+
+        await InvestigationEvalCommand.RunAsync(Args(Dataset()), (release, _) =>
+        {
+            releases.Add(release);
+            return new ScriptedRunner(Run(), Run(), Run());
+        }, _ => null, TimeSpan.Zero);
+
+        Assert.Equal("knowledge-v1", Assert.Single(releases).KnowledgeIndex);
+    }
+
+    [Fact]
+    public async Task An_unknown_index_option_exits_2()
+    {
+        Assert.Equal(2, await Investigations(Args(Dataset(), "--index", "candidate"), Run()));
+        Assert.Equal(2, await RetrievalEvalCommand.RunAsync(RetrievalArgs("--index", "candidate"), (_, _, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([]), TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task Retrieval_reports_name_the_index_they_read()
+    {
+        var args = RetrievalArgs("--index", "evaluation");
+        var output = args[Array.IndexOf(args, "--out") + 1];
+
+        var exit = await RetrievalEvalCommand.RunAsync(args, (_, _, _) => Task.FromResult<IReadOnlyList<RetrievedSection>>([]), TimeSpan.Zero);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("knowledge-eval-v1", JsonNode.Parse(File.ReadAllText(output))!["knowledge_index"]!.GetValue<string>());
+    }
+
+    private static string[] RetrievalArgs(params string[] extra) =>
+    [
+        "--endpoint", "https://search.invalid", "--ai", Path.Combine(RepositoryRoot.FullPath, "ai"), "--sources", Sources,
+        "--dataset", Path.Combine(RepositoryRoot.FullPath, "eval", "datasets", "retrieval-heldout.json"),
+        "--out", Path.GetTempFileName(), "--summary", Path.GetTempFileName(), .. extra,
+    ];
 
     [Fact]
     public void A_repeated_option_collects_every_dataset()
