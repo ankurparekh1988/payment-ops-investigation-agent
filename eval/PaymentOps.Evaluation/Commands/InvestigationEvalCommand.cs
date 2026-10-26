@@ -121,7 +121,7 @@ internal static class InvestigationEvalCommand
 
         return new InvestigationEvalSettings(
             new InvestigationEndpoints(options.Https("search"), options.Https("foundry"), options.One("scope")),
-            options.Optional("content-safety") is null ? null : options.Https("content-safety"),
+            options.OptionalHttps("content-safety"),
             options.One("sources"),
             options.All("dataset"),
             options.Positive("runs"),
@@ -137,7 +137,7 @@ internal static class InvestigationEvalCommand
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
     private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential)
     {
-        var configure = EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint, settings.Endpoints.FoundryTokenScope);
+        var configure = EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint);
         return settings.System == EvaluationReport.AgentSystem
             ? new AgentCaseRunner(release, settings.Endpoints, credential, configure: configure)
             : new FixedWorkflowCaseRunner(release, settings.Endpoints, credential, configure: configure);

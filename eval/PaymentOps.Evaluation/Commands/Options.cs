@@ -60,6 +60,8 @@ internal sealed class Options
 
     public bool Flag(string name) => _flags.Contains(name);
 
+    public Uri? OptionalHttps(string name) => Optional(name) is null ? null : Https(name);
+
     public Uri Https(string name) =>
         Uri.TryCreate(One(name), UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri : throw new UsageException($"--{name} must be an https URL.");
 

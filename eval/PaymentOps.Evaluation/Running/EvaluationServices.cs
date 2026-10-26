@@ -26,27 +26,21 @@ namespace PaymentOps.Evaluation.Running;
 /// </summary>
 internal static class EvaluationServices
 {
+    public const string ContentSafetyEndpointKey = "PaymentOps:ContentSafety:Endpoint";
+
+    /// <summary>
+    /// The app configuration a live evaluation supplies: the Content Safety endpoint, as the app reads it in Azure.
+    /// Without one the configuration stays empty, as it is for tests.
+    /// </summary>
+    public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint) => services =>
+        services.Replace(ServiceDescriptor.Singleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [ContentSafetyEndpointKey] = contentSafetyEndpoint?.ToString(),
+        }).Build()));
+
     /// <param name="substituteModel">Tests only: replaces the Foundry client with a scripted one.</param>
     /// <param name="substituteKnowledge">Tests only: replaces the release's Search lookup.</param>
     /// <param name="configure">Adjusts the app's services: the configuration a live run supplies, or a test's options such as a shorter turn timeout.</param>
-    /// <summary>
-    /// The configuration the app reads that a live evaluation must supply: the Content Safety endpoint and its token scope.
-    /// Nothing is added without an endpoint, so the app falls back to its own default.
-    /// </summary>
-    public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint, string tokenScope) => services =>
-    {
-        if (contentSafetyEndpoint is null)
-        {
-            return;
-        }
-
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["PaymentOps:ContentSafety:Endpoint"] = contentSafetyEndpoint.ToString(),
-            ["PaymentOps:Foundry:TokenScope"] = tokenScope,
-        }).Build());
-    };
-
     public static ServiceProvider Build(
         AiRelease release,
         InvestigationEndpoints endpoints,
@@ -63,7 +57,10 @@ internal static class EvaluationServices
         services.AddSingleton(credential);
         services.AddSingleton<IUserContext>(new EvaluationUser(c.Access == KnowledgeClassification.Restricted, c.Role == InvestigationCase.Engineer ? OpsRoles.Engineer : OpsRoles.Reader));
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddDemoData(new ConfigurationBuilder().Build());
+        // The app reads its settings from configuration, as it does in Azure; a live run replaces this through configure.
+        var configuration = new ConfigurationBuilder().Build();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddDemoData(configuration);
         services.AddInvestigation(endpoints, model => recorder.Observe(substituteModel?.Invoke(model) ?? model));
 
         Wrap<IKnowledgeLookup>(services, (sp, lookup) => recorder.Observe(substituteKnowledge?.Invoke(sp) ?? lookup));

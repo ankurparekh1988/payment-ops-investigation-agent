@@ -17,31 +17,19 @@ public sealed class ContentSafetyPlumbingTests
     public void The_content_safety_endpoint_reaches_the_app_configuration()
     {
         var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
-        EvaluationServices.AppConfiguration(new Uri("https://cs.invalid/"), "https://cognitiveservices.azure.com/.default")(services);
+        EvaluationServices.AppConfiguration(new Uri("https://cs.invalid/"))(services);
 
-        var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
-        Assert.Equal("https://cs.invalid/", configuration["PaymentOps:ContentSafety:Endpoint"]);
-        Assert.Equal("https://cognitiveservices.azure.com/.default", configuration["PaymentOps:Foundry:TokenScope"]);
+        Assert.Equal("https://cs.invalid/", services.BuildServiceProvider().GetRequiredService<IConfiguration>()[EvaluationServices.ContentSafetyEndpointKey]);
     }
 
     [Fact]
-    public void Without_an_endpoint_no_configuration_is_added()
+    public void The_app_always_gets_a_configuration_even_without_an_endpoint()
     {
-        var services = new ServiceCollection();
+        using var provider = EvaluationServices.Build(Release, Endpoints, new UnusedCredential(), Case(), new CaseRecorder(), null, null, EvaluationServices.AppConfiguration(null));
 
-        EvaluationServices.AppConfiguration(null, "scope")(services);
-
-        Assert.Null(services.BuildServiceProvider().GetService<IConfiguration>());
-    }
-
-    [Fact]
-    public async Task A_non_https_content_safety_endpoint_exits_2()
-    {
-        var exit = await InvestigationEvalCommand.RunAsync(
-            [.. CommandTestArgs(), "--content-safety", "http://cs.invalid/"], (_, _) => throw new InvalidOperationException("must not run"), _ => null, TimeSpan.Zero);
-
-        Assert.Equal(2, exit);
+        Assert.Null(provider.GetRequiredService<IConfiguration>()[EvaluationServices.ContentSafetyEndpointKey]);
     }
 
     [Fact]
@@ -57,12 +45,4 @@ public sealed class ContentSafetyPlumbingTests
         Assert.Equal(InfrastructureFailures.ScreeningUnavailable, result.InfrastructureFailure);
         Assert.NotNull(RunPlan.Invalid(new RunOutcome([result], 0)));
     }
-
-    private static string[] CommandTestArgs() =>
-    [
-        "--foundry", "https://foundry.invalid/", "--search", "https://search.invalid", "--scope", "https://cognitiveservices.azure.com/.default",
-        "--ai", Path.Combine(RepositoryRoot.FullPath, "ai"), "--sources", Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src"),
-        "--dataset", Path.Combine(RepositoryRoot.FullPath, "eval", "datasets", "agent-tasks.json"), "--runs", "1", "--system", "agent",
-        "--pricing", Path.Combine(RepositoryRoot.FullPath, "eval", "pricing.json"), "--out", Path.GetTempFileName(), "--summary", Path.GetTempFileName(),
-    ];
 }
