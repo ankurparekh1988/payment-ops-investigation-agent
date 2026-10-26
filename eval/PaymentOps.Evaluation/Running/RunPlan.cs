@@ -24,6 +24,13 @@ internal static class InfrastructureFailures
     public const string SearchUnavailable = "search-unavailable";
     public const string AuthenticationFailed = "authentication-failed";
     public const string EndpointUnavailable = "endpoint-unavailable";
+    public const string ScreeningUnavailable = "screening-unavailable";
+
+    /// <summary>
+    /// What the app sends the model in place of tool text Prompt Shields couldn't check. Seeing it means the screen
+    /// was unavailable, so the case measured an outage rather than the agent. It must match the app's wording exactly.
+    /// </summary>
+    public const string UnscreenableCopy = "[withheld: this text couldn't be checked]";
 
     /// <summary>The failure an exception reaching the harness stands for, or null when it's a bug, not the environment.</summary>
     public static string? Of(Exception exception) => exception switch

@@ -131,6 +131,7 @@ module "web_app" {
   app_settings = merge({
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.monitoring.connection_string
     PaymentOps__Foundry__Endpoint         = module.foundry.openai_endpoint
+    PaymentOps__ContentSafety__Endpoint   = module.foundry.endpoint
     PaymentOps__Search__Endpoint          = module.search.endpoint
 
     # App Service terminates TLS, so sign-in redirects must come from the forwarded scheme.

@@ -61,3 +61,7 @@ output "evaluation_dcr_immutable_id" {
 output "evaluation_ingestion_endpoint" {
   value = module.platform.evaluation_ingestion_endpoint
 }
+
+output "content_safety_endpoint" {
+  value = module.platform.content_safety_endpoint
+}

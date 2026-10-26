@@ -119,6 +119,11 @@ internal sealed class CaseRecorder
             {
                 _calls.Add(Record(call));
             }
+
+            if (sent.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Any(r => Convert.ToString(r.Result, CultureInfo.InvariantCulture)?.Contains(InfrastructureFailures.UnscreenableCopy, StringComparison.Ordinal) == true))
+            {
+                _failure ??= InfrastructureFailures.ScreeningUnavailable;
+            }
         }
     }
 

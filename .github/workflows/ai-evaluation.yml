@@ -216,16 +216,20 @@ jobs:
           INDEX: ${{ needs.classify.outputs.index-switch == 'true' && 'live' || 'evaluation' }}
           FOUNDRY_ENDPOINT: ${{ vars.EVAL_FOUNDRY_ENDPOINT }}
           SEARCH_ENDPOINT: ${{ vars.EVAL_SEARCH_ENDPOINT }}
+          CONTENT_SAFETY_ENDPOINT: ${{ vars.EVAL_CONTENT_SAFETY_ENDPOINT }}
         run: |
           set +e
           mkdir -p "$RUNNER_TEMP/eval"
           judge=()
           [[ "$EVENT_NAME" == pull_request ]] && judge=(--no-judge)
+          # Prompt Shields' endpoint, read by the app's screening; omitted until the environment sets it.
+          content_safety=()
+          [[ -n "$CONTENT_SAFETY_ENDPOINT" ]] && content_safety=(--content-safety "$CONTENT_SAFETY_ENDPOINT")
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- investigation-eval \
             --foundry "$FOUNDRY_ENDPOINT" --search "$SEARCH_ENDPOINT" --scope https://cognitiveservices.azure.com/.default \
             --ai ai --sources data/knowledge/src \
             --dataset eval/datasets/agent-tasks.json --dataset eval/datasets/investigations-heldout.json \
-            --runs 3 --system agent --pricing eval/pricing.json --thresholds eval/thresholds.json --index "$INDEX" "${judge[@]}" \
+            --runs 3 --system agent --pricing eval/pricing.json --thresholds eval/thresholds.json --index "$INDEX" "${judge[@]}" "${content_safety[@]}" \
             --out "$RUNNER_TEMP/eval/investigations.json" --summary "$GITHUB_STEP_SUMMARY"
           echo "investigation-exit=$?" >> "$GITHUB_OUTPUT"
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- retrieval-eval \

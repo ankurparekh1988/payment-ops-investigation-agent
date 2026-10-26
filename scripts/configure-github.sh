@@ -108,10 +108,12 @@ configure_environment "$environment-eval-publish-scheduled" '[]' "$protected"
 # The endpoints exist once the platform is deployed; rerun this script after that, and after a rebuild.
 if search_endpoint="$(platform_output search_endpoint 2>/dev/null)"; then
   foundry_endpoint="$(platform_output foundry_endpoint)"
+  content_safety_endpoint="$(platform_output content_safety_endpoint)"
   ingestion_endpoint="$(platform_output evaluation_ingestion_endpoint)"
   rule_immutable_id="$(platform_output evaluation_dcr_immutable_id)"
   for name in "$environment-eval" "$environment-eval-scheduled"; do
     gh variable set EVAL_FOUNDRY_ENDPOINT --env "$name" --repo "$repo" --body "$foundry_endpoint"
+    gh variable set EVAL_CONTENT_SAFETY_ENDPOINT --env "$name" --repo "$repo" --body "$content_safety_endpoint"
     gh variable set EVAL_SEARCH_ENDPOINT --env "$name" --repo "$repo" --body "$search_endpoint"
   done
   for name in "$environment-eval-publish" "$environment-eval-publish-scheduled"; do

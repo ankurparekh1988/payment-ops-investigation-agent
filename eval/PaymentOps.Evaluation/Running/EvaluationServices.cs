@@ -28,7 +28,25 @@ internal static class EvaluationServices
 {
     /// <param name="substituteModel">Tests only: replaces the Foundry client with a scripted one.</param>
     /// <param name="substituteKnowledge">Tests only: replaces the release's Search lookup.</param>
-    /// <param name="configure">Tests only: adjusts the app's options, such as a shorter turn timeout.</param>
+    /// <param name="configure">Adjusts the app's services: the configuration a live run supplies, or a test's options such as a shorter turn timeout.</param>
+    /// <summary>
+    /// The configuration the app reads that a live evaluation must supply: the Content Safety endpoint and its token scope.
+    /// Nothing is added without an endpoint, so the app falls back to its own default.
+    /// </summary>
+    public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint, string tokenScope) => services =>
+    {
+        if (contentSafetyEndpoint is null)
+        {
+            return;
+        }
+
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["PaymentOps:ContentSafety:Endpoint"] = contentSafetyEndpoint.ToString(),
+            ["PaymentOps:Foundry:TokenScope"] = tokenScope,
+        }).Build());
+    };
+
     public static ServiceProvider Build(
         AiRelease release,
         InvestigationEndpoints endpoints,

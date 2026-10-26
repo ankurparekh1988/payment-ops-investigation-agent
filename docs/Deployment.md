@@ -268,7 +268,7 @@ The pipeline maps stage for stage onto Azure DevOps:
 |---|---|
 | Classify the change | Runs the change classifier from the **base** commit, with the base's .NET SDK, so a pull request can't change how it's classified. Decides whether evaluation is required, whether the author is trusted (not a fork or a bot) and whether the change breaks a gate-policy rule. Scheduled and manual runs of `main` are always evaluated |
 | Publish the evaluation index | As `gh-eval-publish`: first proves it can't write the live index (a no-op delete there must be refused with 403), then makes `knowledge-eval-v1` hold exactly the change's corpus. It never creates or changes an index definition |
-| Evaluate | As `gh-eval`: three investigation runs and the retrieval run against `knowledge-eval-v1`, gated by `eval/thresholds.json`. Pull requests skip the judge; scheduled and manual runs keep it |
+| Evaluate | As `gh-eval`: three investigation runs and the retrieval run against `knowledge-eval-v1`, gated by `eval/thresholds.json`. Pull requests skip the judge; scheduled and manual runs keep it. The app's Content Safety endpoint (`EVAL_CONTENT_SAFETY_ENDPOINT`, the Foundry account's generic endpoint) is passed separately from the model endpoint |
 | Record the evaluation | Scheduled and manual runs only, as `gh-eval-publish`: writes the reports to the evaluation history in Log Analytics, including a gate failure |
 | AI evaluation | The required check. Decides from the other jobs' outputs, with no repository permissions |
 | Report the scheduled evaluation | Scheduled and manual runs only: opens or updates one `ai-evaluation` issue when the run fails or can't complete, and closes it after a pass. The only job that can write to the repository, and it never runs on a pull request |
@@ -290,7 +290,7 @@ A pull request that needs evaluating therefore waits for two approvals, one per 
 2. Run `scripts/configure-github.sh` first. It creates the four environments with their protection before any identity trusts them; a pull request that names an environment that doesn't exist yet makes GitHub create it unprotected. The client-id secrets are skipped on this run.
 3. Copy `foundry_account_id`, `search_service_id` and `evaluation_dcr_id` from `scripts/terraform.sh platform output` into `.env` as `TF_VAR_eval_foundry_account_id`, `TF_VAR_eval_search_service_id` and `TF_VAR_eval_dcr_id`. The evaluation index's writer role takes the index name from `ai/manifest.yaml`.
 4. Re-run `scripts/bootstrap.sh`. Its plan adds two identities, four federated credentials and four role assignments, and nothing else.
-5. Run `scripts/configure-github.sh` again: it sets the two client-id secrets and gives the environments the endpoints they need. Allow a couple of minutes for the new roles to take effect before the first run.
+5. Run `scripts/configure-github.sh` again: it sets the two client-id secrets and gives the environments the endpoints they need, including `EVAL_CONTENT_SAFETY_ENDPOINT`. Re-run it whenever the platform gains an output the environments use. Allow a couple of minutes for the new roles to take effect before the first run.
 6. Prove the gate: a docs-only pull request reports "not required"; a manual run of `main` reproduces the baseline on the evaluation index and writes history rows; a harmless knowledge edit passes.
 7. Add `AI evaluation` to the `main` ruleset's required checks.
 
