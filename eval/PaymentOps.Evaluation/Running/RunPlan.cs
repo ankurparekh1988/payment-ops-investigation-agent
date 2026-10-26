@@ -27,8 +27,8 @@ internal static class InfrastructureFailures
     public const string ScreeningUnavailable = "screening-unavailable";
 
     /// <summary>
-    /// What the app sends the model in place of tool text Prompt Shields couldn't check. Seeing it means the screen
-    /// was unavailable, so the case measured an outage rather than the agent. It must match the app's wording exactly.
+    /// The copy that stands in for tool text Prompt Shields couldn't check. A request carrying it measured an outage
+    /// rather than the agent. Matched as text until the harness can observe the screen directly.
     /// </summary>
     public const string UnscreenableCopy = "[withheld: this text couldn't be checked]";
 

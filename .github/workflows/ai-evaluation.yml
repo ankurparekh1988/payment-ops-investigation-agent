@@ -222,7 +222,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/eval"
           judge=()
           [[ "$EVENT_NAME" == pull_request ]] && judge=(--no-judge)
-          # Prompt Shields' endpoint, read by the app's screening; omitted until the environment sets it.
+          # The Foundry account's Content Safety endpoint, as the app is configured in Azure; omitted until the environment sets it.
           content_safety=()
           [[ -n "$CONTENT_SAFETY_ENDPOINT" ]] && content_safety=(--content-safety "$CONTENT_SAFETY_ENDPOINT")
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- investigation-eval \
