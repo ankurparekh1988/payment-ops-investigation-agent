@@ -151,6 +151,15 @@ public sealed partial class WorkflowTests
     }
 
     [Fact]
+    public void Evaluation_passes_the_content_safety_endpoint()
+    {
+        var step = Step("evaluate", "evaluate");
+
+        Assert.Contains("--content-safety \"$CONTENT_SAFETY_ENDPOINT\"", Scalar(step, "run"), StringComparison.Ordinal);
+        Assert.Equal("${{ vars.EVAL_CONTENT_SAFETY_ENDPOINT }}", Scalar((YamlMappingNode)step["env"], "CONTENT_SAFETY_ENDPOINT"));
+    }
+
+    [Fact]
     public void The_changed_paths_list_both_sides_of_a_rename_unquoted()
     {
         Assert.Contains("git -c core.quotePath=false diff --no-renames --name-only", Scalar(Step("classify", "classify"), "run"), StringComparison.Ordinal);

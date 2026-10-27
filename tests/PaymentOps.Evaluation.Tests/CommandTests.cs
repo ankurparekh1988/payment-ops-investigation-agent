@@ -55,6 +55,7 @@ public sealed class CommandTests
         Assert.Equal(1, await Investigations(Args(dataset), Run(), Run(leak: true), Run()));
         Assert.Equal(2, await Investigations(["--foundry", "http://not-https"]));
         Assert.Equal(2, await Investigations(Args(dataset, "--colour", "blue")));
+        Assert.Equal(2, await Investigations(Args(dataset, "--content-safety", "http://cs.invalid/")));
         Assert.Equal(3, await Investigations(Args(dataset), Run(), Invalid, Invalid));
     }
 

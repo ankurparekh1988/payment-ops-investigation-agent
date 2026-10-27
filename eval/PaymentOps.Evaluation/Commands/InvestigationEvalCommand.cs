@@ -20,6 +20,7 @@ namespace PaymentOps.Evaluation.Commands;
 
 internal sealed record InvestigationEvalSettings(
     InvestigationEndpoints Endpoints,
+    Uri? ContentSafetyEndpoint,
     string Sources,
     IReadOnlyList<string> Datasets,
     int Runs,
@@ -39,9 +40,9 @@ internal static class InvestigationEvalCommand
 {
     public const string Usage =
         "investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] " +
-        "--runs <n> --system agent|fixed-workflow --pricing <file> [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
+        "--runs <n> --system agent|fixed-workflow --pricing <file> [--content-safety <url>] [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
 
-    private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "index", "out", "summary"];
+    private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "index", "content-safety", "out", "summary"];
     private static readonly string[] Flags = ["no-judge"];
 
     public static Task<int> RunAsync(string[] args) => RunAsync(args, null, null, TimeSpan.FromMinutes(1));
@@ -120,6 +121,7 @@ internal static class InvestigationEvalCommand
 
         return new InvestigationEvalSettings(
             new InvestigationEndpoints(options.Https("search"), options.Https("foundry"), options.One("scope")),
+            options.OptionalHttps("content-safety"),
             options.One("sources"),
             options.All("dataset"),
             options.Positive("runs"),
@@ -133,9 +135,13 @@ internal static class InvestigationEvalCommand
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
-    private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential) => settings.System == EvaluationReport.AgentSystem
-        ? new AgentCaseRunner(release, settings.Endpoints, credential)
-        : new FixedWorkflowCaseRunner(release, settings.Endpoints, credential);
+    private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential)
+    {
+        var configure = EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint, settings.Endpoints.FoundryTokenScope);
+        return settings.System == EvaluationReport.AgentSystem
+            ? new AgentCaseRunner(release, settings.Endpoints, credential, configure: configure)
+            : new FixedWorkflowCaseRunner(release, settings.Endpoints, credential, configure: configure);
+    }
 
     private static Judge LiveJudge(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential) =>
         new(ModelClient.Create(settings.Endpoints.FoundryEndpoint, settings.Endpoints.FoundryTokenScope, credential, release.JudgeDeployment));

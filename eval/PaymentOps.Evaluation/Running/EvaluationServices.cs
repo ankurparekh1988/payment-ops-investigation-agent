@@ -26,9 +26,23 @@ namespace PaymentOps.Evaluation.Running;
 /// </summary>
 internal static class EvaluationServices
 {
+    public const string ContentSafetyEndpointKey = "PaymentOps:ContentSafety:Endpoint";
+    public const string FoundryTokenScopeKey = "PaymentOps:Foundry:TokenScope";
+
+    /// <summary>
+    /// The app configuration a live evaluation supplies, under the keys the app reads in Azure: the Content Safety
+    /// endpoint, when there is one, and the Foundry token scope, which every investigation evaluation has.
+    /// </summary>
+    public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint, string foundryTokenScope) => services =>
+        services.Replace(ServiceDescriptor.Singleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [ContentSafetyEndpointKey] = contentSafetyEndpoint?.ToString(),
+            [FoundryTokenScopeKey] = foundryTokenScope,
+        }).Build()));
+
     /// <param name="substituteModel">Tests only: replaces the Foundry client with a scripted one.</param>
     /// <param name="substituteKnowledge">Tests only: replaces the release's Search lookup.</param>
-    /// <param name="configure">Tests only: adjusts the app's options, such as a shorter turn timeout.</param>
+    /// <param name="configure">Adjusts the app's services: the configuration a live run supplies, or a test's options such as a shorter turn timeout.</param>
     public static ServiceProvider Build(
         AiRelease release,
         InvestigationEndpoints endpoints,
@@ -45,7 +59,10 @@ internal static class EvaluationServices
         services.AddSingleton(credential);
         services.AddSingleton<IUserContext>(new EvaluationUser(c.Access == KnowledgeClassification.Restricted, c.Role == InvestigationCase.Engineer ? OpsRoles.Engineer : OpsRoles.Reader));
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddDemoData(new ConfigurationBuilder().Build());
+        // The app reads its settings from configuration, as it does in Azure; a live run replaces this through configure.
+        var configuration = new ConfigurationBuilder().Build();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddDemoData(configuration);
         services.AddInvestigation(endpoints, model => recorder.Observe(substituteModel?.Invoke(model) ?? model));
 
         Wrap<IKnowledgeLookup>(services, (sp, lookup) => recorder.Observe(substituteKnowledge?.Invoke(sp) ?? lookup));

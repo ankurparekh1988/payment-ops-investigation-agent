@@ -82,3 +82,8 @@ output "evaluation_ingestion_endpoint" {
   description = "Logs Ingestion API endpoint record-evaluation writes to."
   value       = module.monitoring.evaluation_ingestion_endpoint
 }
+
+output "content_safety_endpoint" {
+  description = "The Foundry account's generic endpoint, where Prompt Shields is called; separate from the model endpoint."
+  value       = module.foundry.endpoint
+}

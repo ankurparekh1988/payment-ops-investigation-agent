@@ -27,6 +27,7 @@ internal sealed class CaseRecorder
     private readonly Lock _lock = new();
     private readonly List<ToolCallRecord> _calls = [];
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _resultIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RetrievedSection> _retrieved = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _facts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tickets = new(StringComparer.Ordinal);
@@ -118,6 +119,14 @@ internal sealed class CaseRecorder
             foreach (var call in sent.Concat(response.Messages).SelectMany(m => m.Contents).OfType<FunctionCallContent>().Where(call => _callIds.Add(call.CallId)))
             {
                 _calls.Add(Record(call));
+            }
+
+            // Each tool result is checked once, by call id; the history is resent with every request.
+            if (_failure is null && sent.SelectMany(m => m.Contents).OfType<FunctionResultContent>()
+                .Where(r => _resultIds.Add(r.CallId))
+                .Any(r => Text(r.Result)?.Contains(InfrastructureFailures.UnscreenableCopy, StringComparison.Ordinal) == true))
+            {
+                _failure = InfrastructureFailures.ScreeningUnavailable;
             }
         }
     }
