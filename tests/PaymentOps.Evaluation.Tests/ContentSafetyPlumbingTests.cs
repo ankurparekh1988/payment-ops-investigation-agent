@@ -19,17 +19,22 @@ public sealed class ContentSafetyPlumbingTests
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
-        EvaluationServices.AppConfiguration(new Uri("https://cs.invalid/"))(services);
+        EvaluationServices.AppConfiguration(new Uri("https://cs.invalid/"), "https://cognitiveservices.azure.com/.default")(services);
 
-        Assert.Equal("https://cs.invalid/", services.BuildServiceProvider().GetRequiredService<IConfiguration>()[EvaluationServices.ContentSafetyEndpointKey]);
+        var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
+        Assert.Equal("https://cs.invalid/", configuration[EvaluationServices.ContentSafetyEndpointKey]);
+        Assert.Equal("https://cognitiveservices.azure.com/.default", configuration[EvaluationServices.FoundryTokenScopeKey]);
     }
 
     [Fact]
     public void The_app_always_gets_a_configuration_even_without_an_endpoint()
     {
-        using var provider = EvaluationServices.Build(Release, Endpoints, new UnusedCredential(), Case(), new CaseRecorder(), null, null, EvaluationServices.AppConfiguration(null));
+        using var provider = EvaluationServices.Build(
+            Release, Endpoints, new UnusedCredential(), Case(), new CaseRecorder(), null, null, EvaluationServices.AppConfiguration(null, Endpoints.FoundryTokenScope));
 
-        Assert.Null(provider.GetRequiredService<IConfiguration>()[EvaluationServices.ContentSafetyEndpointKey]);
+        var configuration = provider.GetRequiredService<IConfiguration>();
+        Assert.Null(configuration[EvaluationServices.ContentSafetyEndpointKey]);
+        Assert.Equal(Endpoints.FoundryTokenScope, configuration[EvaluationServices.FoundryTokenScopeKey]);
     }
 
     [Fact]

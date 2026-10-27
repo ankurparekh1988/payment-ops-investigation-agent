@@ -137,7 +137,7 @@ internal static class InvestigationEvalCommand
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
     private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential)
     {
-        var configure = EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint);
+        var configure = EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint, settings.Endpoints.FoundryTokenScope);
         return settings.System == EvaluationReport.AgentSystem
             ? new AgentCaseRunner(release, settings.Endpoints, credential, configure: configure)
             : new FixedWorkflowCaseRunner(release, settings.Endpoints, credential, configure: configure);

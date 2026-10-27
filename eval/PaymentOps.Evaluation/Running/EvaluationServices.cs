@@ -27,15 +27,17 @@ namespace PaymentOps.Evaluation.Running;
 internal static class EvaluationServices
 {
     public const string ContentSafetyEndpointKey = "PaymentOps:ContentSafety:Endpoint";
+    public const string FoundryTokenScopeKey = "PaymentOps:Foundry:TokenScope";
 
     /// <summary>
-    /// The app configuration a live evaluation supplies: the Content Safety endpoint, as the app reads it in Azure.
-    /// Without one the configuration stays empty, as it is for tests.
+    /// The app configuration a live evaluation supplies, under the keys the app reads in Azure: the Content Safety
+    /// endpoint, when there is one, and the Foundry token scope, which every investigation evaluation has.
     /// </summary>
-    public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint) => services =>
+    public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint, string foundryTokenScope) => services =>
         services.Replace(ServiceDescriptor.Singleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             [ContentSafetyEndpointKey] = contentSafetyEndpoint?.ToString(),
+            [FoundryTokenScopeKey] = foundryTokenScope,
         }).Build()));
 
     /// <param name="substituteModel">Tests only: replaces the Foundry client with a scripted one.</param>
