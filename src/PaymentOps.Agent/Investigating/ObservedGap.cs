@@ -9,6 +9,9 @@ internal enum ObservedGapKind
     Truncated,
     NotAuthorized,
     LimitReached,
+
+    /// <summary>Untrusted text was kept from the model: flagged as an instruction, or not checkable.</summary>
+    Withheld,
 }
 
 /// <summary>
@@ -25,6 +28,10 @@ internal sealed record ObservedGap(ObservedGapKind Kind, string Wording)
         new(ObservedGapKind.Truncated, $"{truncation.What}: only the first {truncation.Shown} of {truncation.Total} were shown.");
 
     public static ObservedGap NotAuthorized(string tool) => new(ObservedGapKind.NotAuthorized, $"{tool} wasn't available to this user.");
+
+    public static ObservedGap Withheld(string source, bool flagged) => new(
+        ObservedGapKind.Withheld,
+        flagged ? $"{source}: some text was withheld because it looked like an instruction to the assistant." : $"{source}: some text was withheld because it couldn't be checked.");
 
     public static ObservedGap LimitReached { get; } = new(ObservedGapKind.LimitReached, "The investigation stopped at its step limit.");
 }

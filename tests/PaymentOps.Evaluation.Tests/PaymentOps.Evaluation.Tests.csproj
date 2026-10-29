@@ -8,6 +8,7 @@
     <Compile Include="..\Shared\RepositoryRoot.cs" Link="Shared\RepositoryRoot.cs" />
     <Compile Include="..\Shared\TestUser.cs" Link="Shared\TestUser.cs" />
     <Compile Include="..\PaymentOps.Agent.Tests\ScriptedChatClient.cs" Link="Shared\ScriptedChatClient.cs" />
+    <Compile Include="..\PaymentOps.Agent.Tests\ScriptedScreen.cs" Link="Shared\ScriptedScreen.cs" />
   </ItemGroup>
 
 </Project>

@@ -14,7 +14,7 @@ public sealed class ToolGuardTests
     private readonly TurnState _turn = new();
     private readonly FakeTimeProvider _time = new();
 
-    private ToolGuard Guard() => new(_turn, new InvestigationLimits(), _time, TestUser.Reader, null);
+    private ToolGuard Guard() => new(_turn, new InvestigationLimits(), _time, TestUser.Reader, null, ScriptedScreen.AllClean);
 
     // The real fail-closed function layer over a scripted model, so termination is the framework's own.
     private static async Task<ScriptedChatClient> RunAsync(IReadOnlyList<AITool> tools, params ChatResponse[] responses)

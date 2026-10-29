@@ -83,6 +83,12 @@ var search = builder.Configuration.GetSection(SearchOptions.SectionName).Get<Sea
 // answered; outside Development that's a deployment mistake, so startup fails.
 if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answeringEndpoint)
 {
+    // Screening untrusted tool text needs the Content Safety endpoint; without it everything untrusted is withheld.
+    if (!builder.Environment.IsDevelopment() && string.IsNullOrEmpty(builder.Configuration["PaymentOps:ContentSafety:Endpoint"]))
+    {
+        throw new InvalidOperationException("PaymentOps:ContentSafety:Endpoint is required outside Development.");
+    }
+
     builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));
     healthChecks.Add(new HealthCheckRegistration(
         "search",

@@ -39,6 +39,9 @@ internal static partial class InvestigationLog
     [LoggerMessage(EventId = 3003, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} model call failed: {ExceptionType}, status {Status}, code {ErrorCode}, request {RequestId}, {ElapsedMs} ms")]
     private static partial void ModelFailed(ILogger logger, Guid investigationId, string exceptionType, int? status, string? errorCode, string? requestId, long elapsedMs);
 
+    [LoggerMessage(EventId = 3005, Level = LogLevel.Information, Message = "Investigation {InvestigationId} {Tool}: {Screened} untrusted values screened, {Flagged} flagged and {Unscreenable} unscreenable, withheld from the model")]
+    public static partial void TextWithheld(ILogger logger, Guid investigationId, string tool, int screened, int flagged, int unscreenable);
+
     [LoggerMessage(EventId = 3004, Level = LogLevel.Error, Message = "Investigation {InvestigationId} aborted by an unexpected failure: {ExceptionType}, after {ElapsedMs} ms")]
     private static partial void Aborted(ILogger logger, Guid investigationId, string exceptionType, long elapsedMs);
 }

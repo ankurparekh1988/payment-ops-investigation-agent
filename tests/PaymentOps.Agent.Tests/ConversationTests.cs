@@ -218,7 +218,7 @@ public sealed partial class ConversationTests
 
         foreach (var (tool, arguments) in calls)
         {
-            var guard = new ToolGuard(new TurnState(), new InvestigationLimits(), TimeProvider.System, TestUser.RestrictedReader, null);
+            var guard = new ToolGuard(new TurnState(), new InvestigationLimits(), TimeProvider.System, TestUser.RestrictedReader, null, ScriptedScreen.AllClean);
             var function = guard.Wrap(fixture.Tool(tool));
             var json = (string)(await function.InvokeAsync(new AIFunctionArguments(arguments)))!;
 

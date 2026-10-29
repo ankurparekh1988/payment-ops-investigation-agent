@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Security;
 using PaymentOps.Platform.Ai;
@@ -29,6 +30,26 @@ public sealed class InvestigationRegistrationTests
         services.AddDemoData(new ConfigurationBuilder().Build());
         services.AddInvestigation(new InvestigationEndpoints(new Uri("https://search.example"), new Uri("https://foundry.example/"), "https://cognitiveservices.azure.com/.default"));
         return services;
+    }
+
+    [Fact]
+    public void Prompt_Shields_screens_when_the_content_safety_endpoint_is_configured()
+    {
+        var services = Services();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["PaymentOps:ContentSafety:Endpoint"] = "https://cs.example/" }).Build());
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<PromptShieldsScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
+    }
+
+    [Fact]
+    public void Without_a_content_safety_endpoint_the_screen_fails_closed()
+    {
+        using var provider = Services().BuildServiceProvider();
+
+        Assert.IsType<UnavailableScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
     }
 
     [Fact]

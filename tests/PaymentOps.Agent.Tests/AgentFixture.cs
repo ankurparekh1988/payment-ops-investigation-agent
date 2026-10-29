@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Investigation;
@@ -40,7 +41,7 @@ internal sealed class AgentFixture : IDisposable
             .BuildServiceProvider();
     }
 
-    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null) => new(
+    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null, IUntrustedTextScreen? screen = null) => new(
         model,
         _provider.GetServices<IInvestigationTool>(),
         FixedPrompt,
@@ -48,6 +49,7 @@ internal sealed class AgentFixture : IDisposable
         user ?? TestUser.Reader,
         Options.Create(new InvestigationLimits()),
         time ?? TimeProvider.System,
+        screen ?? ScriptedScreen.AllClean,
         logger ?? NullLogger<InvestigationAgentRunner>.Instance);
 
     public FixedPrompt FixedPrompt => new(_provider.GetServices<IInvestigationTool>(), new PromptProvider(Release), _provider.GetRequiredService<IInvestigationClock>());
