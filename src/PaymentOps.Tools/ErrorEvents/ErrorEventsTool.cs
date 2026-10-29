@@ -52,8 +52,9 @@ public sealed class ErrorEventsTool(IErrorEventData events, IInvestigationClock 
                 EvidenceIds.EventGroup(group.Key.ProcessorId, merchantId, category, group.Key.Code, range),
                 string.Create(CultureInfo.InvariantCulture, $"{members.Count} {category} events from {group.Key.ProcessorId}"),
                 eventIds);
+            // Codes are the processor's, not this system's: screened even when they look like codes.
             return new ErrorEventGroup(
-                group.Key.ProcessorId, category, group.Key.Code, members.Count, members[0].OccurredAt, members[^1].OccurredAt,
+                group.Key.ProcessorId, category, UntrustedText.Wrap(group.Key.Code), members.Count, members[0].OccurredAt, members[^1].OccurredAt,
                 evidence.Cap<string>([.. members.Select(e => e.Id)], $"{Sentence(category)} events from {group.Key.ProcessorId}"), factId);
         }).ToList();
 

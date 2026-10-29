@@ -128,7 +128,8 @@ public sealed class SettlementBatchesTool(
     }
 
     // The port lists weekends with no reason; closure days carry theirs.
-    private static string Reason(SettlementDay day) => day.ClosureReason ?? "Weekend";
+    // A closure reason is written outside this system; "Weekend" is ours.
+    private static string Reason(SettlementDay day) => day.ClosureReason is { } reason ? UntrustedText.Wrap(reason) : "Weekend";
 
     /// <summary>One call's view building, sharing the calendar, the clock and the evidence being collected.</summary>
     private sealed class Call(IInvestigationClock clock, Merchant merchant, Dictionary<DateOnly, SettlementDay> calendar, EvidenceCollector evidence)
@@ -162,14 +163,15 @@ public sealed class SettlementBatchesTool(
                 var batchFiles = filesByDate[date].ToList();
                 return new Batch(
                     date,
-                    evidence.Cap(batchPayments.ConvertAll(p => Payment(p, processor, timings[p.Id]!)), $"{processor.Name} payments for {date:yyyy-MM-dd}"),
+                    evidence.Cap(batchPayments.ConvertAll(p => Payment(p, processor, timings[p.Id]!)), $"{processor.Id} payments for {date:yyyy-MM-dd}"),
                     batchFiles.ConvertAll(File),
                     [.. payoutsByDate[date].Select(Payout)],
                     MissingFile(processor, date, batchPayments, batchFiles),
                     PaymentSets(processor, date, batchFiles));
             }).ToList();
 
-            return new ProcessorBatches(processor.Id, processor.Name, evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name), evidence.Cap(batches, $"{processor.Name} batches"));
+            // Truncation notes become gaps, which later turns carry to the model, so they name the processor by id.
+            return new ProcessorBatches(processor.Id, UntrustedText.Wrap(processor.Name), evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name), evidence.Cap(batches, $"{processor.Id} batches"));
         }
 
         public string NonSettlementDay(DateOnly date)

@@ -177,8 +177,8 @@ internal sealed class ToolGuard(TurnState turn, InvestigationLimits limits, Time
         Sections = found.Sections.Select(section => new
         {
             CitationId = turn.RegisterSection(section),
-            section.Title,
-            section.SectionPath,
+            Title = UntrustedText.Wrap(section.Title),
+            SectionPath = UntrustedText.Wrap(section.SectionPath),
             Content = UntrustedText.Wrap(section.Content),
         }).ToList(),
     };

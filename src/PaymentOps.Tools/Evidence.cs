@@ -60,9 +60,10 @@ public static class EvidenceIds
 
     public static string Overdue(string payoutId) => Fact("overdue", payoutId);
 
-    // The range is part of the key: the same group counted over different days is a different fact.
+    // The range is part of the key: the same group counted over different days is a different fact. The code is the
+    // processor's own text, so the id carries a digest of it rather than the text, which the model reads unscreened.
     public static string EventGroup(string processorId, string? merchantId, string category, string code, DateRange range) =>
-        Fact("event-group", processorId, merchantId ?? "*", category, code, Iso(range.Start), Iso(range.End));
+        Fact("event-group", processorId, merchantId ?? "*", category, Digest(code), Iso(range.Start), Iso(range.End));
 
     public static bool IsDerived(string id) => id.StartsWith(FactPrefix, StringComparison.Ordinal);
 
@@ -71,6 +72,9 @@ public static class EvidenceIds
     public static bool IsEventGroup(string id) => id.StartsWith(EventGroupPrefix, StringComparison.Ordinal);
 
     private static string Fact(string kind, params string[] key) => $"{FactPrefix}{kind}:{string.Join(':', key)}";
+
+    private static string Digest(string text) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)))[..12];
 
     private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }

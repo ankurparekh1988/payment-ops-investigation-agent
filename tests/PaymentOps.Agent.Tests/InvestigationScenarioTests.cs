@@ -22,7 +22,7 @@ public sealed class InvestigationScenarioTests
     private const string Submit = ToolNames.SubmitAssessment;
     private const string Fabrikam = "fabrikam-pay";
     private const string MissingFile = "fact:missing-file:fabrikam-pay:2026-11-09";
-    private const string Timeouts = "fact:event-group:fabrikam-pay:*:file_transfer_timeout:SFTP-TIMEOUT:2026-11-09:2026-11-10";
+    private const string Timeouts = "fact:event-group:fabrikam-pay:*:file_transfer_timeout:6a40626c31a3:2026-11-09:2026-11-10";
 
     private static readonly Dictionary<string, string?> AllSourcesDown = new()
     {
