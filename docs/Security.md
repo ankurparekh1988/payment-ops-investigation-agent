@@ -219,7 +219,7 @@ Ids, dates, amounts, enum values and time zones checked against the IANA list st
 
 **Fail closed.** A flagged value is replaced by "[withheld: this text was flagged as a possible instruction to the assistant]"; one that couldn't be checked, by "[withheld: this text couldn't be checked]". The result shows a gap saying which source lost text and why. Without the Content Safety endpoint, which only Development allows, nothing can be checked and every untrusted value is withheld. The log records how many values were screened, flagged and unscreenable, never the text.
 
-**Withheld knowledge supports nothing.** A section with any part withheld can't support a statement, an *Assessment* root cause, high confidence or a ticket; an assessment citing it goes back for correction.
+**Withheld knowledge supports nothing.** A section with any part withheld can't support a statement, an *Assessment* root cause, high confidence or a ticket; an assessment citing it goes back for correction. Nor does the server copy withheld text anywhere for the model: a processor's reference that was withheld is never put on a proposed ticket.
 
 **The human source boundary.** The source page shows an authorized person the original section, re-read from the index. Prompt Shields protects the model's context, not what a person reads; a person deciding on a ticket sees the cited sources as they are.
 

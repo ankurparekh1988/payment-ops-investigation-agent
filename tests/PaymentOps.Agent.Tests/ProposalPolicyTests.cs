@@ -108,4 +108,14 @@ public sealed class ProposalPolicyTests
         Assert.Null(assessed.Proposal);
         Assert.True(assessed.ProposalWithheld);
     }
+
+    // The reference is copied into the ticket from the server's record; text the model wasn't shown can't be.
+    [Fact]
+    public void A_withheld_reference_is_never_carried()
+    {
+        var turn = Turn();
+        turn.TextWithheld("FAB-7731");
+
+        Assert.Null(AssessmentPolicy.Reference(Ticket(MissingFile, FabIncident), turn));
+    }
 }

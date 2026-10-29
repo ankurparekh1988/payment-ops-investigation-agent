@@ -26,8 +26,9 @@ public sealed record InvestigationEndpoints(Uri SearchEndpoint, Uri FoundryEndpo
 
 public static class InvestigationServiceCollectionExtensions
 {
-    // Shared for the process; each call's own deadline comes from the guard's screening budget.
-    private static readonly HttpClient ScreenHttp = new() { Timeout = TimeSpan.FromSeconds(30) };
+    // Shared for the process, with pooled connections renewed so DNS changes are seen; each call's own deadline
+    // comes from the guard's screening budget.
+    private static readonly HttpClient ScreenHttp = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) { Timeout = TimeSpan.FromSeconds(30) };
 
     /// <summary>
     /// Registers the investigation behind <see cref="IInvestigationService"/> and ticket decisions behind <see cref="IApprovalService"/>.
@@ -54,7 +55,7 @@ public static class InvestigationServiceCollectionExtensions
         // one (only Development allows that) nothing can be checked, so untrusted tool text is withheld.
         services.AddSingleton<ScreenCache>();
         services.AddSingleton<IUntrustedTextScreen>(sp =>
-            Uri.TryCreate(sp.GetService<IConfiguration>()?[ContentSafetyOptions.EndpointKey], UriKind.Absolute, out var contentSafety)
+            sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
                 ? new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>())
                 : new UnavailableScreen());
         services.AddOptions<InvestigationLimits>();

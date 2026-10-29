@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+
 namespace PaymentOps.Agent.Safety;
 
 /// <summary>What screening found in one piece of untrusted text.</summary>
@@ -23,12 +25,14 @@ public interface IUntrustedTextScreen
 }
 
 /// <summary>Where Prompt Shields is called: the Foundry account's generic endpoint, separate from the model endpoint.</summary>
-public sealed class ContentSafetyOptions
+public static class ContentSafetyOptions
 {
     public const string SectionName = "PaymentOps:ContentSafety";
     public const string EndpointKey = SectionName + ":Endpoint";
 
-    public Uri? Endpoint { get; init; }
+    /// <summary>The configured endpoint, or null unless it's an absolute https address; startup and registration both read it here.</summary>
+    public static Uri? Endpoint(IConfiguration configuration) =>
+        Uri.TryCreate(configuration?[EndpointKey], UriKind.Absolute, out var endpoint) && endpoint.Scheme == Uri.UriSchemeHttps ? endpoint : null;
 }
 
 /// <summary>Used when no Content Safety endpoint is configured: nothing can be checked, so everything is withheld.</summary>

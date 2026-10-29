@@ -85,9 +85,9 @@ var search = builder.Configuration.GetSection(SearchOptions.SectionName).Get<Sea
 if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answeringEndpoint)
 {
     // Screening untrusted tool text needs the Content Safety endpoint; without it everything untrusted is withheld.
-    if (!builder.Environment.IsDevelopment() && builder.Configuration.GetSection(ContentSafetyOptions.SectionName).Get<ContentSafetyOptions>()?.Endpoint is null)
+    if (!builder.Environment.IsDevelopment() && ContentSafetyOptions.Endpoint(builder.Configuration) is null)
     {
-        throw new InvalidOperationException($"{ContentSafetyOptions.EndpointKey} is required outside Development.");
+        throw new InvalidOperationException($"{ContentSafetyOptions.EndpointKey} must be an https address outside Development.");
     }
 
     builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));

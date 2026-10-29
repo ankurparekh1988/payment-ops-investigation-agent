@@ -29,33 +29,32 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
     {
         ArgumentNullException.ThrowIfNull(segments);
 
-        var verdicts = new ScreenVerdict?[segments.Count];
-        var pieces = new List<(int Segment, string Text)>();
-        for (var i = 0; i < segments.Count; i++)
+        // Each distinct text is sent once: names and codes repeat within one result.
+        var known = new Dictionary<string, ScreenVerdict>(StringComparer.Ordinal);
+        var pending = new List<string>();
+        foreach (var segment in segments.Distinct(StringComparer.Ordinal))
         {
-            if (cache.TryGet(segments[i], out var cached))
+            if (cache.TryGet(segment, out var cached))
             {
-                verdicts[i] = cached;
-                continue;
+                known[segment] = cached;
             }
-
-            pieces.AddRange(Split(segments[i]).Select(piece => (i, piece)));
+            else
+            {
+                pending.Add(segment);
+            }
         }
 
         // Calls run together: they share one deadline, and a slow one shouldn't cost the others their time.
-        var batches = Batches(pieces).ToList();
+        var batches = Batches([.. pending.SelectMany(text => Split(text).Select(piece => (text, piece)))]).ToList();
         var results = await Task.WhenAll(batches.Select(batch => CallAsync([.. batch.Select(p => p.Text)], cancellationToken)));
-        var pieceVerdicts = batches.Zip(results).SelectMany(b => b.First.Select((p, j) => (p.Segment, Verdict: b.Second[j])));
-
-        foreach (var group in pieceVerdicts.GroupBy(p => p.Segment))
+        foreach (var group in batches.Zip(results).SelectMany(b => b.First.Select((p, j) => (p.Segment, Verdict: b.Second[j]))).GroupBy(p => p.Segment))
         {
-            var verdict = Aggregate([.. group.Select(p => p.Verdict)]);
-            verdicts[group.Key] = verdict;
-            cache.Set(segments[group.Key], verdict);
+            known[group.Key] = Aggregate([.. group.Select(p => p.Verdict)]);
+            cache.Set(group.Key, known[group.Key]);
         }
 
         // Empty text has no pieces to send and carries nothing to screen.
-        return [.. verdicts.Select(v => v ?? ScreenVerdict.Clean)];
+        return [.. segments.Select(segment => known.GetValueOrDefault(segment, ScreenVerdict.Clean))];
     }
 
     /// <summary>Attack wins over Unavailable, which wins over Clean: text is only clean if every piece is.</summary>
@@ -64,21 +63,34 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
         : pieces.Contains(ScreenVerdict.Unavailable) ? ScreenVerdict.Unavailable
         : ScreenVerdict.Clean;
 
-    private static IEnumerable<string> Split(string text)
+    // Boundaries move back rather than split a surrogate pair, so every piece is valid text and overlaps by at least 500.
+    internal static IEnumerable<string> Split(string text)
     {
-        for (var start = 0; start < text.Length; start += MaxPieceChars - OverlapChars)
+        for (var start = 0; start < text.Length;)
         {
-            yield return text.Substring(start, Math.Min(MaxPieceChars, text.Length - start));
-            if (start + MaxPieceChars >= text.Length)
+            var length = Math.Min(MaxPieceChars, text.Length - start);
+            if (start + length < text.Length && char.IsHighSurrogate(text[start + length - 1]))
+            {
+                length--;
+            }
+
+            yield return text.Substring(start, length);
+            if (start + length >= text.Length)
             {
                 yield break;
+            }
+
+            start += length - OverlapChars;
+            if (char.IsLowSurrogate(text[start]))
+            {
+                start--;
             }
         }
     }
 
-    private static IEnumerable<List<(int Segment, string Text)>> Batches(List<(int Segment, string Text)> pieces)
+    private static IEnumerable<List<(string Segment, string Text)>> Batches(List<(string Segment, string Text)> pieces)
     {
-        var batch = new List<(int Segment, string Text)>();
+        var batch = new List<(string Segment, string Text)>();
         var chars = 0;
         foreach (var piece in pieces)
         {

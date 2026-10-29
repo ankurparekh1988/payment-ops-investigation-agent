@@ -223,6 +223,7 @@ internal sealed class ToolGuard(
         {
             if (verdicts[i] != ScreenVerdict.Clean)
             {
+                turn.TextWithheld(UntrustedText.Unwrap(marked[i].GetValue<string>()));
                 marked[i].ReplaceWith(JsonValue.Create(UntrustedText.Wrap(verdicts[i] == ScreenVerdict.Attack ? Withheld : Unscreenable)));
             }
         }

@@ -122,4 +122,15 @@ public sealed class SettlementBatchesToolTests
         Assert.NotEmpty(ok.Truncations);
         Assert.Contains("\"truncated\":true", ToolJson.Serialize(ok), StringComparison.Ordinal);
     }
+
+    // Labels are shown to people, never to the model, so they carry the reason as written, without markers.
+    [Fact]
+    public async Task A_closure_days_labels_show_its_reason_without_markers()
+    {
+        using var tools = new ToolFixture();
+        var ok = Ok(await Run(tools, "M-6230", "2026-11-05", "2026-11-10"));
+
+        Assert.All(ok.Evidence.Where(e => e.Id is "calendar:2026-11-06" or "fact:non-settlement-day:2026-11-06"), e => Assert.DoesNotContain(UntrustedText.Open, e.Label, StringComparison.Ordinal));
+        Assert.Contains(UntrustedText.Open, ToolJson.Serialize(ok), StringComparison.Ordinal);
+    }
 }

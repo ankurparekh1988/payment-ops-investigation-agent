@@ -103,4 +103,17 @@ public sealed class InvestigationRegistrationTests
 
         await Assert.ThrowsAsync<ContentFilteredException>(() => provider.GetRequiredService<IChatClient>().GetResponseAsync("q"));
     }
+
+    // Startup and registration read the endpoint the same way, so one that can't be called can't pass startup.
+    [Theory]
+    [InlineData("https://cs.example/", true)]
+    [InlineData("cs.example", false)]
+    [InlineData("/contentsafety", false)]
+    [InlineData("", false)]
+    public void Only_an_absolute_https_endpoint_is_a_content_safety_endpoint(string value, bool usable)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [ContentSafetyOptions.EndpointKey] = value }).Build();
+
+        Assert.Equal(usable, ContentSafetyOptions.Endpoint(configuration) is not null);
+    }
 }

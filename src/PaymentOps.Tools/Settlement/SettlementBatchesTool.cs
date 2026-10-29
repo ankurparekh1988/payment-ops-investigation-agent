@@ -121,7 +121,7 @@ public sealed class SettlementBatchesTool(
         var nonSettlementDays = calendar.Values
             .Where(day => !day.IsSettlementDay && day.Date >= range.Start && day.Date <= range.End)
             .OrderBy(day => day.Date)
-            .Select(day => new NonSettlementDay(day.Date, Reason(day), call.NonSettlementDay(day.Date)))
+            .Select(day => new NonSettlementDay(day.Date, day.ClosureReason is { } reason ? UntrustedText.Wrap(reason) : Weekend, call.NonSettlementDay(day.Date)))
             .ToList();
 
         return call.Evidence.Ok(new SettlementActivity(merchant.Id, call.Evidence.Record(EvidenceIds.Merchant(merchant.Id), merchant.Name), views, nonSettlementDays));
@@ -129,7 +129,10 @@ public sealed class SettlementBatchesTool(
 
     // The port lists weekends with no reason; closure days carry theirs.
     // A closure reason is written outside this system; "Weekend" is ours.
-    private static string Reason(SettlementDay day) => day.ClosureReason is { } reason ? UntrustedText.Wrap(reason) : "Weekend";
+    private const string Weekend = "Weekend";
+
+    // For evidence labels, which only people read; what the model reads is wrapped where the result is built.
+    private static string Reason(SettlementDay day) => day.ClosureReason ?? Weekend;
 
     /// <summary>One call's view building, sharing the calendar, the clock and the evidence being collected.</summary>
     private sealed class Call(IInvestigationClock clock, Merchant merchant, Dictionary<DateOnly, SettlementDay> calendar, EvidenceCollector evidence)

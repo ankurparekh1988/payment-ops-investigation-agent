@@ -16,6 +16,7 @@ internal sealed class TurnState
     private readonly Dictionary<string, string> _idsBySectionKey = new(StringComparer.Ordinal);
     // Whether the model has read each screened section in full at least once; an unscreened section is support.
     private readonly Dictionary<string, bool> _readInFull = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _withheldText = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EvidenceItem> _evidence = new(StringComparer.Ordinal);
     private readonly List<ObservedGap> _gaps = [];
     private bool _structuredAnswered;
@@ -120,6 +121,23 @@ internal sealed class TurnState
         lock (_lock)
         {
             _readInFull[id] = readInFull || _readInFull.GetValueOrDefault(id);
+        }
+    }
+
+    /// <summary>Text the model was never shown, so the server doesn't copy it anywhere on the model's behalf.</summary>
+    public void TextWithheld(string text)
+    {
+        lock (_lock)
+        {
+            _withheldText.Add(text);
+        }
+    }
+
+    public bool WasWithheld(string text)
+    {
+        lock (_lock)
+        {
+            return _withheldText.Contains(text);
         }
     }
 
