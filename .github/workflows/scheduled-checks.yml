@@ -85,6 +85,10 @@ jobs:
       TF_VAR_github_repository_id: ${{ github.repository_id }}
       TF_VAR_developer_object_ids: ${{ secrets.DEVELOPER_OBJECT_IDS }}
       TF_VAR_bootstrap_operator_object_id: ${{ secrets.BOOTSTRAP_OPERATOR_OBJECT_ID }}
+      # The evaluation grants' scopes; without them the plan would offer to remove those grants.
+      TF_VAR_eval_foundry_account_id: ${{ secrets.EVAL_FOUNDRY_ACCOUNT_ID }}
+      TF_VAR_eval_search_service_id: ${{ secrets.EVAL_SEARCH_SERVICE_ID }}
+      TF_VAR_eval_dcr_id: ${{ secrets.EVAL_DCR_ID }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

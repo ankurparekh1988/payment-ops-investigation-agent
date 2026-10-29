@@ -187,7 +187,7 @@ scripts/terraform.sh platform plan
 `.github/workflows/scheduled-checks.yml` runs weekly and keeps one GitHub issue open per problem, closing it when the problem is gone:
 
 - **Model lifecycle:** reruns the model preflight with a 120-day window, so a model approaching deprecation or retirement is flagged well before deployment would start refusing it.
-- **Bootstrap drift:** plans the bootstrap and reports anything changed outside Terraform.
+- **Bootstrap drift:** plans the bootstrap and reports anything changed outside Terraform. It plans with the same settings the operator uses, including the evaluation grants' scopes (`EVAL_FOUNDRY_ACCOUNT_ID`, `EVAL_SEARCH_SERVICE_ID`, `EVAL_DCR_ID`), which `scripts/configure-github.sh` copies from `.env`.
 
 The workflows read their configuration from the repository's Actions secrets and a single `TERRAFORM_SETTINGS` variable. `scripts/configure-github.sh` sets them from `.env` and the bootstrap outputs, with identifiers and personal values as secrets so logs mask them, and creates the GitHub environments the deployment pipeline uses.
 
