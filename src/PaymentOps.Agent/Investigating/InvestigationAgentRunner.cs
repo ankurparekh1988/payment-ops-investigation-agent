@@ -104,13 +104,17 @@ internal sealed class InvestigationAgentRunner(
             },
             (failure, ex) =>
             {
-                if (failure == TurnFailure.ServiceFailed)
+                switch (failure)
                 {
-                    InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
-                }
-                else
-                {
-                    InvestigationLog.Aborted(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                    case TurnFailure.ServiceFailed:
+                        InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                        break;
+                    case TurnFailure.Blocked:
+                        InvestigationLog.Blocked(logger, investigationId, ex is ContentFilteredException ? "completion" : "prompt", timer.ElapsedMilliseconds);
+                        break;
+                    default:
+                        InvestigationLog.Aborted(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                        break;
                 }
             },
             cancellationToken);

@@ -1,5 +1,6 @@
 using Azure.Core;
 
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Safety;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Security;
@@ -89,4 +91,16 @@ public sealed class InvestigationRegistrationTests
     [Fact]
     public void The_service_contract_has_no_grounded_answer() =>
         Assert.Null(typeof(IInvestigationService).GetMethod("AskAsync"));
+
+    [Fact]
+    public async Task The_registered_model_ends_a_turn_on_a_filtered_completion()
+    {
+        var services = Services();
+        services.AddInvestigation(
+            new InvestigationEndpoints(new Uri("https://search.example"), new Uri("https://foundry.example/"), "https://cognitiveservices.azure.com/.default"),
+            _ => new ScriptedChatClient(_ => ModelFailureTests.Filtered()));
+        using var provider = services.BuildServiceProvider();
+
+        await Assert.ThrowsAsync<ContentFilteredException>(() => provider.GetRequiredService<IChatClient>().GetResponseAsync("q"));
+    }
 }

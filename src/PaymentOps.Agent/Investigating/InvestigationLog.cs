@@ -34,6 +34,10 @@ internal static partial class InvestigationLog
         ModelFailed(logger, investigationId, exception.GetType().Name, attempt?.Status, attempt is null ? null : ModelFailure.ErrorCode(attempt), attempt is null ? null : ModelFailure.RequestId(attempt), elapsedMs);
     }
 
+    /// <param name="side"><c>prompt</c> when the request was refused, <c>completion</c> when the answer was withheld.</param>
+    [LoggerMessage(EventId = 3006, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} blocked by the content filter on the {Side}, {ElapsedMs} ms")]
+    public static partial void Blocked(ILogger logger, Guid investigationId, string side, long elapsedMs);
+
     public static void Aborted(ILogger logger, Guid investigationId, Exception exception, long elapsedMs) => Aborted(logger, investigationId, exception.GetType().Name, elapsedMs);
 
     [LoggerMessage(EventId = 3003, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} model call failed: {ExceptionType}, status {Status}, code {ErrorCode}, request {RequestId}, {ElapsedMs} ms")]

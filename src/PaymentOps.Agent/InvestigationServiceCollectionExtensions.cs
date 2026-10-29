@@ -46,7 +46,7 @@ public static class InvestigationServiceCollectionExtensions
         services.AddSingleton(sp =>
         {
             var model = ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment);
-            return observeModel is null ? model : observeModel(model);
+            return ContentFilter.Checked(observeModel is null ? model : observeModel(model));
         });
         services.AddInvestigationTools();
 
