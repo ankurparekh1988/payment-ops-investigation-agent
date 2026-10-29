@@ -45,6 +45,10 @@ set_secret AZURE_EVAL_PUBLISH_CLIENT_ID "$(bootstrap_output eval_publish_identit
 set_secret ALERT_EMAIL "${TF_VAR_alert_email:-}"
 set_secret DEVELOPER_OBJECT_IDS "${TF_VAR_developer_object_ids:-}"
 set_secret BOOTSTRAP_OPERATOR_OBJECT_ID "${TF_VAR_bootstrap_operator_object_id:-}"
+# The bootstrap drift check needs the evaluation grants' scopes; they hold the subscription id, so they're secrets.
+set_secret EVAL_FOUNDRY_ACCOUNT_ID "${TF_VAR_eval_foundry_account_id:-}"
+set_secret EVAL_SEARCH_SERVICE_ID "${TF_VAR_eval_search_service_id:-}"
+set_secret EVAL_DCR_ID "${TF_VAR_eval_dcr_id:-}"
 
 # Created once and never rotated by this script, so a plan encrypted before a rerun can still be
 # applied. Delete the secret to rotate it.
