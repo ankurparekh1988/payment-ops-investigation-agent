@@ -80,9 +80,8 @@ internal sealed class InvestigationService(
     {
         var turns = conversation.Turns;
         var budget = HistoryProjection.HistoryBudgetChars(conversationOptions.Value, limits.Value, fixedPrompt.Chars);
-        var history = HistoryProjection.Build(turns, budget, proposals.NoteFor);
-        // Nothing carried while an answered turn exists means the newest answered turn alone doesn't fit.
-        var ended = turns.Count >= conversationOptions.Value.MaxQuestions || (history.Count == 0 && turns.Any(t => HistoryProjection.IsCarried(t.Result)));
+        var (history, newestDoesNotFit) = HistoryProjection.Carry(turns, budget, proposals.NoteFor);
+        var ended = turns.Count >= conversationOptions.Value.MaxQuestions || newestDoesNotFit;
         return (history, ended);
     }
 }

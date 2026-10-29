@@ -43,7 +43,7 @@ internal static class DemoTools
 
     private static DemoDataset Rewritten(Func<string, string, string> rewrite)
     {
-        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(RepositoryRoot.FullPath, "data", "datasets", "default", "dataset.json")))!;
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(RepositoryRoot.FullPath, DemoDatasetLoader.DefaultResource)))!;
         Rewrite(root, rewrite);
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(root.ToJsonString()));
         return DemoDatasetLoader.Load(stream);

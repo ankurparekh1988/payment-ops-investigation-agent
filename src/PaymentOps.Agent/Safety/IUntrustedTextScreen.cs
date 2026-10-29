@@ -26,6 +26,7 @@ public interface IUntrustedTextScreen
 public sealed class ContentSafetyOptions
 {
     public const string SectionName = "PaymentOps:ContentSafety";
+    public const string EndpointKey = SectionName + ":Endpoint";
 
     public Uri? Endpoint { get; init; }
 }
@@ -34,5 +35,8 @@ public sealed class ContentSafetyOptions
 internal sealed class UnavailableScreen : IUntrustedTextScreen
 {
     public Task<IReadOnlyList<ScreenVerdict>> ScreenAsync(IReadOnlyList<string> segments, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ScreenVerdict>>([.. segments.Select(_ => ScreenVerdict.Unavailable)]);
+        Task.FromResult<IReadOnlyList<ScreenVerdict>>(AllUnavailable(segments.Count));
+
+    /// <summary>The verdicts when nothing could be checked.</summary>
+    public static ScreenVerdict[] AllUnavailable(int count) => [.. Enumerable.Repeat(ScreenVerdict.Unavailable, count)];
 }

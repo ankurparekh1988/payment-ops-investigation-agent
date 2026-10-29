@@ -14,8 +14,8 @@ internal sealed class TurnState
     private readonly Lock _lock = new();
     private readonly Dictionary<string, RetrievedSection> _sectionsById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _idsBySectionKey = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _withheldSections = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _sectionsReadInFull = new(StringComparer.Ordinal);
+    // Whether the model has read each screened section in full at least once; an unscreened section is support.
+    private readonly Dictionary<string, bool> _readInFull = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EvidenceItem> _evidence = new(StringComparer.Ordinal);
     private readonly List<ObservedGap> _gaps = [];
     private bool _structuredAnswered;
@@ -119,15 +119,7 @@ internal sealed class TurnState
     {
         lock (_lock)
         {
-            if (readInFull)
-            {
-                _sectionsReadInFull.Add(id);
-                _withheldSections.Remove(id);
-            }
-            else if (!_sectionsReadInFull.Contains(id))
-            {
-                _withheldSections.Add(id);
-            }
+            _readInFull[id] = readInFull || _readInFull.GetValueOrDefault(id);
         }
     }
 
@@ -135,7 +127,7 @@ internal sealed class TurnState
     {
         lock (_lock)
         {
-            return !_withheldSections.Contains(id);
+            return _readInFull.GetValueOrDefault(id, true);
         }
     }
 

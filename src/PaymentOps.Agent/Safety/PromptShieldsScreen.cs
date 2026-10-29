@@ -21,6 +21,10 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
 
     private readonly Uri _shieldPrompt = new(endpoint, "contentsafety/text:shieldPrompt?api-version=2024-09-01");
 
+    // Managed identity caches its tokens, but a developer's Azure CLI sign-in starts a process for each one, which
+    // would spend the screening budget. Two calls refreshing at once both fetch one; that's harmless.
+    private volatile CachedToken? _token;
+
     public async Task<IReadOnlyList<ScreenVerdict>> ScreenAsync(IReadOnlyList<string> segments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(segments);
@@ -38,12 +42,10 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
             pieces.AddRange(Split(segments[i]).Select(piece => (i, piece)));
         }
 
-        var pieceVerdicts = new List<(int Segment, ScreenVerdict Verdict)>();
-        foreach (var batch in Batches(pieces))
-        {
-            var results = await CallAsync([.. batch.Select(p => p.Text)], cancellationToken);
-            pieceVerdicts.AddRange(batch.Select((p, j) => (p.Segment, results[j])));
-        }
+        // Calls run together: they share one deadline, and a slow one shouldn't cost the others their time.
+        var batches = Batches(pieces).ToList();
+        var results = await Task.WhenAll(batches.Select(batch => CallAsync([.. batch.Select(p => p.Text)], cancellationToken)));
+        var pieceVerdicts = batches.Zip(results).SelectMany(b => b.First.Select((p, j) => (p.Segment, Verdict: b.Second[j])));
 
         foreach (var group in pieceVerdicts.GroupBy(p => p.Segment))
         {
@@ -101,31 +103,43 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
     {
         try
         {
-            var token = await credential.GetTokenAsync(new TokenRequestContext([tokenScope]), cancellationToken);
+            var token = await TokenAsync(cancellationToken);
             using var request = new HttpRequestMessage(HttpMethod.Post, _shieldPrompt)
             {
                 Content = JsonContent.Create(new { userPrompt = string.Empty, documents }),
             };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             using var response = await http.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                return Unavailable(documents.Count);
+                return UnavailableScreen.AllUnavailable(documents.Count);
             }
 
             using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
             var analysis = body.RootElement.GetProperty("documentsAnalysis");
             return analysis.GetArrayLength() == documents.Count
                 ? [.. analysis.EnumerateArray().Select(d => d.GetProperty("attackDetected").GetBoolean() ? ScreenVerdict.Attack : ScreenVerdict.Clean)]
-                : Unavailable(documents.Count);
+                : UnavailableScreen.AllUnavailable(documents.Count);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested
             && ex is HttpRequestException or TaskCanceledException or AuthenticationFailedException or JsonException or KeyNotFoundException or InvalidOperationException)
         {
-            return Unavailable(documents.Count);
+            return UnavailableScreen.AllUnavailable(documents.Count);
         }
     }
 
-    private static ScreenVerdict[] Unavailable(int count) => [.. Enumerable.Repeat(ScreenVerdict.Unavailable, count)];
+    private async Task<string> TokenAsync(CancellationToken cancellationToken)
+    {
+        if (_token is { } cached && cached.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            return cached.Value;
+        }
+
+        var fresh = await credential.GetTokenAsync(new TokenRequestContext([tokenScope]), cancellationToken);
+        _token = new CachedToken(fresh.Token, fresh.ExpiresOn);
+        return fresh.Token;
+    }
+
+    private sealed record CachedToken(string Value, DateTimeOffset ExpiresOn);
 }

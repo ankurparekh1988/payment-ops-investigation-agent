@@ -54,7 +54,7 @@ public static class InvestigationServiceCollectionExtensions
         // one (only Development allows that) nothing can be checked, so untrusted tool text is withheld.
         services.AddSingleton<ScreenCache>();
         services.AddSingleton<IUntrustedTextScreen>(sp =>
-            Uri.TryCreate(sp.GetService<IConfiguration>()?[$"{ContentSafetyOptions.SectionName}:Endpoint"], UriKind.Absolute, out var contentSafety)
+            Uri.TryCreate(sp.GetService<IConfiguration>()?[ContentSafetyOptions.EndpointKey], UriKind.Absolute, out var contentSafety)
                 ? new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>())
                 : new UnavailableScreen());
         services.AddOptions<InvestigationLimits>();

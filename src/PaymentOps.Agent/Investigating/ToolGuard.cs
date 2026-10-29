@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Safety;
@@ -30,6 +31,7 @@ internal sealed class ToolGuard(
 {
     // A guard built without a screen can check nothing, so it withholds every untrusted value: fail closed.
     private readonly IUntrustedTextScreen _screen = screen ?? new UnavailableScreen();
+    private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
     private const string Withheld = "[withheld: this text was flagged as a possible instruction to the assistant]";
     private const string Unscreenable = "[withheld: this text couldn't be checked]";
@@ -210,29 +212,22 @@ internal sealed class ToolGuard(
             turn.SectionScreened(section.Key!, readInFull: section.All(p => p.Second == ScreenVerdict.Clean));
         }
 
-        var flagged = 0;
-        var unscreenable = 0;
-        for (var i = 0; i < marked.Count; i++)
-        {
-            if (verdicts[i] == ScreenVerdict.Clean)
-            {
-                continue;
-            }
-
-            var attack = verdicts[i] == ScreenVerdict.Attack;
-            _ = attack ? flagged++ : unscreenable++;
-            marked[i].ReplaceWith(JsonValue.Create(UntrustedText.Wrap(attack ? Withheld : Unscreenable)));
-        }
-
+        var flagged = verdicts.Count(v => v == ScreenVerdict.Attack);
+        var unscreenable = verdicts.Count(v => v == ScreenVerdict.Unavailable);
         if (flagged + unscreenable == 0)
         {
             return (json, null);
         }
 
-        if (logger is not null)
+        for (var i = 0; i < marked.Count; i++)
         {
-            InvestigationLog.TextWithheld(logger, investigationId, tool.Name, marked.Count, flagged, unscreenable);
+            if (verdicts[i] != ScreenVerdict.Clean)
+            {
+                marked[i].ReplaceWith(JsonValue.Create(UntrustedText.Wrap(verdicts[i] == ScreenVerdict.Attack ? Withheld : Unscreenable)));
+            }
         }
+
+        InvestigationLog.TextWithheld(_logger, investigationId, tool.Name, marked.Count, flagged, unscreenable);
 
         var gap = ObservedGap.Withheld(tool.Source, flagged > 0);
         turn.AddGap(gap);
@@ -244,7 +239,7 @@ internal sealed class ToolGuard(
         var allowed = remaining < limits.ScreenTimeout ? remaining : limits.ScreenTimeout;
         if (allowed <= TimeSpan.Zero)
         {
-            return [.. segments.Select(_ => ScreenVerdict.Unavailable)];
+            return UnavailableScreen.AllUnavailable(segments.Count);
         }
 
         using var timeout = new CancellationTokenSource(allowed, time);
@@ -255,7 +250,7 @@ internal sealed class ToolGuard(
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            return [.. segments.Select(_ => ScreenVerdict.Unavailable)];
+            return UnavailableScreen.AllUnavailable(segments.Count);
         }
     }
 

@@ -11,6 +11,7 @@ using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
@@ -84,9 +85,9 @@ var search = builder.Configuration.GetSection(SearchOptions.SectionName).Get<Sea
 if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answeringEndpoint)
 {
     // Screening untrusted tool text needs the Content Safety endpoint; without it everything untrusted is withheld.
-    if (!builder.Environment.IsDevelopment() && string.IsNullOrEmpty(builder.Configuration["PaymentOps:ContentSafety:Endpoint"]))
+    if (!builder.Environment.IsDevelopment() && builder.Configuration.GetSection(ContentSafetyOptions.SectionName).Get<ContentSafetyOptions>()?.Endpoint is null)
     {
-        throw new InvalidOperationException("PaymentOps:ContentSafety:Endpoint is required outside Development.");
+        throw new InvalidOperationException($"{ContentSafetyOptions.EndpointKey} is required outside Development.");
     }
 
     builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));
