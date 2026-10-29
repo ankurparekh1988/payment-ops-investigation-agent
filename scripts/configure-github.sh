@@ -20,6 +20,10 @@ if [[ -f "$env_file" ]]; then
   set +a
 fi
 
+# Git Bash on Windows rewrites arguments starting with "/" into Windows paths for native programs, which would store
+# resource IDs such as /subscriptions/... as C:/Program Files/Git/subscriptions/.... No effect outside Git Bash.
+export MSYS_NO_PATHCONV=1
+
 repo="${TF_VAR_github_repository:?Set TF_VAR_github_repository in .env}"
 environment="${TF_VAR_environment:?Set TF_VAR_environment in .env}"
 bootstrap_output() { "$repo_root/scripts/terraform.sh" bootstrap output -raw "$1"; }
