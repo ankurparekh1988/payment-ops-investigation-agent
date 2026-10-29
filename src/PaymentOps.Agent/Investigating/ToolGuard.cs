@@ -33,6 +33,7 @@ internal sealed class ToolGuard(
 
     private const string Withheld = "[withheld: this text was flagged as a possible instruction to the assistant]";
     private const string Unscreenable = "[withheld: this text couldn't be checked]";
+    private static readonly string CitationIdProperty = ToolJson.Options.PropertyNamingPolicy!.ConvertName("CitationId");
 
     private static readonly string LimitReached = ToolJson.Serialize(new ToolResult.Failed(
         ToolErrorCode.LimitReached, "The investigation has reached its step limit. Call submit_assessment with what you have."));
@@ -202,6 +203,13 @@ internal sealed class ToolGuard(
         }
 
         var verdicts = await VerdictsAsync([.. marked.Select(v => UntrustedText.Unwrap(v.GetValue<string>()))], remaining, cancellationToken);
+
+        // A knowledge section with any part withheld can't support a statement; read before the values are replaced.
+        foreach (var section in marked.Zip(verdicts).GroupBy(p => p.First.Parent?[CitationIdProperty]?.GetValue<string>()).Where(g => g.Key is not null))
+        {
+            turn.SectionScreened(section.Key!, readInFull: section.All(p => p.Second == ScreenVerdict.Clean));
+        }
+
         var flagged = 0;
         var unscreenable = 0;
         for (var i = 0; i < marked.Count; i++)

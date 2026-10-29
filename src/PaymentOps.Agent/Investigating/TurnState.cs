@@ -14,6 +14,8 @@ internal sealed class TurnState
     private readonly Lock _lock = new();
     private readonly Dictionary<string, RetrievedSection> _sectionsById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _idsBySectionKey = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _withheldSections = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _sectionsReadInFull = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EvidenceItem> _evidence = new(StringComparer.Ordinal);
     private readonly List<ObservedGap> _gaps = [];
     private bool _structuredAnswered;
@@ -106,6 +108,34 @@ internal sealed class TurnState
                     .Select(id => id[EvidenceIds.ProcessorPrefix.Length..])
                     .ToHashSet(StringComparer.Ordinal);
             }
+        }
+    }
+
+    /// <summary>
+    /// Records whether the model read all of a section. One it never read in full keeps its citation id for the
+    /// Source page but can't support anything; once read in full, it can.
+    /// </summary>
+    public void SectionScreened(string id, bool readInFull)
+    {
+        lock (_lock)
+        {
+            if (readInFull)
+            {
+                _sectionsReadInFull.Add(id);
+                _withheldSections.Remove(id);
+            }
+            else if (!_sectionsReadInFull.Contains(id))
+            {
+                _withheldSections.Add(id);
+            }
+        }
+    }
+
+    public bool IsSupportEligible(string id)
+    {
+        lock (_lock)
+        {
+            return !_withheldSections.Contains(id);
         }
     }
 

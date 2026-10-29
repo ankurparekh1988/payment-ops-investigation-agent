@@ -124,9 +124,16 @@ internal static class AssessmentValidator
 
     public static void Citations(string field, IReadOnlyList<string> citationIds, TurnState turn, List<string> failures)
     {
-        foreach (var id in citationIds.Where(id => !turn.TryGetSection(id, out _)))
+        foreach (var id in citationIds)
         {
-            failures.Add($"{field}.citation_ids: '{Shown(id)}' wasn't retrieved in this investigation.");
+            if (!turn.TryGetSection(id, out _))
+            {
+                failures.Add($"{field}.citation_ids: '{Shown(id)}' wasn't retrieved in this investigation.");
+            }
+            else if (!turn.IsSupportEligible(id))
+            {
+                failures.Add($"{field}.citation_ids: '{id}' was withheld from you and can't support a statement.");
+            }
         }
     }
 
