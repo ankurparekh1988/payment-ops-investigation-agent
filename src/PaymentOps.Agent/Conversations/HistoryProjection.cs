@@ -25,7 +25,14 @@ internal static class HistoryProjection
         return Math.Max(0, options.InputBudgetTokens - reserved) * PromptSize.CharsPerToken;
     }
 
-    /// <summary>The newest turns that fit the budget, oldest first, two messages each. Stops at the first turn that doesn't fit.</summary>
+    /// <summary>
+    /// Only an answered turn is context. A blocked, refused or unanswered question is never sent again, so an attack
+    /// the model declined once can't ride along with every later question.
+    /// </summary>
+    public static bool IsCarried(AssessmentResult result) =>
+        result is AssessmentResult.Assessed { Outcome: AssessmentOutcome.Assessed or AssessmentOutcome.Incomplete or AssessmentOutcome.Escalated };
+
+    /// <summary>The newest carried turns that fit the budget, oldest first, two messages each. Stops at the first that doesn't fit.</summary>
     public static IReadOnlyList<ChatMessage> Build(IReadOnlyList<ConversationTurn> turns, int budgetChars, Func<Guid, string?> approvalNote)
     {
         var carried = new List<ChatMessage>();
@@ -33,6 +40,11 @@ internal static class HistoryProjection
         for (var i = turns.Count - 1; i >= 0; i--)
         {
             var turn = turns[i];
+            if (!IsCarried(turn.Result))
+            {
+                continue;
+            }
+
             var answer = Answer(turn.Result, approvalNote(turn.Result.InvestigationId));
             used += turn.Question.Length + answer.Length;
             if (used > budgetChars)
@@ -51,9 +63,6 @@ internal static class HistoryProjection
         var text = new StringBuilder(Marker).AppendLine();
         switch (result)
         {
-            case AssessmentResult.Assessed { Outcome: AssessmentOutcome.Refused }:
-                text.AppendLine("The question was refused as outside what this agent investigates.");
-                break;
             case AssessmentResult.Assessed a:
                 text.AppendLine(CultureInfo.InvariantCulture, $"Outcome: {ToolJson.Word(a.Outcome)}. Confidence: {ToolJson.Word(a.Confidence)}.");
                 text.Append("Summary: ").AppendLine(Line(a.Summary));
