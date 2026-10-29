@@ -35,6 +35,7 @@ locals {
     "Storage Blob Data Contributor"  = "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
     "Log Analytics Reader"           = "73c42c96-874c-492b-b04d-ab87d138a893"
     "Monitoring Metrics Publisher"   = "3913510d-42f4-4e42-8a64-420c390055eb"
+    "Prompt Shields User"            = azurerm_role_definition.prompt_shields_user.role_definition_id
   }
   delegable_role_ids = join(", ", values(local.delegable_roles))
   delegable_role_definition_ids = {
@@ -58,6 +59,11 @@ locals {
       scope        = var.eval_search_service_id == null ? null : "${var.eval_search_service_id}/indexes/${var.eval_search_index_name}"
       role         = "Search Index Data Contributor"
       principal_id = module.eval_publish_identity.principal_id
+    }
+    prompt-shields = {
+      scope        = var.eval_foundry_account_id
+      role         = "Prompt Shields User"
+      principal_id = module.eval_identity.principal_id
     }
     publish-metrics-publisher = {
       scope        = var.eval_dcr_id
@@ -322,6 +328,23 @@ resource "azurerm_role_assignment" "plan_web_app_config_reader" {
   principal_type     = "ServicePrincipal"
 }
 
+# --- Prompt Shields: screening untrusted text, and nothing else -------------------------------
+
+# The built-in roles that include the shield call also grant every other Foundry data action. The id is
+# fixed so the deploy identity's delegation condition is known at plan time.
+resource "azurerm_role_definition" "prompt_shields_user" {
+  name               = "${var.name_prefix} Prompt Shields User"
+  role_definition_id = uuidv5("url", "https://${var.name_prefix}/roles/prompt-shields-user")
+  scope              = azurerm_resource_group.workload.id
+  description        = "Call Prompt Shields to screen text for prompt attacks."
+
+  permissions {
+    data_actions = ["Microsoft.CognitiveServices/accounts/ContentSafety/text:shieldprompt/action"]
+  }
+
+  assignable_scopes = [azurerm_resource_group.workload.id]
+}
+
 # --- Developers ---------------------------------------------------------------------------------
 
 # Data-plane access for people running the app locally. Granted here, by an Owner, because the
@@ -333,6 +356,17 @@ resource "azurerm_role_assignment" "developer" {
   role_definition_name = each.value.role
   principal_id         = each.value.object_id
   principal_type       = "User"
+}
+
+# Running the app locally screens tool text too. Granted on the Foundry account only, so it waits for
+# the platform's account id like the evaluation grants.
+resource "azurerm_role_assignment" "developer_prompt_shields" {
+  for_each = var.eval_foundry_account_id == null ? toset([]) : toset(var.developer_object_ids)
+
+  scope              = var.eval_foundry_account_id
+  role_definition_id = azurerm_role_definition.prompt_shields_user.role_definition_resource_id
+  principal_id       = each.value
+  principal_type     = "User"
 }
 
 # --- Operator ---------------------------------------------------------------------------------

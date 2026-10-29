@@ -190,6 +190,19 @@ resource "azurerm_role_assignment" "app_foundry" {
   principal_type       = "ServicePrincipal"
 }
 
+# Screens untrusted tool text before the model reads it. The role is created by bootstrap, which owns role definitions.
+data "azurerm_role_definition" "prompt_shields_user" {
+  name  = "${var.name_prefix} Prompt Shields User"
+  scope = data.azurerm_resource_group.this.id
+}
+
+resource "azurerm_role_assignment" "app_prompt_shields" {
+  scope              = module.foundry.account_id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/${data.azurerm_role_definition.prompt_shields_user.role_definition_id}"
+  principal_id       = azurerm_user_assigned_identity.app.principal_id
+  principal_type     = "ServicePrincipal"
+}
+
 # Queries and source lookups; the app reads the index and nothing else in Search.
 resource "azurerm_role_assignment" "app_search_reader" {
   scope                = module.search.id
