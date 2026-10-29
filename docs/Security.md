@@ -1,6 +1,6 @@
 # Security
 
-How access is controlled, as built so far. Tool authorization and prompt-injection defences are added with the features they protect, and documented here when they land.
+How access is controlled, as built so far. Each control is documented here when the feature it protects lands.
 
 ## Principles
 
@@ -46,6 +46,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Principal | Scope | Role | Why |
 |---|---|---|---|
 | Web app | Foundry resource | Cognitive Services OpenAI User | Call the chat and embedding deployments |
+| Web app | Foundry resource | Prompt Shields User (custom) | Screen untrusted tool text; the role holds that one action |
 | Web app | Search service | Search Index Data Reader | Retrieve sections for investigations and show cited sections |
 | Web app | Application Insights | Monitoring Metrics Publisher | Send telemetry with an Entra token |
 | Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
@@ -60,7 +61,9 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Bootstrap operator | Operator-only state container | Storage Blob Data Contributor | The identity deployment's state, which holds demo user passwords and the local sign-in secret. No pipeline identity has any role on this container |
 | `gh-deploy` | Subscription | Model Availability Reader (custom) | Read the model catalog, quota and regional capacity for the preflight and the pre-apply capacity check; nothing else |
 | Developers | Environment resource group | OpenAI User, Foundry User, Search Index Data Reader | Run the app locally |
+| Developers | Foundry resource | Prompt Shields User (custom) | Screen tool text when running the app locally |
 | `gh-eval` | Foundry account | Cognitive Services OpenAI User | Run the evaluated agent and the judge |
+| `gh-eval` | Foundry account | Prompt Shields User (custom) | Screen tool text as the app does |
 | `gh-eval` | Search service | Search Index Data Reader | Read the evaluation index, or the live index for a pull request that switches it |
 | `gh-eval-publish` | The `knowledge-eval-v1` index only | Search Index Data Contributor | Make the evaluation index hold the evaluated change's corpus. Every run first proves the live index refuses its writes |
 | `gh-eval-publish` | The evaluation history's data collection rule only | Monitoring Metrics Publisher | Write evaluation history rows; no other write in Azure Monitor |
@@ -123,8 +126,8 @@ The agent can only read, and only what the user may read; what it says is checke
 - **Arguments are validated before any data is read.** The server reads them strictly, whatever the schema sent to the model says: an argument the tool doesn't declare is an error and the tool doesn't run. Repeats are counted on the request as parsed, so an extra or blank argument doesn't make a new call. Ids are checked against a fixed pattern and matched exactly; ranges are capped at 31 days and can't end after the investigation's date. Errors go back to the model in fixed wording, never as exception text.
 - **The tool loop fails closed.** Calls run one at a time; an unexpected exception or a call to an unknown tool ends the loop at once, with nothing from the exception sent to the model. Call, repeat, correction and time limits are enforced by our own code ([Architecture](Architecture.md#limits)).
 - **Evidence comes from the server.** Only tool code registers evidence, from typed results; the model can cite an id but can't create one. An assessment citing anything this investigation's tools didn't return is rejected. Labels, outcome and confidence caps are set by the server.
-- **Untrusted text before injection defences.** Incident summaries and knowledge content reach the model marked as untrusted data. The markers are guidance; dedicated injection defences come later. Until then the structural controls hold: there are no write tools, evidence is registered by the server, every statement shown is validated against it, and a ticket needs a person's approval.
-- **Earlier questions aren't evidence.** Follow-up questions see earlier turns as plain text with no tool messages and no section ids, and validation accepts only what this question's own tools returned.
+- **Untrusted text is screened before the model reads it.** Every externally authored string a tool returns is marked and passed through Prompt Shields; what's flagged or can't be checked is withheld ([Injection and content safety](#injection-and-content-safety)). The structural controls hold whatever the screen decides: there are no write tools, evidence is registered by the server, every statement shown is validated against it, and a ticket needs a person's approval.
+- **Earlier questions aren't evidence.** Follow-up questions see earlier turns as plain text with no tool messages and no section ids, and validation accepts only what this question's own tools returned. Only answered turns are carried: a blocked, refused or unassessed question is never sent to the model again.
 - **Model text is never markup.** The investigation page binds every model-written string, including a proposed ticket's title and summary, as text. Timeline labels come from validated ids and dates in the parsed request, never from free text the model wrote.
 - **Logs hold no content.** Investigation logs record the investigation id, outcome, confidence, label, counts of claims and gaps, timings and failure classes. They never record the question, tool results, the prompt or the model's output.
 
@@ -161,7 +164,7 @@ Creating an incident ticket is the only action that changes anything outside the
 Known limits:
 
 - A role removed in Entra applies at the next sign-in, as for every check.
-- A person can approve a well-formed proposal that untrusted text steered. Warnings for that come with the injection defences.
+- A person can approve a well-formed proposal that untrusted text steered. Flagged text is withheld and can't ground a ticket, but text the screen passes can still shape one; the approver sees the cited sources as they are ([Injection and content safety](#injection-and-content-safety)).
 - The content policy blocks card-like and account-like numbers. It isn't data-loss prevention for bank details ([ProductionGapAnalysis](ProductionGapAnalysis.md)).
 - Proposals and tickets are lost on restart, deploy or slot swap, and the app runs as one instance.
 - A Reader's draft can't be handed to an Engineer; the Engineer runs the investigation themselves.
@@ -186,9 +189,43 @@ The `AI evaluation` check runs a pull request's own code with access to the mode
 
 Evaluation history rows carry metric names, numbers, verdicts, the commit, prompt and model versions, and the trigger. They never carry model text, case content, endpoints or identifiers. Only runs of `main` are recorded.
 
-## Content safety
+## Injection and content safety
 
-Chat deployments use a strict content filter policy. Anything above "Safe" in the hate, sexual, violence and self-harm categories is blocked, on both prompts and completions, along with jailbreak attempts in user prompts and protected text in completions. Filtering is synchronous, so blocked output is never streamed. The trade-off is that some legitimate operational language may be blocked; that false-positive rate will be measured once the evaluation suite exists.
+Two controls with different jobs: the deployment's content filter screens what the person asks and what the model answers, and Prompt Shields screens the text tools return, which the filter never sees ([ADR 0013](adr/0013-screen-untrusted-tool-text.md)).
+
+| Threat | Where it enters | Control |
+|---|---|---|
+| Harmful content in a question or an answer | The question; the completion | Strict content filter on prompts and completions; the investigation ends *blocked* |
+| A direct prompt attack | The question | The filter's prompt-attack detection; the investigation ends *blocked*, and the question is never resent |
+| An instruction hidden in data or documents | Names, incident notes, references, closure reasons, error codes, knowledge | Marked where the tool writes it, screened by Prompt Shields, withheld when flagged |
+| A screen that can't answer | Throttling, errors, timeouts | The text is withheld as unchecked; the investigation continues on structured data |
+| Steered support for a claim or a ticket | A withheld knowledge section | It keeps its citation id but can't support anything |
+| An attack carried into later questions | Conversation history | Only answered turns are carried |
+
+**The content filter.** Chat deployments use a strict policy. Anything above "Safe" in the hate, sexual, violence and self-harm categories is blocked, on both prompts and completions, along with prompt attacks in user prompts and protected text in completions. Filtering is synchronous, so blocked output is never streamed. A rejected prompt or a withheld completion ends the investigation as *blocked*, and the person sees "This question can't be investigated: it was blocked by the content safety policy." Nothing partial is shown, and the request isn't retried. Some legitimate operational language may be blocked; the safety evaluation measures how often.
+
+**What's screened.** Trust follows provenance, not appearance. These are written outside the system, and each is marked and screened wherever it appears:
+
+| Text | Tool |
+|---|---|
+| Knowledge title, section path and content | `search_knowledge` |
+| Merchant name | `get_merchant_profile` |
+| Processor name | `get_merchant_profile`, `get_processor_status`, `get_settlement_batches` |
+| Incident summary and the processor's reference | `get_processor_status` |
+| Closure-day reason | `get_settlement_batches` |
+| Error code | `get_error_events` |
+
+Ids, dates, amounts, enum values and time zones checked against the IANA list stay plain. A test poisons every string in the data and the knowledge, runs every tool, and fails if any poison appears unmarked, so a new field can't slip past. Evidence labels, which name merchants and processors, are built by the server and shown only to people; the model never reads them.
+
+**Fail closed.** A flagged value is replaced by "[withheld: this text was flagged as a possible instruction to the assistant]"; one that couldn't be checked, by "[withheld: this text couldn't be checked]". The result shows a gap saying which source lost text and why. Without the Content Safety endpoint, which only Development allows, nothing can be checked and every untrusted value is withheld. The log records how many values were screened, flagged and unscreenable, never the text.
+
+**Withheld knowledge supports nothing.** A section with any part withheld can't support a statement, an *Assessment* root cause, high confidence or a ticket; an assessment citing it goes back for correction.
+
+**The human source boundary.** The source page shows an authorized person the original section, re-read from the index. Prompt Shields protects the model's context, not what a person reads; a person deciding on a ticket sees the cited sources as they are.
+
+**False positives.** Before screening went live, the corpus the index holds and the demo data, exactly as the model sees them, were screened: 304 strings (216 distinct), none flagged. A poisoned incident note was flagged.
+
+**Processing location.** Prompt Shields appears for Canada Central under Foundry guardrails but not under the standalone Content Safety service. Our calls go to the Canada Central Foundry account and succeed, but that doesn't prove where the operation is processed. Until Microsoft documents it, treat screened text as possibly processed outside the region; the data here is synthetic.
 
 ## Network
 

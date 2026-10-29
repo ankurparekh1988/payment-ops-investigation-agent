@@ -20,7 +20,7 @@ When a settlement batch didn't close, the runbooks say to raise an incident with
 ## Consequences
 
 - No ticket exists without an owner's click on content the server stored, and a repeated or concurrent click makes one ticket.
-- A human can still approve a well-formed proposal that untrusted text steered. Warnings for that come with the injection defences; the controls here keep it grounded and visible.
+- A human can still approve a well-formed proposal that untrusted text steered. Screening that text ([ADR 0013](0013-screen-untrusted-tool-text.md)) narrows this; the controls here keep it grounded and visible.
 - Proposals and tickets are held in one process's memory, so they're lost on restart and the app runs as one instance ([ProductionGapAnalysis](../ProductionGapAnalysis.md)).
 - A Reader's draft can't be handed to an Engineer; the Engineer runs the investigation themselves.
 
