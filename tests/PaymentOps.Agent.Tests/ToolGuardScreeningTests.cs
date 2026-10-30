@@ -9,6 +9,11 @@ using PaymentOps.Tools;
 
 namespace PaymentOps.Agent.Tests;
 
+// The budget tests drive a fake clock against real thread-pool work; other tests running alongside would slow that work.
+[CollectionDefinition(nameof(FakeClockBudget), DisableParallelization = true)]
+public sealed class FakeClockBudget;
+
+[Collection(nameof(FakeClockBudget))]
 public sealed class ToolGuardScreeningTests
 {
     private const string Attack = "<untrusted-data>[withheld: this text was flagged as a possible instruction to the assistant]</untrusted-data>";
@@ -24,14 +29,15 @@ public sealed class ToolGuardScreeningTests
     private static Task<string> CallAsync(ToolGuard guard, IInvestigationTool tool, Dictionary<string, object?> arguments) =>
         guard.Wrap(tool).InvokeAsync(new AIFunctionArguments(arguments)).AsTask().ContinueWith(t => (string)t.Result!, TaskScheduler.Default);
 
-    // Moves the fake clock in small steps until the call finishes, recording how much time it took.
+    // Moves the fake clock in small steps until the call finishes, recording how much time it took. Each step waits
+    // for the work it released to run, so a slow machine doesn't move the clock past a timer that hasn't started yet.
     private async Task<(string Json, TimeSpan Elapsed)> DriveAsync(Task<string> pending)
     {
         var start = _time.GetUtcNow();
         while (!pending.IsCompleted)
         {
             _time.Advance(TimeSpan.FromMilliseconds(100));
-            await Task.Delay(1);
+            await Task.WhenAny(pending, Task.Delay(TimeSpan.FromMilliseconds(25)));
         }
 
         return (await pending, _time.GetUtcNow() - start);
