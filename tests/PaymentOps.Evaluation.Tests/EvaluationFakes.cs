@@ -1,8 +1,10 @@
 using Azure.Core;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 
 using PaymentOps.Agent;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Agent.Tests;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Running;
@@ -48,8 +50,12 @@ internal static class EvaluationFakes
         ScoreEvidence: false, EvidenceOutcomes: null, ExpectedEvidence: [], RequiredSections: [], AcceptableSections: [],
         Proposal: InvestigationCase.ProposalEither, RestrictedMarkers: [], ExpectedRootCause: null);
 
-    public static AgentCaseRunner AgentRunner(Func<ScriptedChatClient> model, IKnowledgeLookup? knowledge = null) =>
-        new(Release, Endpoints, new UnusedCredential(), _ => model(), _ => knowledge ?? new FixedKnowledge(GeneralSection));
+    public static AgentCaseRunner AgentRunner(Func<ScriptedChatClient> model, IKnowledgeLookup? knowledge = null, IUntrustedTextScreen? screen = null) =>
+        new(Release, Endpoints, new UnusedCredential(), _ => model(), _ => knowledge ?? new FixedKnowledge(GeneralSection), Screening(screen));
+
+    /// <summary>The app's services with a scripted Prompt Shields screen, clean unless a test says otherwise.</summary>
+    public static Action<IServiceCollection> Screening(IUntrustedTextScreen? screen = null) =>
+        services => services.AddSingleton(screen ?? ScriptedScreen.AllClean);
 
     public static ScriptedChatClient Model(params ChatResponse[] responses) =>
         new([.. responses.Select(r => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => r))]);

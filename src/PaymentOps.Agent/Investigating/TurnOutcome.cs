@@ -13,6 +13,9 @@ internal enum TurnFailure
 
     /// <summary>A tool or the loop failed unexpectedly.</summary>
     Aborted,
+
+    /// <summary>The model's content filter refused the prompt or withheld the completion.</summary>
+    Blocked,
 }
 
 /// <summary>
@@ -55,6 +58,12 @@ internal static class TurnOutcome
             {
                 progress?.Report(new InvestigationProgress.LimitReached());
             }
+        }
+        catch (Exception ex) when (ex is ContentFilteredException || ModelFailure.IsContentFilterRejection(ModelFailure.LastAttempt(ex)))
+        {
+            // A policy decision, not an outage: retrying the same input would be refused again.
+            failed?.Invoke(TurnFailure.Blocked, ex);
+            return new NotAssessed(NotAssessedReason.Blocked);
         }
         catch (Exception ex) when (ex is OperationCanceledException || ModelFailure.IsServiceFailure(ex))
         {

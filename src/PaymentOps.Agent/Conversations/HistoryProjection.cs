@@ -25,57 +25,60 @@ internal static class HistoryProjection
         return Math.Max(0, options.InputBudgetTokens - reserved) * PromptSize.CharsPerToken;
     }
 
-    /// <summary>The newest turns that fit the budget, oldest first, two messages each. Stops at the first turn that doesn't fit.</summary>
-    public static IReadOnlyList<ChatMessage> Build(IReadOnlyList<ConversationTurn> turns, int budgetChars, Func<Guid, string?> approvalNote)
+    /// <summary>
+    /// Only an answered turn is context. A blocked, refused or unanswered question is never sent again, so an attack
+    /// the model declined once can't ride along with every later question.
+    /// </summary>
+    public static bool IsCarried(AssessmentResult result) =>
+        result is AssessmentResult.Assessed { Outcome: AssessmentOutcome.Assessed or AssessmentOutcome.Incomplete or AssessmentOutcome.Escalated };
+
+    /// <summary>The newest carried turns that fit the budget, oldest first, two messages each. Stops at the first that doesn't fit.</summary>
+    public static IReadOnlyList<ChatMessage> Build(IReadOnlyList<ConversationTurn> turns, int budgetChars, Func<Guid, string?> approvalNote) =>
+        Carry(turns, budgetChars, approvalNote).Messages;
+
+    /// <summary>As <see cref="Build"/>, and whether the newest carried turn alone didn't fit, which ends the conversation.</summary>
+    public static (IReadOnlyList<ChatMessage> Messages, bool NewestDoesNotFit) Carry(IReadOnlyList<ConversationTurn> turns, int budgetChars, Func<Guid, string?> approvalNote)
     {
         var carried = new List<ChatMessage>();
         var used = 0;
         for (var i = turns.Count - 1; i >= 0; i--)
         {
-            var turn = turns[i];
-            var answer = Answer(turn.Result, approvalNote(turn.Result.InvestigationId));
-            used += turn.Question.Length + answer.Length;
-            if (used > budgetChars)
+            if (turns[i].Result is not AssessmentResult.Assessed assessed || !IsCarried(assessed))
             {
-                break;
+                continue;
             }
 
-            carried.InsertRange(0, [new ChatMessage(ChatRole.User, turn.Question), new ChatMessage(ChatRole.Assistant, answer)]);
+            var answer = Answer(assessed, approvalNote(assessed.InvestigationId));
+            used += turns[i].Question.Length + answer.Length;
+            if (used > budgetChars)
+            {
+                return (carried, carried.Count == 0);
+            }
+
+            carried.InsertRange(0, [new ChatMessage(ChatRole.User, turns[i].Question), new ChatMessage(ChatRole.Assistant, answer)]);
         }
 
-        return carried;
+        return (carried, false);
     }
 
-    private static string Answer(AssessmentResult result, string? note)
+    private static string Answer(AssessmentResult.Assessed a, string? note)
     {
         var text = new StringBuilder(Marker).AppendLine();
-        switch (result)
+        text.AppendLine(CultureInfo.InvariantCulture, $"Outcome: {ToolJson.Word(a.Outcome)}. Confidence: {ToolJson.Word(a.Confidence)}.");
+        text.Append("Summary: ").AppendLine(Line(a.Summary));
+        foreach (var claim in a.Claims)
         {
-            case AssessmentResult.Assessed { Outcome: AssessmentOutcome.Refused }:
-                text.AppendLine("The question was refused as outside what this agent investigates.");
-                break;
-            case AssessmentResult.Assessed a:
-                text.AppendLine(CultureInfo.InvariantCulture, $"Outcome: {ToolJson.Word(a.Outcome)}. Confidence: {ToolJson.Word(a.Confidence)}.");
-                text.Append("Summary: ").AppendLine(Line(a.Summary));
-                foreach (var claim in a.Claims)
-                {
-                    text.Append("- ").AppendLine(Line(claim));
-                }
+            text.Append("- ").AppendLine(Line(claim));
+        }
 
-                if (a.RootCause is { } root)
-                {
-                    text.Append(CultureInfo.InvariantCulture, $"Root cause ({ToolJson.Word(root.Label)}): ").AppendLine(Line(root.Statement));
-                }
+        if (a.RootCause is { } root)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"Root cause ({ToolJson.Word(root.Label)}): ").AppendLine(Line(root.Statement));
+        }
 
-                foreach (var gap in a.Gaps)
-                {
-                    text.Append("Not checked: ").AppendLine(gap);
-                }
-
-                break;
-            default:
-                text.AppendLine("This question wasn't assessed.");
-                break;
+        foreach (var gap in a.Gaps)
+        {
+            text.Append("Not checked: ").AppendLine(gap);
         }
 
         if (note is not null)

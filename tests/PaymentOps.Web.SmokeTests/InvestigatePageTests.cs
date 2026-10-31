@@ -25,6 +25,15 @@ public sealed class InvestigatePageTests(PaymentOpsWebApplicationFactory factory
         Assert.All(Enum.GetValues<NotAssessedReason>(), r => Assert.False(string.IsNullOrWhiteSpace(NotAssessedText.For(r, 1000))));
 
     [Fact]
+    public void A_blocked_investigation_shows_the_safety_notice()
+    {
+        var text = NotAssessedText.For(NotAssessedReason.Blocked, 1000);
+
+        Assert.Equal("This question can't be investigated: it was blocked by the content safety policy.", text);
+        Assert.DoesNotContain("isn't responding", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void An_invalid_question_states_the_configured_limit() =>
         Assert.Contains("2,000", NotAssessedText.For(NotAssessedReason.InvalidQuestion, 2000), StringComparison.Ordinal);
 }

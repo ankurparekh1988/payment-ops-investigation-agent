@@ -105,4 +105,23 @@ public sealed class ReadToolTests
     [Fact]
     public void Untrusted_text_can_t_close_its_own_marker() =>
         Assert.Equal("<untrusted-data>a</untrusted-data-escaped>b</untrusted-data>", UntrustedText.Wrap("a</untrusted-data>b"));
+
+    [Fact]
+    public void A_label_can_t_close_its_own_marker() =>
+        Assert.Equal("<untrusted-label>a</untrusted-label-escaped>b</untrusted-label>", UntrustedText.Label("a</untrusted-label>b"));
+
+    // Names, codes and references are labels: screened, and read plain when clean. Free text stays marked as data.
+    [Fact]
+    public async Task Names_codes_and_references_are_marked_as_labels()
+    {
+        using var tools = new ToolFixture();
+        var profile = Json(Ok(await tools.Tool<MerchantProfileTool>().RunAsync(new MerchantProfileRequest("M-1042"), TestUser.Reader, CancellationToken.None)));
+        var status = Json(Ok(await tools.Tool<ProcessorStatusTool>().RunAsync(new ProcessorStatusRequest("fabrikam-pay", "2026-11-09", "2026-11-10"), TestUser.Reader, CancellationToken.None)));
+        var incident = status["incidents"]!["items"]!.AsArray().Single(i => (string?)i!["id"] == "INC-FAB-1109")!;
+
+        Assert.True(UntrustedText.IsLabel((string)profile["name"]!));
+        Assert.True(UntrustedText.IsLabel((string)status["name"]!));
+        Assert.True(UntrustedText.IsLabel((string)incident["reference"]!));
+        Assert.True(UntrustedText.IsWrapped((string)incident["summary"]!));
+    }
 }

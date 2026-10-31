@@ -1,6 +1,7 @@
 using Azure.Core;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,7 @@ using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
 using PaymentOps.Agent.Model;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Tools;
@@ -24,6 +26,10 @@ public sealed record InvestigationEndpoints(Uri SearchEndpoint, Uri FoundryEndpo
 
 public static class InvestigationServiceCollectionExtensions
 {
+    // Shared for the process, with pooled connections renewed so DNS changes are seen; each call's own deadline
+    // comes from the guard's screening budget.
+    private static readonly HttpClient ScreenHttp = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) { Timeout = TimeSpan.FromSeconds(30) };
+
     /// <summary>
     /// Registers the investigation behind <see cref="IInvestigationService"/> and ticket decisions behind <see cref="IApprovalService"/>.
     /// Needs <see cref="AiRelease"/>, <see cref="IPromptProvider"/>, <see cref="TokenCredential"/>, a scoped
@@ -41,9 +47,17 @@ public static class InvestigationServiceCollectionExtensions
         services.AddSingleton(sp =>
         {
             var model = ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment);
-            return observeModel is null ? model : observeModel(model);
+            return ContentFilter.Checked(observeModel is null ? model : observeModel(model));
         });
         services.AddInvestigationTools();
+
+        // Prompt Shields lives on the Foundry account's generic endpoint, configured separately from the model's. Without
+        // one (only Development allows that) nothing can be checked, so untrusted tool text is withheld.
+        services.AddSingleton<ScreenCache>();
+        services.AddSingleton<IUntrustedTextScreen>(sp =>
+            sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
+                ? new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>())
+                : new UnavailableScreen());
         services.AddOptions<InvestigationLimits>();
         services.AddSingleton<FixedPrompt>();
 

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Model;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
 using PaymentOps.Tools;
@@ -27,6 +28,7 @@ internal sealed class InvestigationAgentRunner(
     IUserContext user,
     IOptions<InvestigationLimits> options,
     TimeProvider time,
+    IUntrustedTextScreen screen,
     ILogger<InvestigationAgentRunner> logger)
 {
     public const string PromptId = "investigation-agent";
@@ -58,7 +60,7 @@ internal sealed class InvestigationAgentRunner(
         }
 
         var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);
-        var guard = new ToolGuard(turn, _limits, time, user, progress);
+        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId);
         List<AITool> readTools = [.. tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).Select(guard.Wrap)];
 
         // No default tools: tools passed per run are added to an agent's defaults, and the correction run must offer only submit_assessment.
@@ -102,13 +104,17 @@ internal sealed class InvestigationAgentRunner(
             },
             (failure, ex) =>
             {
-                if (failure == TurnFailure.ServiceFailed)
+                switch (failure)
                 {
-                    InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
-                }
-                else
-                {
-                    InvestigationLog.Aborted(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                    case TurnFailure.ServiceFailed:
+                        InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                        break;
+                    case TurnFailure.Blocked:
+                        InvestigationLog.Blocked(logger, investigationId, ex is ContentFilteredException ? "completion" : "prompt", timer.ElapsedMilliseconds);
+                        break;
+                    default:
+                        InvestigationLog.Aborted(logger, investigationId, ex, timer.ElapsedMilliseconds);
+                        break;
                 }
             },
             cancellationToken);

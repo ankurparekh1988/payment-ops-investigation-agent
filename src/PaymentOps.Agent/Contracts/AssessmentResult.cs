@@ -33,6 +33,9 @@ public enum NotAssessedReason
     LimitReached,
     AssessmentUnverified,
 
+    /// <summary>The content safety policy blocked the question or the answer; nothing from the turn is shown.</summary>
+    Blocked,
+
     /// <summary>The person stopped the investigation; nothing from it is kept.</summary>
     Cancelled,
 

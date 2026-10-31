@@ -80,8 +80,8 @@ internal sealed class InvestigationService(
     {
         var turns = conversation.Turns;
         var budget = HistoryProjection.HistoryBudgetChars(conversationOptions.Value, limits.Value, fixedPrompt.Chars);
-        var history = HistoryProjection.Build(turns, budget, proposals.NoteFor);
-        var ended = turns.Count >= conversationOptions.Value.MaxQuestions || (turns.Count > 0 && history.Count == 0);
+        var (history, newestDoesNotFit) = HistoryProjection.Carry(turns, budget, proposals.NoteFor);
+        var ended = turns.Count >= conversationOptions.Value.MaxQuestions || newestDoesNotFit;
         return (history, ended);
     }
 }

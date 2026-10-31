@@ -190,6 +190,14 @@ resource "azurerm_role_assignment" "app_foundry" {
   principal_type       = "ServicePrincipal"
 }
 
+# Screens untrusted tool text before the model reads it. The custom role is created by the bootstrap.
+resource "azurerm_role_assignment" "app_prompt_shields" {
+  scope                = module.foundry.account_id
+  role_definition_name = "${var.name_prefix} Prompt Shields User"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
 # Queries and source lookups; the app reads the index and nothing else in Search.
 resource "azurerm_role_assignment" "app_search_reader" {
   scope                = module.search.id

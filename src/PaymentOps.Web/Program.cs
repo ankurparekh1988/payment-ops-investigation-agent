@@ -11,6 +11,7 @@ using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
@@ -83,6 +84,12 @@ var search = builder.Configuration.GetSection(SearchOptions.SectionName).Get<Sea
 // answered; outside Development that's a deployment mistake, so startup fails.
 if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answeringEndpoint)
 {
+    // Screening untrusted tool text needs the Content Safety endpoint; without it everything untrusted is withheld.
+    if (!builder.Environment.IsDevelopment() && ContentSafetyOptions.Endpoint(builder.Configuration) is null)
+    {
+        throw new InvalidOperationException($"{ContentSafetyOptions.EndpointKey} must be an https address outside Development.");
+    }
+
     builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));
     healthChecks.Add(new HealthCheckRegistration(
         "search",

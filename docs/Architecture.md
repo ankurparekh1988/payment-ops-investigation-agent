@@ -176,6 +176,7 @@ flowchart LR
   G --> T["Tools<br/>PaymentOps.Tools"]
   T --> P["Data ports"]
   T --> K["Knowledge retrieval<br/>(the user's access)"]
+  G -- "untrusted text" --> PS["Prompt Shields"]
   G --> S[("This investigation's<br/>evidence and gaps")]
   A -- "submit_assessment" --> V["Validation against<br/>that evidence"]
   S --> V
@@ -205,11 +206,17 @@ A guard around every tool enforces these in our code; the framework's own iterat
 |---|---|
 | Tool calls per investigation | 10 (submitting the assessment isn't counted) |
 | Time per tool call | 5 s |
+| Time per tool call, including screening its text | 8 s |
+| Time to screen one tool result | 3 s, within what's left of the 8 s |
 | Time per investigation | 60 s |
 | The same call with the same arguments | Twice; a third stops the investigation |
 | Calls with invalid arguments | Two corrections; a third stops it |
 
 Tool calls run one at a time. An unexpected exception, or a call to a tool that doesn't exist, ends the loop at once, with no exception text sent to the model and no retry.
+
+### Screening tool text
+
+Tools mark every string written outside this system (names, incident notes and references, closure reasons, error codes, and knowledge) as untrusted data. Before a tool result reaches the model, the guard sends each marked value to Prompt Shields on the Foundry account, in pieces of up to 9,500 characters overlapping by 500, with at most five pieces and 10,000 characters to a call. A value flagged as an attack, or one that couldn't be checked in time, is replaced by fixed withheld text and recorded as a gap; the rest of the result goes through. Names, codes and references are marked as labels, which the model reads plain once they're screened clean; free text keeps its markers. Verdicts are cached by the text's hash, so repeated names and codes cost nothing. A knowledge section with anything withheld keeps its citation id but can't support a statement ([ADR 0013](adr/0013-screen-untrusted-tool-text.md), [Security](Security.md#injection-and-content-safety)).
 
 ### Assessments
 
@@ -217,8 +224,9 @@ The agent finishes by calling `submit_assessment`: an outcome (`assessed`, `inco
 
 - **The investigation's evidence.** Server code registers everything a tool returned, from typed results: knowledge sections as `S1`, `S2` and so on, records such as `payout:PO-…`, and computed facts such as `fact:missing-file:…`, each holding the exact records it was computed from. A count is supported by the group that counted every event, not by the few ids shown.
 - **Validation.** The summary and every claim need at least one id, and every id must be in this investigation's evidence. Ids in the text, blank text and impossible outcomes fail too. A failure goes back to the model, listed by rule, for one correction with only `submit_assessment` available; a second failure shows nothing.
-- **Set by the server, not the model.** A root cause backed by both data and knowledge is an *assessment*; otherwise it's a *hypothesis*. What the investigation couldn't check (a source unavailable or too slow, a list cut short, a check the user wasn't allowed, a limit reached) is recorded as it happens and shown in fixed words. Any such gap caps confidence at medium, and so does a hypothesis or any summary or claim that doesn't cite both data and knowledge. A stopped investigation is incomplete, with low confidence. When the data tools it tried all failed, the outcome is incomplete with no root cause, whatever was submitted.
+- **Set by the server, not the model.** A root cause backed by both data and knowledge is an *assessment*; otherwise it's a *hypothesis*. What the investigation couldn't check (a source unavailable or too slow, a list cut short, a check the user wasn't allowed, text withheld by the screen, a limit reached) is recorded as it happens and shown in fixed words. Any such gap caps confidence at medium, and so does a hypothesis or any summary or claim that doesn't cite both data and knowledge. A stopped investigation is incomplete, with low confidence. When the data tools it tried all failed, the outcome is incomplete with no root cause, whatever was submitted.
 - **Refusals.** A refusal has no claims, root cause or next steps and needs no evidence, so a question the tools can't serve is refused without a tool call. People see a fixed notice from the server instead of the model's summary; the evidence rule covers what the model states, and the notice states nothing about the data.
+- **Blocked.** When the content filter rejects the prompt or withholds the completion, the investigation ends *blocked*: the page shows a fixed notice, nothing partial, and the request isn't retried. That's a policy decision, distinct from the model being unavailable.
 - **"Now" is the data's.** An investigation clock gives the dataset's as-of time, and the agent is told the date from it, so "yesterday" means the same day whenever it runs.
 
 ### Two clocks
@@ -254,7 +262,7 @@ flowchart LR
 Follow-up questions see earlier ones as context, never as evidence.
 
 - **A fresh session every question.** The request is the instructions, the tool definitions, the newest earlier turns that fit, then the new question. Earlier tool calls and results are never replayed, and section ids such as `S1` never appear: a cited section is named by its title, and record ids stay as plain references the agent can look up again. Each earlier answer starts "Earlier context, not evidence for this question", and validation accepts only ids this question's own tools returned.
-- **What an earlier turn carries.** The question, the outcome, the summary, the claims, the root cause with its label, the confidence, the gaps, and what became of any proposal: created with its ticket id, rejected with the reason, expired or replaced. A question that wasn't assessed, or was refused, carries one fixed line.
+- **What an earlier turn carries.** The question, the outcome, the summary, the claims, the root cause with its label, the confidence, the gaps, and what became of any proposal: created with its ticket id, rejected with the reason, expired or replaced. Only answered turns (assessed, incomplete or escalated) are carried. A blocked, refused or unassessed question stays on the page but is never sent to the model again, so an attack the model declined can't come back with every later question; it still counts toward the 20.
 - **A budget the application owns.** The input budget is 32,000 tokens, a setting rather than a claim about the model. The current question reserves its share first: the instructions and tool definitions as sent (about 3,300 tokens, measured), the longest allowed question, ten tool results at 2,300 tokens each, and the output. What's left, about 3,400 tokens, goes to history, and startup refuses, with the same calculation, a budget that would leave no history. Sizes are estimated at three characters a token; the recorded live runs compared that with the counted input.
 - **Ending.** A conversation ends at 20 questions, or when the newest earlier turn alone doesn't fit. When fewer than all earlier questions are carried, the page says how many the agent sees. A new investigation, or a reload, starts again with nothing carried over.
 

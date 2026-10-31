@@ -72,14 +72,15 @@ internal static class AssessmentPolicy
 
     /// <summary>
     /// The processor's reference from the incidents the ticket cites for its processor, when they agree on one.
-    /// Read from typed incident data only; model text is never searched for it.
+    /// Read from typed incident data only; model text is never searched for it, and a reference withheld from the
+    /// model is never carried.
     /// </summary>
     public static string? Reference(ProposedTicket ticket, TurnState turn)
     {
         var references = ticket.EvidenceIds
             .Select(id => turn.TryGetEvidence(id, out var item) ? item : null)
             .OfType<IncidentEvidence>()
-            .Where(incident => incident.ProcessorId == ticket.ProcessorId && incident.ProcessorReference is not null)
+            .Where(incident => incident.ProcessorId == ticket.ProcessorId && incident.ProcessorReference is not null && !turn.WasWithheld(incident.ProcessorReference))
             .Select(incident => incident.ProcessorReference!)
             .Distinct(StringComparer.Ordinal)
             .ToList();

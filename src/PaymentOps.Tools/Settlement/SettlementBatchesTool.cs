@@ -121,14 +121,18 @@ public sealed class SettlementBatchesTool(
         var nonSettlementDays = calendar.Values
             .Where(day => !day.IsSettlementDay && day.Date >= range.Start && day.Date <= range.End)
             .OrderBy(day => day.Date)
-            .Select(day => new NonSettlementDay(day.Date, Reason(day), call.NonSettlementDay(day.Date)))
+            .Select(day => new NonSettlementDay(day.Date, day.ClosureReason is { } reason ? UntrustedText.Wrap(reason) : Weekend, call.NonSettlementDay(day.Date)))
             .ToList();
 
         return call.Evidence.Ok(new SettlementActivity(merchant.Id, call.Evidence.Record(EvidenceIds.Merchant(merchant.Id), merchant.Name), views, nonSettlementDays));
     }
 
     // The port lists weekends with no reason; closure days carry theirs.
-    private static string Reason(SettlementDay day) => day.ClosureReason ?? "Weekend";
+    // A closure reason is written outside this system; "Weekend" is ours.
+    private const string Weekend = "Weekend";
+
+    // For evidence labels, which only people read; what the model reads is wrapped where the result is built.
+    private static string Reason(SettlementDay day) => day.ClosureReason ?? Weekend;
 
     /// <summary>One call's view building, sharing the calendar, the clock and the evidence being collected.</summary>
     private sealed class Call(IInvestigationClock clock, Merchant merchant, Dictionary<DateOnly, SettlementDay> calendar, EvidenceCollector evidence)
@@ -162,14 +166,15 @@ public sealed class SettlementBatchesTool(
                 var batchFiles = filesByDate[date].ToList();
                 return new Batch(
                     date,
-                    evidence.Cap(batchPayments.ConvertAll(p => Payment(p, processor, timings[p.Id]!)), $"{processor.Name} payments for {date:yyyy-MM-dd}"),
+                    evidence.Cap(batchPayments.ConvertAll(p => Payment(p, processor, timings[p.Id]!)), $"{processor.Id} payments for {date:yyyy-MM-dd}"),
                     batchFiles.ConvertAll(File),
                     [.. payoutsByDate[date].Select(Payout)],
                     MissingFile(processor, date, batchPayments, batchFiles),
                     PaymentSets(processor, date, batchFiles));
             }).ToList();
 
-            return new ProcessorBatches(processor.Id, processor.Name, evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name), evidence.Cap(batches, $"{processor.Name} batches"));
+            // Truncation notes become gaps, which later turns carry to the model, so they name the processor by id.
+            return new ProcessorBatches(processor.Id, UntrustedText.Label(processor.Name), evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name), evidence.Cap(batches, $"{processor.Id} batches"));
         }
 
         public string NonSettlementDay(DateOnly date)

@@ -1,7 +1,10 @@
+using System.ClientModel;
+
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Tests;
 using PaymentOps.Evaluation.Challenger;
 using PaymentOps.Evaluation.Running;
 
@@ -21,6 +24,8 @@ public sealed class TurnOutcomeParityTests
         TurnTimeout,
         ModelUnavailable,
         Unexpected,
+        PromptFiltered,
+        CompletionFiltered,
     }
 
     public static TheoryData<Failure, string> Failures => new()
@@ -29,6 +34,8 @@ public sealed class TurnOutcomeParityTests
         { Failure.TurnTimeout, "not-assessed:limit-reached" },
         { Failure.ModelUnavailable, "not-assessed:model-unavailable" },
         { Failure.Unexpected, "not-assessed:assessment-unverified" },
+        { Failure.PromptFiltered, "not-assessed:blocked" },
+        { Failure.CompletionFiltered, "not-assessed:blocked" },
     };
 
     [Theory]
@@ -72,6 +79,10 @@ public sealed class TurnOutcomeParityTests
                     throw new HttpRequestException("The model service didn't answer.");
                 case Failure.Unexpected:
                     throw new InvalidOperationException("A bug.");
+                case Failure.PromptFiltered:
+                    throw new ClientResultException(new FakePipelineResponse(400, "{\"error\":{\"code\":\"content_filter\"}}"));
+                case Failure.CompletionFiltered:
+                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty)) { FinishReason = ChatFinishReason.ContentFilter };
             }
 
             throw new InvalidOperationException("Unreachable.");

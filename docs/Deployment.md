@@ -87,8 +87,9 @@ Later runs apply against the remote state directly. To check for drift, run the 
 | `id-<prefix>-gh-eval` | Evaluation identity that calls the model and reads the indexes ([AI evaluation](#ai-evaluation)) |
 | `id-<prefix>-gh-eval-publish` | Evaluation identity that writes the evaluation index and the evaluation history |
 | *Model Availability Reader* role | Custom role for the model preflight (below) |
+| *Prompt Shields User* role | Custom role holding only the Prompt Shields call, assignable in the environment's resource group. The platform grants it to the app; the bootstrap grants it to `gh-eval` and developers, on the Foundry account once `TF_VAR_eval_foundry_account_id` is set |
 | `gh-deploy` search roles | Search Service Contributor and Search Index Data Contributor on the environment's resource group, so the pipeline can create the knowledge index and publish to it |
-| Developer role assignments | Optional, for `TF_VAR_developer_object_ids`: OpenAI User, Foundry User and Search Index Data Reader |
+| Developer role assignments | Optional, for `TF_VAR_developer_object_ids`: OpenAI User, Foundry User and Search Index Data Reader, and Prompt Shields User on the Foundry account |
 | Evaluation role assignments | Each on one exact resource, once its `TF_VAR_eval_*` scope is set from the platform outputs ([AI evaluation](#ai-evaluation)) |
 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
@@ -147,6 +148,10 @@ The platform stack creates everything the application runs on. Each tier is size
 | Budget and action group | | Free | Emails at 50%, 80% and 100% of actual spend, and on a forecast overrun |
 
 The strict content filter is attached to the chat deployments: anything above "Safe" in the four harm categories is blocked on prompts and completions, as are jailbreak attempts. The evaluation judge uses Microsoft's default filter, because it has to read deliberately unsafe answers when scoring the safety evaluations.
+
+The app screens untrusted tool text with Prompt Shields on the same Foundry account, through its generic endpoint rather than the model's. The platform sets it as `PaymentOps__ContentSafety__Endpoint`, and the app won't start outside Development without it. Running locally, set `PaymentOps:ContentSafety:Endpoint` in user-secrets to the platform's `content_safety_endpoint` output; without it, every untrusted value is withheld from the model.
+
+**Before deploying a change that adds a role to the delegable list,** such as *Prompt Shields User*, re-run `scripts/bootstrap.sh`. The deploy identity can assign only the roles its condition lists, and only the bootstrap creates the role and widens that list. Until then CD's apply fails on the app's role assignment.
 
 ### Model preflight
 
@@ -339,6 +344,7 @@ A pull request can show what *would* change, but cannot change anything. Only jo
 - Storage Blob Data Contributor
 - Log Analytics Reader
 - Monitoring Metrics Publisher
+- Prompt Shields User (custom, created by the bootstrap)
 
 Storage Blob Data Reader stays on the list so the platform can remove grants it made before. It cannot grant Owner or Contributor, and cannot assign roles to users or groups. Developer access is granted by the bootstrap for the same reason.
 

@@ -42,12 +42,13 @@ public sealed class MerchantProfileTool(IMerchantData merchants, IProcessorData 
             var processor = await ReadAsync(token => processors.FindAsync(processorId, token), DataSources.Processors, cancellationToken);
             routed.Add(processor is null
                 ? new RoutedProcessor(processorId, processorId, null)
-                : new RoutedProcessor(processorId, processor.Name, evidence.Record(EvidenceIds.Processor(processorId), processor.Name)));
+                : new RoutedProcessor(processorId, UntrustedText.Label(processor.Name), evidence.Record(EvidenceIds.Processor(processorId), processor.Name)));
         }
 
         var hold = merchant.RiskHold is { } h
             ? new RiskHoldView(h.Id, h.PlacedAt, h.RuleId, h.ReviewBy, evidence.Record(EvidenceIds.Hold(h.Id), $"Risk hold {h.Id}"))
             : null;
-        return evidence.Ok(new MerchantProfile(merchant.Id, merchant.Name, evidence.Record(EvidenceIds.Merchant(merchant.Id), merchant.Name), routed, hold));
+        // Names come from onboarding, outside this system, so they are screened before the model reads them.
+        return evidence.Ok(new MerchantProfile(merchant.Id, UntrustedText.Label(merchant.Name), evidence.Record(EvidenceIds.Merchant(merchant.Id), merchant.Name), routed, hold));
     }
 }

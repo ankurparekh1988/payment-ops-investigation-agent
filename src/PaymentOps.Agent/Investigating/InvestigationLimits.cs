@@ -8,7 +8,14 @@ public sealed class InvestigationLimits
     /// <summary>Read-tool calls per turn; <c>submit_assessment</c> isn't counted.</summary>
     public int MaxToolCalls { get; set; } = 10;
 
+    /// <summary>How long the tool or data source itself may take.</summary>
     public TimeSpan ToolTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>The whole guarded call, from starting the tool to finishing its screening; budgets the screening, not the source.</summary>
+    public TimeSpan ToolResultBudget { get; set; } = TimeSpan.FromSeconds(8);
+
+    /// <summary>How long Prompt Shields may take, within what remains of <see cref="ToolResultBudget"/>.</summary>
+    public TimeSpan ScreenTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
     public TimeSpan TurnTimeout { get; set; } = TimeSpan.FromSeconds(60);
 

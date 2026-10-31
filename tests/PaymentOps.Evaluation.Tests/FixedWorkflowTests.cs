@@ -18,6 +18,11 @@ public sealed class FixedWorkflowTests
 
     private static ChatResponse Submit(object submission) => ScriptedChatClient.Call(ToolNames.SubmitAssessment, submission);
 
+    // The challenger is given no screen, so it withholds every knowledge section and can't cite one; this cites data only.
+    private static object DataOnly() => Submission(
+        summary: Statement("The 9 November Fabrikam file never arrived.", [MissingFile], []),
+        rootCause: Statement("A Fabrikam settlement outage stopped the file.", [MissingFile, Incident], []));
+
     private static FixedWorkflowCaseRunner Challenger(Func<ScriptedChatClient> model) =>
         new(Release, Endpoints, new UnusedCredential(), _ => model(), _ => new FixedKnowledge(GeneralSection));
 
@@ -27,7 +32,7 @@ public sealed class FixedWorkflowTests
     [Fact]
     public async Task The_fan_out_calls_profile_then_batches_status_errors_and_knowledge()
     {
-        var result = await RunAsync(() => Model(Scope("\"M-1042\""), Submit(Submission())));
+        var result = await RunAsync(() => Model(Scope("\"M-1042\""), Submit(DataOnly())));
 
         var reads = result.Calls.Where(c => c.Tool != ToolNames.SubmitAssessment).ToList();
         Assert.Equal(ToolNames.MerchantProfile, reads[0].Tool);
@@ -76,7 +81,7 @@ public sealed class FixedWorkflowTests
     {
         var bad = Submission(summary: Statement("The file never arrived.", ["file:NO-SUCH-FILE"], []), confidence: "low");
 
-        var corrected = await RunAsync(() => Model(Scope("\"M-1042\""), Submit(bad), Submit(Submission())));
+        var corrected = await RunAsync(() => Model(Scope("\"M-1042\""), Submit(bad), Submit(DataOnly())));
         var twice = await RunAsync(() => Model(Scope("\"M-1042\""), Submit(bad), Submit(bad)));
 
         Assert.Equal("assessed", corrected.Outcome);
@@ -99,16 +104,16 @@ public sealed class FixedWorkflowTests
         Assert.DoesNotContain("expected", text, StringComparison.OrdinalIgnoreCase);
     }
 
+    // A ticket needs a knowledge citation, and without a screen the challenger has none it may cite: it fails closed.
     [Fact]
-    public async Task An_engineer_challenger_proposal_is_stored_approved_and_counted()
+    public async Task Without_a_screen_the_challenger_cannot_ground_a_proposal()
     {
-        var engineer = await Challenger(() => Model(Scope("\"M-1042\""), Submit(Submission(Ticket())))).RunAsync([Case(role: "engineer")], CancellationToken.None);
-        var reader = await Challenger(() => Model(Scope("\"M-1042\""), Submit(Submission(Ticket())))).RunAsync([Case()], CancellationToken.None);
+        var engineer = await Challenger(() => Model(Scope("\"M-1042\""), Submit(Submission(Ticket())), Submit(Submission(Ticket())))).RunAsync([Case(role: "engineer")], CancellationToken.None);
 
-        Assert.Equal(ProposalStates.Approved, Assert.Single(engineer.Results).ProposalState);
-        Assert.Equal(1, engineer.TicketsInStore);
-        Assert.Equal(ProposalStates.Draft, Assert.Single(reader.Results).ProposalState);
-        Assert.Equal(0, reader.TicketsInStore);
+        var result = Assert.Single(engineer.Results);
+        Assert.Equal("not-assessed:assessment-unverified", result.Outcome);
+        Assert.Equal(ProposalStates.None, result.ProposalState);
+        Assert.Equal(0, engineer.TicketsInStore);
     }
 
     [Fact]
