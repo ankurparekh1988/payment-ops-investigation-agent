@@ -204,18 +204,19 @@ Two controls with different jobs: the deployment's content filter screens what t
 
 **The content filter.** Chat deployments use a strict policy. Anything above "Safe" in the hate, sexual, violence and self-harm categories is blocked, on both prompts and completions, along with prompt attacks in user prompts and protected text in completions. Filtering is synchronous, so blocked output is never streamed. A rejected prompt or a withheld completion ends the investigation as *blocked*, and the person sees "This question can't be investigated: it was blocked by the content safety policy." Nothing partial is shown, and the request isn't retried. Some legitimate operational language may be blocked; the safety evaluation measures how often.
 
-**What's screened.** Trust follows provenance, not appearance. These are written outside the system, and each is marked and screened wherever it appears:
+**What's screened.** Trust follows provenance, not appearance. These are written outside the system, and each is marked and screened wherever it appears. Free text keeps its `<untrusted-data>` markers when it's clean. Names, codes and references are marked as labels: once one is screened clean the model reads it plain, and one that isn't is withheld like any other text.
 
-| Text | Tool |
-|---|---|
-| Knowledge title, section path and content | `search_knowledge` |
-| Merchant name | `get_merchant_profile` |
-| Processor name | `get_merchant_profile`, `get_processor_status`, `get_settlement_batches` |
-| Incident summary and the processor's reference | `get_processor_status` |
-| Closure-day reason | `get_settlement_batches` |
-| Error code | `get_error_events` |
+| Text | Tool | Read by the model as |
+|---|---|---|
+| Knowledge title, section path and content | `search_knowledge` | Marked data |
+| Merchant name | `get_merchant_profile` | Plain label |
+| Processor name | `get_merchant_profile`, `get_processor_status`, `get_settlement_batches` | Plain label |
+| Incident summary | `get_processor_status` | Marked data |
+| The processor's reference | `get_processor_status` | Plain label |
+| Closure-day reason | `get_settlement_batches` | Marked data |
+| Error code | `get_error_events` | Plain label |
 
-Ids, dates, amounts, enum values and time zones checked against the IANA list stay plain. A test poisons every string in the data and the knowledge, runs every tool, and fails if any poison appears unmarked, so a new field can't slip past. Evidence labels, which name merchants and processors, are built by the server and shown only to people; the model never reads them.
+Labels are plain because markers around names changed what the model asked for next: with every name marked, it stopped widening a settlement search to the day before, and tool argument accuracy fell below the gate. Ids, dates, amounts, enum values and time zones checked against the IANA list stay plain. A test poisons every string in the data and the knowledge, runs every tool through a screen that flags the poison, and fails if any poison reaches the model, so a new field can't slip past. Evidence labels, which name merchants and processors, are built by the server and shown only to people; the model never reads them.
 
 **Fail closed.** A flagged value is replaced by "[withheld: this text was flagged as a possible instruction to the assistant]"; one that couldn't be checked, by "[withheld: this text couldn't be checked]". The result shows a gap saying which source lost text and why. Without the Content Safety endpoint, which only Development allows, nothing can be checked and every untrusted value is withheld. The log records how many values were screened, flagged and unscreenable, never the text.
 

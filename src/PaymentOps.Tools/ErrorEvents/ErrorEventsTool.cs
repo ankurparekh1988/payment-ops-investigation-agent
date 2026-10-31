@@ -54,7 +54,7 @@ public sealed class ErrorEventsTool(IErrorEventData events, IInvestigationClock 
                 eventIds);
             // Codes are the processor's, not this system's: screened even when they look like codes.
             return new ErrorEventGroup(
-                group.Key.ProcessorId, category, UntrustedText.Wrap(group.Key.Code), members.Count, members[0].OccurredAt, members[^1].OccurredAt,
+                group.Key.ProcessorId, category, UntrustedText.Label(group.Key.Code), members.Count, members[0].OccurredAt, members[^1].OccurredAt,
                 evidence.Cap<string>([.. members.Select(e => e.Id)], $"{Sentence(category)} events from {group.Key.ProcessorId}"), factId);
         }).ToList();
 

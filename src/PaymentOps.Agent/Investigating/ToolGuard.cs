@@ -188,17 +188,18 @@ internal sealed class ToolGuard(
         return (ToolJson.Serialize(result), gap);
     }
 
-    // Every value that is wholly one untrusted segment is screened; a value the screen doesn't pass is replaced, so the
-    // model never reads it. Screening that runs out of time or fails withholds the text too.
+    // Every value that is wholly one untrusted segment or label is screened; a value the screen doesn't pass is
+    // replaced, so the model never reads it, and a clean label is read plain. Screening that runs out of time or fails
+    // withholds the text too.
     private async Task<(string Json, ObservedGap? Gap)> ScreenAsync(IInvestigationTool tool, string json, TimeSpan remaining, CancellationToken cancellationToken)
     {
-        if (!json.Contains(UntrustedText.Open, StringComparison.Ordinal))
+        if (!json.Contains(UntrustedText.Open, StringComparison.Ordinal) && !json.Contains(UntrustedText.LabelOpen, StringComparison.Ordinal))
         {
             return (json, null);
         }
 
         var root = JsonNode.Parse(json)!;
-        var marked = Values(root).Where(v => UntrustedText.IsWrapped(v.GetValue<string>())).ToList();
+        var marked = Values(root).Where(v => v.GetValue<string>() is var text && (UntrustedText.IsWrapped(text) || UntrustedText.IsLabel(text))).ToList();
         if (marked.Count == 0)
         {
             return (json, null);
@@ -212,20 +213,26 @@ internal sealed class ToolGuard(
             turn.SectionScreened(section.Key!, readInFull: section.All(p => p.Second == ScreenVerdict.Clean));
         }
 
+        var labels = marked.Select(v => UntrustedText.IsLabel(v.GetValue<string>())).ToList();
         var flagged = verdicts.Count(v => v == ScreenVerdict.Attack);
         var unscreenable = verdicts.Count(v => v == ScreenVerdict.Unavailable);
-        if (flagged + unscreenable == 0)
-        {
-            return (json, null);
-        }
-
         for (var i = 0; i < marked.Count; i++)
         {
+            var text = UntrustedText.Unwrap(marked[i].GetValue<string>());
             if (verdicts[i] != ScreenVerdict.Clean)
             {
-                turn.TextWithheld(UntrustedText.Unwrap(marked[i].GetValue<string>()));
+                turn.TextWithheld(text);
                 marked[i].ReplaceWith(JsonValue.Create(UntrustedText.Wrap(verdicts[i] == ScreenVerdict.Attack ? Withheld : Unscreenable)));
             }
+            else if (labels[i])
+            {
+                marked[i].ReplaceWith(JsonValue.Create(text));
+            }
+        }
+
+        if (flagged + unscreenable == 0)
+        {
+            return (labels.Contains(true) ? root.ToJsonString(ToolJson.Options) : json, null);
         }
 
         InvestigationLog.TextWithheld(_logger, investigationId, tool.Name, marked.Count, flagged, unscreenable);

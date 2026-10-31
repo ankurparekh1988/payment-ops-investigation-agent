@@ -40,13 +40,13 @@ public sealed class ProcessorStatusTool(IProcessorData processors, IInvestigatio
         var incidents = await ReadAsync(token => processors.GetIncidentsAsync(processorId, range.FromUtc, range.ToUtcExclusive, token), DataSources.Processors, cancellationToken);
         var evidence = Collect();
         var views = incidents.Select(i => new IncidentView(
-            i.Id, ToolJson.Word(i.Component), i.StartedAt, i.ResolvedAt, i.ProcessorReference is { } reference ? UntrustedText.Wrap(reference) : null, UntrustedText.Wrap(i.Summary),
+            i.Id, ToolJson.Word(i.Component), i.StartedAt, i.ResolvedAt, i.ProcessorReference is { } reference ? UntrustedText.Label(reference) : null, UntrustedText.Wrap(i.Summary),
             evidence.Incident(i))).ToList();
 
         var c = processor.Configuration;
         return evidence.Ok(new ProcessorStatus(
             processor.Id,
-            UntrustedText.Wrap(processor.Name),
+            UntrustedText.Label(processor.Name),
             evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name),
             new ProcessorSettings(c.CutOff, c.TimeZoneId, c.ExpectedDelivery, c.LateAfter, c.HoldingSettlementDays),
             evidence.Cap(views, "Incidents")));

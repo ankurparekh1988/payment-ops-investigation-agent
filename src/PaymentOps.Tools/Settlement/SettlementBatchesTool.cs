@@ -174,7 +174,7 @@ public sealed class SettlementBatchesTool(
             }).ToList();
 
             // Truncation notes become gaps, which later turns carry to the model, so they name the processor by id.
-            return new ProcessorBatches(processor.Id, UntrustedText.Wrap(processor.Name), evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name), evidence.Cap(batches, $"{processor.Id} batches"));
+            return new ProcessorBatches(processor.Id, UntrustedText.Label(processor.Name), evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name), evidence.Cap(batches, $"{processor.Id} batches"));
         }
 
         public string NonSettlementDay(DateOnly date)
