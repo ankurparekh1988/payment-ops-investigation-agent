@@ -1,4 +1,7 @@
+using System.Text.Json;
+
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Data.Demo;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Challenger;
 using PaymentOps.Evaluation.Retrieval;
@@ -34,13 +37,14 @@ internal static class SafetyDataset
         }
 
         var processors = KnownProcessor.FromDemoData().Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+        var withIncidents = ProcessorsWithIncidents();
         var docs = corpus.Select(s => s.DocId).ToHashSet(StringComparer.Ordinal);
         var general = corpus.Where(s => s.Classification == KnowledgeClassification.General).Select(s => s.Content).ToList();
         var sections = new Dictionary<string, string>(StringComparer.Ordinal);
         var problems = file.Cases.GroupBy(c => c.Id, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => $"{g.Key}: id appears more than once.").ToList();
         foreach (var c in file.Cases)
         {
-            problems.AddRange(Check(c, processors, general).Select(problem => $"{c.Id}: {problem}"));
+            problems.AddRange(Check(c, processors, withIncidents, general).Select(problem => $"{c.Id}: {problem}"));
             if (c.Poison is { Surface: SafetyPoison.Knowledge } poison)
             {
                 if (!CalibrationReferences.TryResolve(new ExpectedSection(poison.Target, poison.SectionPath ?? string.Empty), corpus, docs, out var key, out var error))
@@ -61,7 +65,7 @@ internal static class SafetyDataset
         return problems.Count > 0 ? throw new InvalidDataException(string.Join(Environment.NewLine, problems)) : new LoadedSafetyCases(file.Cases, sections);
     }
 
-    private static IEnumerable<string> Check(SafetyCase c, HashSet<string> processors, List<string> generalText)
+    private static IEnumerable<string> Check(SafetyCase c, HashSet<string> processors, HashSet<string> withIncidents, List<string> generalText)
     {
         if (!SafetyCase.Kinds.Contains(c.Kind))
         {
@@ -105,6 +109,9 @@ internal static class SafetyDataset
             {
                 case SafetyPoison.ProcessorIncident when !processors.Contains(poison.Target):
                     yield return $"no processor '{poison.Target}'.";
+                    break;
+                case SafetyPoison.ProcessorIncident when !withIncidents.Contains(poison.Target):
+                    yield return $"processor '{poison.Target}' has no incidents to plant text in.";
                     break;
                 case SafetyPoison.ProcessorIncident when poison.SectionPath is not null:
                     yield return "an incident poison has no sectionPath.";
@@ -153,6 +160,15 @@ internal static class SafetyDataset
                 yield return "restrictedSections only applies under general access.";
             }
         }
+    }
+
+    // Text is appended to a processor's incidents, so a processor with none would carry the poison nowhere.
+    private static HashSet<string> ProcessorsWithIncidents()
+    {
+        using var stream = typeof(DemoDataServiceCollectionExtensions).Assembly.GetManifestResourceStream("data/datasets/default/dataset.json")
+            ?? throw new InvalidOperationException("The demo dataset isn't embedded.");
+        using var json = JsonDocument.Parse(stream);
+        return [.. json.RootElement.GetProperty("incidents").EnumerateArray().Select(i => i.GetProperty("processorId").GetString()!)];
     }
 
     private sealed record SafetyFile(int SchemaVersion, string Description, IReadOnlyList<SafetyCase> Cases);
