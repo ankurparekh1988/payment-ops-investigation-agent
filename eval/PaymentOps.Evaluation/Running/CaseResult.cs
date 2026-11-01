@@ -50,6 +50,12 @@ internal sealed record CaseResult(string CaseId, string Outcome)
 
     public string ProposalState { get; init; } = ProposalStates.None;
 
+    /// <summary>The confidence an assessed result claimed, as labels write it; null when not assessed.</summary>
+    public string? Confidence { get; init; }
+
+    /// <summary>Tool text the screen flagged as an instruction, and so withheld from the model.</summary>
+    public int WithheldFlagged { get; init; }
+
     /// <summary>Set when the evaluation environment, not the system under test, failed this case; it invalidates the run.</summary>
     public string? InfrastructureFailure { get; init; }
 

@@ -32,6 +32,7 @@ internal sealed class CaseRecorder
     private readonly Dictionary<string, string> _facts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tickets = new(StringComparer.Ordinal);
     private int _requests;
+    private int _flagged;
     private long _inputTokens;
     private long _cachedInputTokens;
     private long _outputTokens;
@@ -89,6 +90,8 @@ internal sealed class CaseRecorder
                 ProposalSectionKeys = [.. proposal?.Citations.Select(c => c.SectionKey) ?? []],
                 RetrievedSections = [.. _retrieved.Values.Select(s => new SectionHit(s.Key, s.Classification))],
                 ProposalState = proposalState,
+                Confidence = assessed is null ? null : Outcomes.Word(assessed.Confidence),
+                WithheldFlagged = _flagged,
                 InfrastructureFailure = _failure ?? result switch
                 {
                     AssessmentResult.NotAssessed { Reason: NotAssessedReason.ModelUnavailable } => InfrastructureFailures.ModelUnavailable,
@@ -139,6 +142,18 @@ internal sealed class CaseRecorder
         JsonElement other => other.GetRawText(),
         _ => Convert.ToString(value, CultureInfo.InvariantCulture),
     };
+
+    private void Screened(IReadOnlyList<ScreenVerdict> verdicts)
+    {
+        lock (_lock)
+        {
+            _flagged += verdicts.Count(v => v == ScreenVerdict.Attack);
+            if (verdicts.Contains(ScreenVerdict.Unavailable))
+            {
+                _failure ??= InfrastructureFailures.ScreeningUnavailable;
+            }
+        }
+    }
 
     private void Retrieved(IReadOnlyList<RetrievedSection> sections)
     {
@@ -244,8 +259,8 @@ internal sealed class CaseRecorder
         }
     }
 
-    // A verdict the screen couldn't give, or a call that ran out of time, withholds text for want of Prompt Shields:
-    // the run then measures the outage, not the system.
+    // Flagged text is what the guard withheld as an attack. A verdict the screen couldn't give, or a call that ran out
+    // of time, withholds text for want of Prompt Shields: the run then measures the outage, not the system.
     private sealed class RecordingScreen(IUntrustedTextScreen inner, CaseRecorder recorder) : IUntrustedTextScreen
     {
         public async Task<IReadOnlyList<ScreenVerdict>> ScreenAsync(IReadOnlyList<string> segments, CancellationToken cancellationToken)
@@ -253,11 +268,7 @@ internal sealed class CaseRecorder
             try
             {
                 var verdicts = await inner.ScreenAsync(segments, cancellationToken);
-                if (verdicts.Contains(ScreenVerdict.Unavailable))
-                {
-                    recorder.Fail(InfrastructureFailures.ScreeningUnavailable);
-                }
-
+                recorder.Screened(verdicts);
                 return verdicts;
             }
             catch (OperationCanceledException)

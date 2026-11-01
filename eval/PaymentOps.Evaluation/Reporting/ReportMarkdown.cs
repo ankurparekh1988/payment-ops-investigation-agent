@@ -99,13 +99,60 @@ internal static class ReportMarkdown
         return md.ToString();
     }
 
+    public static string Safety(EvaluationReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        var md = new StringBuilder();
+        md.AppendLine("## Safety evaluation").AppendLine();
+        Header(md, report);
+        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.InjectionFollowed}: {report.Runs.Sum(r => r.SafetyHardGates?.InjectionFollowed.Count ?? 0)} across every run");
+        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.UnsafeHandling}: {report.Runs.Sum(r => r.SafetyHardGates?.UnsafeHandling.Count ?? 0)} across every run").AppendLine();
+
+        md.AppendLine("### Metrics").AppendLine();
+        md.AppendLine("Filtered means the Azure content filter blocked the question; a refusal is safe handling, not detection. Withheld means the screen flagged planted tool text.").AppendLine();
+        md.AppendLine("| Metric | Median | Min | Max | Threshold | N |").AppendLine("|---|---|---|---|---|---|");
+        foreach (var metric in MetricNames.Safety)
+        {
+            var s = report.Summary.GetValueOrDefault(metric) ?? new MetricSummary(null, null, null, 0);
+            var threshold = report.Gate.Thresholds.TryGetValue(metric, out var t) ? $"{t:F2} ({SafetyThresholdRule.Direction(metric)})" : "none";
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {metric} | {Value(s.Median)} | {Value(s.Min)} | {Value(s.Max)} | {threshold} | {s.N} |");
+        }
+
+        md.AppendLine().AppendLine("### Planted text by surface (median)").AppendLine();
+        md.AppendLine("| Surface | attack_withheld_rate | benign_withheld_rate |").AppendLine("|---|---|---|");
+        foreach (var (surface, summary) in report.Breakdown.Where(b => b.Key.StartsWith("surface:", StringComparison.Ordinal)))
+        {
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {surface["surface:".Length..]} | {Value(summary.GetValueOrDefault(MetricNames.AttackWithheldRate)?.Median)} | {Value(summary.GetValueOrDefault(MetricNames.BenignWithheldRate)?.Median)} |");
+        }
+
+        md.AppendLine().AppendLine("### Cases").AppendLine();
+        md.AppendLine("Each run's outcome, what the case missed in that run, and whether the tool that reads planted text was called.").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"| Case | Kind | {string.Join(" | ", report.Runs.Select(r => $"Run {r.Run}"))} |");
+        md.AppendLine(CultureInfo.InvariantCulture, $"|---|---|{string.Concat(report.Runs.Select(_ => "---|"))}");
+        foreach (var c in report.Stability)
+        {
+            var cells = c.Outcomes.Select((outcome, run) =>
+            {
+                var missed = c.Metrics.Where(m => !m.Value[run]).Select(m => m.Key).ToList();
+                var cell = missed.Count == 0 ? outcome : $"{outcome}; missed {string.Join(", ", missed)}";
+                return c.PoisonReachable is { } reachable && !reachable[run] ? $"{cell}; planted text not read" : cell;
+            });
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Group} | {string.Join(" | ", cells)} |");
+        }
+
+        md.AppendLine().AppendLine("### Latency and cost").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"Latency p50 {Seconds(report.Latency.P50)}, p95 {Seconds(report.Latency.P95)}. Estimated chat cost {Money(report.Cost.Chat, report.Cost.Currency)}; informational.");
+        return md.ToString();
+    }
+
     private static void Header(StringBuilder md, EvaluationReport report)
     {
         var gate = report.Gate;
         md.AppendLine(gate.Verdict switch
         {
             GateReport.Passed => "Gate: **passed**.",
-            GateReport.ReportOnly => "Gate: **report-only** (no thresholds); hard gates and viability passed.",
+            GateReport.ReportOnly => report.System == EvaluationReport.SafetySystem ? "Gate: **report-only** (no thresholds); hard gates passed." : "Gate: **report-only** (no thresholds); hard gates and viability passed.",
             _ => "Gate: **FAILED**.",
         }).AppendLine();
         foreach (var failure in gate.Failures)

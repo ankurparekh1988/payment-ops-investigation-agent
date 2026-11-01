@@ -6,6 +6,7 @@ using PaymentOps.Evaluation.Judging;
 using PaymentOps.Evaluation.Pricing;
 using PaymentOps.Evaluation.Retrieval;
 using PaymentOps.Evaluation.Running;
+using PaymentOps.Evaluation.Safety;
 using PaymentOps.Evaluation.Scoring;
 using PaymentOps.Platform.Ai;
 
@@ -44,10 +45,18 @@ internal sealed record RunReport(
     IReadOnlyDictionary<string, JudgeScore> Judge,
     IReadOnlyDictionary<string, double?> Metrics,
     HardGates HardGates,
-    int TicketsInStore);
+    int TicketsInStore)
+{
+    /// <summary>The safety evaluation's own hard gates; null in every other report.</summary>
+    public SafetyHardGates? SafetyHardGates { get; init; }
+}
 
 /// <summary>One case across runs: its outcome in each, and whether each run met each metric it's eligible for.</summary>
-internal sealed record CaseStability(string CaseId, string Group, string Set, IReadOnlyList<string> Outcomes, IReadOnlyDictionary<string, IReadOnlyList<bool>> Metrics);
+internal sealed record CaseStability(string CaseId, string Group, string Set, IReadOnlyList<string> Outcomes, IReadOnlyDictionary<string, IReadOnlyList<bool>> Metrics)
+{
+    /// <summary>For a poisoned safety case, whether each run called the tool that reads the planted text.</summary>
+    public IReadOnlyList<bool>? PoisonReachable { get; init; }
+}
 
 /// <summary>Nearest-rank percentiles in milliseconds; null when nothing was measured.</summary>
 internal sealed record Percentiles(long? P50, long? P95)
@@ -108,6 +117,8 @@ internal sealed record EvaluationReport(
     public const string AgentSystem = "agent";
     public const string FixedWorkflowSystem = "fixed-workflow";
     public const string RetrievalSystem = "retrieval";
+    public const string SafetySystem = "safety";
+    public const string SafetySet = "safety";
     public const string RegressionSet = "regression";
     public const string HeldOutSet = "held-out";
 
@@ -158,21 +169,6 @@ internal sealed record EvaluationReport(
             }
         }
 
-        var chatTokens = results.Aggregate(TokenUse.Zero, (sum, r) => sum.Add(new TokenUse(r.InputTokens, r.CachedInputTokens, r.OutputTokens)));
-        var judgeTokens = judgeScores.Aggregate(TokenUse.Zero, (sum, j) => sum.Add(new TokenUse(j.InputTokens, j.CachedInputTokens, j.OutputTokens)));
-        var price = context.Chat is { } chat ? prices.Find(chat.Identity) : null;
-        var chatCost = price is null ? null : (decimal?)PriceList.Cost(price, chatTokens);
-        var validated = results.Count(r => InvestigationCase.AssessedOutcomes.Contains(r.Outcome));
-        var cost = new CostReport(
-            price?.Currency,
-            chatCost,
-            context.Judge is { } judge && judgeScores.Count > 0 ? prices.Cost(judge.Identity, judgeTokens) : null,
-            PriceList.CostPerValidatedInvestigation(chatCost, validated),
-            validated,
-            chatTokens,
-            judgeTokens,
-            price?.Source);
-
         return new EvaluationReport(
             SupportedSchemaVersion,
             context.System,
@@ -189,8 +185,56 @@ internal sealed record EvaluationReport(
             [.. cases.Cases.Select(c => StabilityOf(c, runs, metrics))],
             Percentiles.Of(results.Select(r => r.LatencyMs)),
             Percentiles.Of(results.Where(r => r.TtfpMs is not null).Select(r => r.TtfpMs!.Value)),
-            cost,
+            CostOf(context, results, judgeScores, prices),
             GateFor(metrics, summary, thresholds, thresholdsFile, Applicable(n)),
+            []);
+    }
+
+    /// <summary>The safety cases over N runs, gated by <see cref="SafetyGate"/>, never by the investigation thresholds.</summary>
+    /// <param name="classification">Section key to classification, for every section in the corpus.</param>
+    public static EvaluationReport ForSafety(
+        ReportContext context,
+        IReadOnlyList<SafetyCase> cases,
+        IReadOnlyDictionary<string, string> classification,
+        IReadOnlyList<RunOutcome> runs,
+        PriceList prices,
+        SafetyThresholds? thresholds,
+        string? thresholdsFile)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(cases);
+        ArgumentNullException.ThrowIfNull(runs);
+        ArgumentNullException.ThrowIfNull(prices);
+
+        var scored = runs.Select(run => SafetyMetrics.Compute(cases, classification, run)).ToList();
+        var summary = Aggregation.Summarize([.. scored.Select(s => s.Metrics)], SafetyMetrics.Opportunities(cases));
+        var verdict = SafetyGate.Evaluate(scored, summary, thresholds);
+        var results = runs.SelectMany(run => run.Results).ToList();
+        var shown = thresholds?.Metrics.Where(m => MetricNames.Safety.Contains(m.Key)).ToDictionary(m => m.Key, m => m.Value.Threshold, StringComparer.Ordinal)
+            ?? new Dictionary<string, double>(StringComparer.Ordinal);
+
+        return new EvaluationReport(
+            SupportedSchemaVersion,
+            context.System,
+            context.Commit,
+            context.Prompts,
+            context.Chat,
+            context.Judge,
+            context.JudgePromptVersion,
+            context.StartedAt,
+            context.KnowledgeIndex,
+            [.. runs.Select((run, i) => new RunReport(i + 1, run.Results, new Dictionary<string, JudgeScore>(), scored[i].Metrics.Values, scored[i].Metrics.Hard, run.TicketsInStore) { SafetyHardGates = scored[i].Safety })],
+            summary,
+            SafetyMetrics.BySurface(cases, classification, runs),
+            [.. cases.Select(c => StabilityOf(c.ToInvestigationCase() with { Group = c.Kind }, runs, [.. scored.Select(s => s.Metrics)]) with
+            {
+                Set = SafetySet,
+                PoisonReachable = c.Poison is null ? null : [.. runs.Select(run => run.Results.FirstOrDefault(r => r.CaseId == c.Id) is { } r && SafetyMetrics.PoisonReachable(c, r))],
+            })],
+            Percentiles.Of(results.Select(r => r.LatencyMs)),
+            Percentiles.Of(results.Where(r => r.TtfpMs is not null).Select(r => r.TtfpMs!.Value)),
+            CostOf(context, results, [], prices),
+            new GateReport(!verdict.Passed ? GateReport.Failed : verdict.ReportOnly ? GateReport.ReportOnly : GateReport.Passed, verdict.Failures, thresholdsFile, shown),
             []);
     }
 
@@ -230,6 +274,25 @@ internal sealed record EvaluationReport(
     }
 
     public string ToJson() => JsonSerializer.Serialize(this, Json);
+
+    // Estimated model cost, informational only: the system's own chat calls, and the judge's apart.
+    private static CostReport CostOf(ReportContext context, List<CaseResult> results, List<JudgeScore> judgeScores, PriceList prices)
+    {
+        var chatTokens = results.Aggregate(TokenUse.Zero, (sum, r) => sum.Add(new TokenUse(r.InputTokens, r.CachedInputTokens, r.OutputTokens)));
+        var judgeTokens = judgeScores.Aggregate(TokenUse.Zero, (sum, j) => sum.Add(new TokenUse(j.InputTokens, j.CachedInputTokens, j.OutputTokens)));
+        var price = context.Chat is { } chat ? prices.Find(chat.Identity) : null;
+        var chatCost = price is null ? null : (decimal?)PriceList.Cost(price, chatTokens);
+        var validated = results.Count(r => InvestigationCase.AssessedOutcomes.Contains(r.Outcome));
+        return new CostReport(
+            price?.Currency,
+            chatCost,
+            context.Judge is { } judge && judgeScores.Count > 0 ? prices.Cost(judge.Identity, judgeTokens) : null,
+            PriceList.CostPerValidatedInvestigation(chatCost, validated),
+            validated,
+            chatTokens,
+            judgeTokens,
+            price?.Source);
+    }
 
     private static GateReport GateFor(IReadOnlyList<RunMetrics> runs, IReadOnlyDictionary<string, MetricSummary> summary, Thresholds? thresholds, string? file, IReadOnlySet<string> applicable)
     {
