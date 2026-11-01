@@ -38,6 +38,9 @@ internal static partial class InvestigationLog
     [LoggerMessage(EventId = 3006, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} blocked by the content filter on the {Side}, {ElapsedMs} ms")]
     public static partial void Blocked(ILogger logger, Guid investigationId, string side, long elapsedMs);
 
+    [LoggerMessage(EventId = 3007, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} question not investigated: {Verdict} after {ElapsedMs} ms")]
+    public static partial void QuestionBlocked(ILogger logger, Guid investigationId, Safety.QuestionVerdict verdict, long elapsedMs);
+
     public static void Aborted(ILogger logger, Guid investigationId, Exception exception, long elapsedMs) => Aborted(logger, investigationId, exception.GetType().Name, elapsedMs);
 
     [LoggerMessage(EventId = 3003, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} model call failed: {ExceptionType}, status {Status}, code {ErrorCode}, request {RequestId}, {ElapsedMs} ms")]

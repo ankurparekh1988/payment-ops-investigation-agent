@@ -36,6 +36,12 @@ public enum NotAssessedReason
     /// <summary>The content safety policy blocked the question or the answer; nothing from the turn is shown.</summary>
     Blocked,
 
+    /// <summary>The question was about harming oneself; it isn't investigated, and the notice points to support.</summary>
+    BlockedSelfHarm,
+
+    /// <summary>The question couldn't be checked for safety in time, so it wasn't investigated.</summary>
+    Unscreened,
+
     /// <summary>The person stopped the investigation; nothing from it is kept.</summary>
     Cancelled,
 

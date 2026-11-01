@@ -16,6 +16,8 @@ internal static class NotAssessedText
         NotAssessedReason.LimitReached => "The investigation stopped at its limit before reaching an assessment. Please try a narrower question.",
         NotAssessedReason.AssessmentUnverified => "I couldn't produce an assessment I can back with evidence. Please try rephrasing the question.",
         NotAssessedReason.Blocked => "This question can't be investigated: it was blocked by the content safety policy.",
+        NotAssessedReason.BlockedSelfHarm => "This question can't be investigated here. If you're thinking about harming yourself, please contact local emergency services or someone you trust now.",
+        NotAssessedReason.Unscreened => "This question couldn't be checked for safety, so it wasn't investigated. Please try again shortly.",
         NotAssessedReason.Cancelled => "Investigation cancelled. Nothing from it was kept.",
         NotAssessedReason.ConversationLimit => "This conversation is full. Start a new investigation to continue.",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null),

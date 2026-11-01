@@ -53,9 +53,9 @@ internal static class EvaluationFakes
     public static AgentCaseRunner AgentRunner(Func<ScriptedChatClient> model, IKnowledgeLookup? knowledge = null, IUntrustedTextScreen? screen = null) =>
         new(Release, Endpoints, new UnusedCredential(), _ => model(), _ => knowledge ?? new FixedKnowledge(GeneralSection), Screening(screen));
 
-    /// <summary>The app's services with a scripted Prompt Shields screen, clean unless a test says otherwise.</summary>
-    public static Action<IServiceCollection> Screening(IUntrustedTextScreen? screen = null) =>
-        services => services.AddSingleton(screen ?? ScriptedScreen.AllClean);
+    /// <summary>The app's services with scripted screens for tool text and questions, clean unless a test says otherwise.</summary>
+    public static Action<IServiceCollection> Screening(IUntrustedTextScreen? screen = null, IQuestionScreen? questions = null) =>
+        services => services.AddSingleton(screen ?? ScriptedScreen.AllClean).AddSingleton(questions ?? ScriptedQuestionScreen.AllClean);
 
     public static ScriptedChatClient Model(params ChatResponse[] responses) =>
         new([.. responses.Select(r => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => r))]);

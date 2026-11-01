@@ -58,6 +58,19 @@ public static class InvestigationServiceCollectionExtensions
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
                 ? new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>())
                 : new UnavailableScreen());
+
+        // Every question is screened before the agent runs; without the endpoint nothing can be, so nothing is investigated.
+        // The classifier has its own client on the same deployment, so it never appears among the agent's own requests.
+        services.AddSingleton<IQuestionScreen>(sp =>
+            sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
+                ? new ContentSafetyQuestionScreen(
+                    new ContentSafetyClient(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
+                    new HarmClassifier(
+                        ContentFilter.Checked(ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment)),
+                        sp.GetRequiredService<IPromptProvider>().GetPrompt(HarmClassifier.PromptId).Template.Render(new Dictionary<string, string>())),
+                    sp.GetRequiredService<IOptions<InvestigationLimits>>(),
+                    sp.GetService<TimeProvider>() ?? TimeProvider.System)
+                : new UnavailableQuestionScreen());
         services.AddOptions<InvestigationLimits>();
         services.AddSingleton<FixedPrompt>();
 

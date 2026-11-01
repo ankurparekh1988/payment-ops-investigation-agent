@@ -58,8 +58,11 @@ public sealed class TurnOutcomeParityTests
     }
 
     // A short turn timeout, so the timeout case ends in a moment rather than a minute.
-    private static void Configure(IServiceCollection services) =>
+    private static void Configure(IServiceCollection services)
+    {
         services.Configure<InvestigationLimits>(limits => limits.TurnTimeout = TimeSpan.FromMilliseconds(200));
+        Screening()(services);
+    }
 
     // Fails the first request in the way the case names; the caller's cancel is made from inside the request.
     private sealed class FailingModel(Failure failure, CancellationTokenSource caller) : IChatClient

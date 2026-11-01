@@ -20,7 +20,7 @@ namespace PaymentOps.Agent.Tests;
 
 public sealed class InvestigationRegistrationTests
 {
-    private static ServiceCollection Services()
+    internal static ServiceCollection Services()
     {
         var services = new ServiceCollection();
         var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());

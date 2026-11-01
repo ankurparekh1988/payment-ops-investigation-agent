@@ -25,6 +25,13 @@ public sealed class InvestigatePageTests(PaymentOpsWebApplicationFactory factory
         Assert.All(Enum.GetValues<NotAssessedReason>(), r => Assert.False(string.IsNullOrWhiteSpace(NotAssessedText.For(r, 1000))));
 
     [Fact]
+    public void A_self_harm_question_points_to_support_and_an_unscreened_one_asks_to_retry()
+    {
+        Assert.Equal("This question can't be investigated here. If you're thinking about harming yourself, please contact local emergency services or someone you trust now.", NotAssessedText.For(NotAssessedReason.BlockedSelfHarm, 1000));
+        Assert.Equal("This question couldn't be checked for safety, so it wasn't investigated. Please try again shortly.", NotAssessedText.For(NotAssessedReason.Unscreened, 1000));
+    }
+
+    [Fact]
     public void A_blocked_investigation_shows_the_safety_notice()
     {
         var text = NotAssessedText.For(NotAssessedReason.Blocked, 1000);

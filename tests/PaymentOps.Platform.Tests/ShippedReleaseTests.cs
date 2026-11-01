@@ -50,8 +50,8 @@ public sealed class ShippedReleaseTests
     }
 
     [Fact]
-    public void The_shipped_release_has_only_the_investigation_prompt()
+    public void The_shipped_release_has_the_investigation_and_harm_screen_prompts()
     {
-        Assert.Equal(["investigation-agent"], AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).Prompts.Keys);
+        Assert.Equal(["harm-screen", "investigation-agent"], AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).Prompts.Keys.Order(StringComparer.Ordinal));
     }
 }
