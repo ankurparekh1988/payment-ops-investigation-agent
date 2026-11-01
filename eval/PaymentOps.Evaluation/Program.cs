@@ -7,7 +7,7 @@
 // in Log Analytics. None of them writes to Search or edits the AI release. Exit codes: 0 passed or report-only, 1 failed, 2 bad command or input,
 // 3 the evaluation environment was unavailable.
 //
-// Usage: PaymentOps.Evaluation investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] --runs <n> --system agent|fixed-workflow --pricing <file> [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>
+// Usage: PaymentOps.Evaluation investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] --runs <n> --system agent|fixed-workflow --pricing <file> --content-safety <url> [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>
 //        PaymentOps.Evaluation retrieval-eval --endpoint <url> --ai <dir> --sources <dir> --dataset <file> [--thresholds <file>] [--index live|evaluation] --out <file> --summary <file>
 //        PaymentOps.Evaluation thresholds --investigations <report.json> --retrieval <report.json> --out <file>
 //        PaymentOps.Evaluation kill-test --agent <report.json> --challenger <report.json> --out <file> --summary <file>
