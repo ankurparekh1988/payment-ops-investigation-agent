@@ -205,7 +205,7 @@ Three layers. Every question is screened before any model request is made for it
 | Steered support for a claim or a ticket | A withheld knowledge section | It keeps its citation id but can't support anything |
 | An attack carried into later questions | Conversation history | Only answered turns are carried |
 
-**The question screen.** Three checks run together on every question and follow-up, under one 3 s budget, before the agent starts:
+**The question screen.** Three checks run together on every question and follow-up, under one 8 s budget, before the agent starts:
 - Content Safety's harm analysis for the four categories, blocking at Low severity and above;
 - Prompt Shields with the question as the user prompt;
 - one structured call to the chat deployment (prompt `harm-screen`), which sees only the question and names any of the four categories that apply.

@@ -19,7 +19,7 @@ Azure's detectors overlap, so adding one more of them would change little for mi
 
 **Every question is screened before any model request, and every untrusted tool value is screened for harm as well as instructions.**
 
-- **Three checks on each question and follow-up,** run together under one 3 s budget:
+- **Three checks on each question and follow-up,** run together under one 8 s budget. The two Azure calls take about 70 ms and the classifier about 2 s; a tighter budget would leave ordinary questions uninvestigated whenever the model is slow:
   - Content Safety's harm analysis, `text:analyze`, for the four categories at four severity levels. **Low (2) and above blocks**, the same level the strict filter blocks.
   - Prompt Shields with the question as the user prompt, for attempts to override the assistant.
   - **Our own classifier:** one structured call to the active chat deployment, with prompt `harm-screen` 1.0.0 from the AI release manifest. It sees only the question, with no tools and no history, and lists any of the four categories that apply. The prompt says that operational language, such as killing a job, attack traffic or a furious merchant, isn't harmful. A call the content filter refuses counts as a block. The classifier has its own client on the same deployment, so it never appears among the agent's requests.

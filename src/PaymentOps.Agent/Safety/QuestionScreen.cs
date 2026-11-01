@@ -115,7 +115,7 @@ internal sealed class HarmClassifier(IChatClient model, string instructions)
         {
             response = await model.GetResponseAsync(
                 [new ChatMessage(ChatRole.System, instructions), new ChatMessage(ChatRole.User, question)],
-                new ChatOptions { ResponseFormat = ChatResponseFormat.Json, Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } },
+                new ChatOptions { ResponseFormat = ChatResponseFormat.Json, MaxOutputTokens = 50, Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None } },
                 cancellationToken);
         }
         catch (Exception ex) when (ex is ContentFilteredException || ModelFailure.IsContentFilterRejection(ModelFailure.LastAttempt(ex)))
@@ -146,7 +146,7 @@ internal sealed class HarmClassifier(IChatClient model, string instructions)
 }
 
 /// <summary>
-/// The three checks on a question, run together under one budget: Content Safety's harm analysis, Prompt Shields'
+/// The three checks on a question, run together under one budget of 8 s: Content Safety's harm analysis, Prompt Shields'
 /// user-prompt attack check, and our classifier. Anything found blocks; any check that can't answer leaves the
 /// question unscreened, so it isn't investigated.
 /// </summary>
