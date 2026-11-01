@@ -10,6 +10,9 @@ public enum ScreenVerdict
     /// <summary>The text looks like an instruction to the assistant.</summary>
     Attack,
 
+    /// <summary>The text contains hate, sexual content, violence or self-harm at Low severity or above.</summary>
+    Harmful,
+
     /// <summary>The text couldn't be checked; it's treated as unsafe to read.</summary>
     Unavailable,
 }

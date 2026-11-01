@@ -18,7 +18,7 @@ public sealed class QuestionScreenTests
     private static readonly Uri Endpoint = new("https://cs.invalid/");
 
     /// <summary>Answers text:analyze and text:shieldPrompt from scripted functions, recording each request.</summary>
-    private sealed class ContentSafetyHandler(Func<string, (HttpStatusCode, string)> analyze, Func<string, (HttpStatusCode, string)> shield, TimeSpan delay = default, TimeProvider? time = null)
+    internal sealed class ContentSafetyHandler(Func<string, (HttpStatusCode, string)> analyze, Func<string, (HttpStatusCode, string)> shield, TimeSpan delay = default, TimeProvider? time = null)
         : HttpMessageHandler
     {
         public List<(string Path, string? Auth, JsonNode Body)> Requests { get; } = [];
@@ -188,6 +188,46 @@ public sealed class QuestionScreenTests
         await cancelled.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Screen(Clean(), Classifier()).ScreenAsync("q", cancelled.Token));
+    }
+
+    private static HarmAwareScreen Harm(IUntrustedTextScreen shields, ContentSafetyHandler handler) =>
+        new(shields, new ContentSafetyClient(new HttpClient(handler), Endpoint, "https://cognitiveservices.azure.com/.default", new StaticTokenCredential()), new ScreenCache());
+
+    [Fact]
+    public async Task Tool_text_Prompt_Shields_passes_is_checked_for_harm()
+    {
+        var handler = new ContentSafetyHandler(text => text.Contains("slur", StringComparison.Ordinal) ? Severities(hate: 2) : Severities(), _ => Attack(false));
+
+        var verdicts = await Harm(ScriptedScreen.AllClean, handler).ScreenAsync(["Settlement delayed.", "a slur about merchants"], CancellationToken.None);
+
+        Assert.Equal([ScreenVerdict.Clean, ScreenVerdict.Harmful], verdicts);
+    }
+
+    [Fact]
+    public async Task Text_Prompt_Shields_flags_or_could_not_check_is_not_sent_for_harm_analysis()
+    {
+        var handler = Clean();
+        var shields = new ScriptedScreen(text => text == "attack" ? ScreenVerdict.Attack : text == "down" ? ScreenVerdict.Unavailable : ScreenVerdict.Clean);
+
+        var verdicts = await Harm(shields, handler).ScreenAsync(["attack", "down", "fine"], CancellationToken.None);
+
+        Assert.Equal([ScreenVerdict.Attack, ScreenVerdict.Unavailable, ScreenVerdict.Clean], verdicts);
+        Assert.Equal(["fine"], handler.Requests.Select(r => r.Body["text"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Tool_text_the_harm_check_cannot_answer_is_unscreenable_and_never_cached()
+    {
+        var down = true;
+        var handler = new ContentSafetyHandler(_ => down ? (HttpStatusCode.ServiceUnavailable, "{}") : Severities(), _ => Attack(false));
+        var screen = Harm(ScriptedScreen.AllClean, handler);
+
+        Assert.Equal([ScreenVerdict.Unavailable], await screen.ScreenAsync(["note"], CancellationToken.None));
+        down = false;
+        Assert.Equal([ScreenVerdict.Clean], await screen.ScreenAsync(["note"], CancellationToken.None));
+        Assert.Equal([ScreenVerdict.Clean], await screen.ScreenAsync(["note"], CancellationToken.None));
+
+        Assert.Equal(2, handler.Requests.Count);
     }
 
     [Fact]

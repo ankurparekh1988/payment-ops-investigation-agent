@@ -56,7 +56,10 @@ public static class InvestigationServiceCollectionExtensions
         services.AddSingleton<ScreenCache>();
         services.AddSingleton<IUntrustedTextScreen>(sp =>
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
-                ? new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>())
+                ? new HarmAwareScreen(
+                    new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>()),
+                    new ContentSafetyClient(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
+                    new ScreenCache())
                 : new UnavailableScreen());
 
         // Every question is screened before the agent runs; without the endpoint nothing can be, so nothing is investigated.

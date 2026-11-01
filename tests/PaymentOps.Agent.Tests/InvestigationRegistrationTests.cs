@@ -43,7 +43,7 @@ public sealed class InvestigationRegistrationTests
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<PromptShieldsScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
+        Assert.IsType<HarmAwareScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
     }
 
     [Fact]
