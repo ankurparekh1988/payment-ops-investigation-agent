@@ -409,9 +409,11 @@ jobs:
             scripts/report-issue.sh close ai-evaluation
             exit 0
           fi
+          # An apostrophe inside ${...} opens a quote bash never closes, so the fallback lives in a variable.
+          fallback="the evaluation workflow didn't complete"
           {
-            echo "The scheduled AI evaluation of main didn't pass: ${MESSAGE:-the evaluation workflow didn't complete}."
+            echo "The scheduled AI evaluation of main didn't pass: ${MESSAGE:-$fallback}."
             echo
             echo "Run: $RUN_URL"
           } > issue.md
-          scripts/report-issue.sh open ai-evaluation "AI evaluation of main: ${MESSAGE:-the evaluation workflow didn't complete}" issue.md
+          scripts/report-issue.sh open ai-evaluation "AI evaluation of main: ${MESSAGE:-$fallback}" issue.md
