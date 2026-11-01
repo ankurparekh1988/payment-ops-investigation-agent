@@ -13,6 +13,7 @@ using PaymentOps.Tests.Shared;
 
 namespace PaymentOps.Agent.Tests;
 
+[Collection(nameof(FakeClockBudget))]
 public sealed class QuestionScreenTests
 {
     private static readonly Uri Endpoint = new("https://cs.invalid/");
@@ -163,6 +164,8 @@ public sealed class QuestionScreenTests
         Assert.Empty(request.Tools);
     }
 
+    // The slow check would answer at 30 s; ending well before that, but not before the budget, is the deadline's doing.
+    // The upper bound leaves room for a slow machine to run the timeout's continuation after the clock has moved on.
     [Fact]
     public async Task The_checks_share_one_budget_and_a_slow_one_leaves_the_question_unscreened()
     {
@@ -174,11 +177,11 @@ public sealed class QuestionScreenTests
         while (!screening.IsCompleted)
         {
             time.Advance(TimeSpan.FromMilliseconds(100));
-            await Task.WhenAny(screening, Task.Delay(TimeSpan.FromMilliseconds(10)));
+            await Task.WhenAny(screening, Task.Delay(TimeSpan.FromMilliseconds(25)));
         }
 
         Assert.Equal(QuestionVerdict.Unavailable, await screening);
-        Assert.True(time.GetUtcNow() - start <= new InvestigationLimits().QuestionScreenTimeout + TimeSpan.FromMilliseconds(200));
+        Assert.InRange(time.GetUtcNow() - start, new InvestigationLimits().QuestionScreenTimeout, TimeSpan.FromSeconds(20));
     }
 
     [Fact]
