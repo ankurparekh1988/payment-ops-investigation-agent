@@ -64,20 +64,27 @@ public sealed class AssessmentTests
     public void An_assessed_outcome_needs_a_claim() =>
         Assert.Contains("claims: an assessed outcome needs at least one claim.", AssessmentValidator.Check(Valid() with { Claims = [] }, _turn, Today));
 
+    // People see the server's notice, never the model's words, so what a refusal carries is dropped rather than
+    // costing it the refusal: a refusal that adds a support line must still end as a refusal.
     [Theory]
     [InlineData("claims")]
     [InlineData("root_cause")]
     [InlineData("next_steps")]
-    public void A_refusal_carries_no_claims_root_cause_or_next_steps(string field)
+    public void Whatever_a_refusal_carries_is_discarded_not_rejected(string field)
     {
         var submission = field switch
         {
-            "claims" => Refusal() with { Claims = [Said("y", ["payment:PAY-1"])] },
-            "root_cause" => Refusal() with { RootCause = Said("Outage.", ["payment:PAY-1"], ["S1"]) },
-            _ => Refusal() with { NextSteps = [new SubmittedNextStep("Raise an incident.", ["S1"])] },
+            "claims" => Refusal() with { Claims = [Said("The request is outside payment operations.")] },
+            "root_cause" => Refusal() with { RootCause = Said("Outage.", ["payment:PAY-NONE"], ["S9"]) },
+            _ => Refusal() with { NextSteps = [new SubmittedNextStep("If you might act on these thoughts, contact emergency services now.", [])] },
         };
 
-        Assert.Contains("outcome: a refusal carries no claims, no root cause and no next steps.", AssessmentValidator.Check(submission, _turn, Today));
+        Assert.Empty(AssessmentValidator.Check(submission, new TurnState(), Today));
+        var result = AssessmentPolicy.Apply(submission, new TurnState());
+        Assert.Equal((AssessmentOutcome.Refused, AssessmentPolicy.RefusalNotice), (result.Outcome, result.Summary.Text));
+        Assert.Empty(result.Claims);
+        Assert.Null(result.RootCause);
+        Assert.Empty(result.NextSteps);
     }
 
     private static AssessmentSubmission Refusal() => new("refused", Said("I can't refund payments."), [], Said(string.Empty), "high", [], null);
