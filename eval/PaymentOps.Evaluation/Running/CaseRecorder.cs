@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Security;
 using PaymentOps.Evaluation.Cases;
@@ -27,7 +28,6 @@ internal sealed class CaseRecorder
     private readonly Lock _lock = new();
     private readonly List<ToolCallRecord> _calls = [];
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _resultIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RetrievedSection> _retrieved = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _facts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tickets = new(StringComparer.Ordinal);
@@ -55,6 +55,8 @@ internal sealed class CaseRecorder
     public IInvestigationTool Observe(IInvestigationTool tool) => new RecordingTool(tool, this);
 
     public IIncidentStore Observe(IIncidentStore store) => new CountingIncidentStore(store, this);
+
+    public IUntrustedTextScreen Observe(IUntrustedTextScreen screen) => new RecordingScreen(screen, this);
 
     public void Fail(string failure)
     {
@@ -119,14 +121,6 @@ internal sealed class CaseRecorder
             foreach (var call in sent.Concat(response.Messages).SelectMany(m => m.Contents).OfType<FunctionCallContent>().Where(call => _callIds.Add(call.CallId)))
             {
                 _calls.Add(Record(call));
-            }
-
-            // Each tool result is checked once, by call id; the history is resent with every request.
-            if (_failure is null && sent.SelectMany(m => m.Contents).OfType<FunctionResultContent>()
-                .Where(r => _resultIds.Add(r.CallId))
-                .Any(r => Text(r.Result)?.Contains(InfrastructureFailures.UnscreenableCopy, StringComparison.Ordinal) == true))
-            {
-                _failure = InfrastructureFailures.ScreeningUnavailable;
             }
         }
     }
@@ -247,6 +241,30 @@ internal sealed class CaseRecorder
             }
 
             return result;
+        }
+    }
+
+    // A verdict the screen couldn't give, or a call that ran out of time, withholds text for want of Prompt Shields:
+    // the run then measures the outage, not the system.
+    private sealed class RecordingScreen(IUntrustedTextScreen inner, CaseRecorder recorder) : IUntrustedTextScreen
+    {
+        public async Task<IReadOnlyList<ScreenVerdict>> ScreenAsync(IReadOnlyList<string> segments, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var verdicts = await inner.ScreenAsync(segments, cancellationToken);
+                if (verdicts.Contains(ScreenVerdict.Unavailable))
+                {
+                    recorder.Fail(InfrastructureFailures.ScreeningUnavailable);
+                }
+
+                return verdicts;
+            }
+            catch (OperationCanceledException)
+            {
+                recorder.Fail(InfrastructureFailures.ScreeningUnavailable);
+                throw;
+            }
         }
     }
 

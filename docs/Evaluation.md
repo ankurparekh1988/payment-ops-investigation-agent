@@ -162,14 +162,15 @@ dotnet run --project eval/PaymentOps.Evaluation -c Release -- investigation-eval
   --foundry <foundry endpoint> --search <search endpoint> --scope https://cognitiveservices.azure.com/.default \
   --ai ai --sources data/knowledge/src \
   --dataset eval/datasets/agent-tasks.json --dataset eval/datasets/investigations-heldout.json \
-  --runs 3 --system agent --pricing eval/pricing.json --out agent.json --summary agent.md
+  --runs 3 --system agent --pricing eval/pricing.json --content-safety <foundry account endpoint> \
+  --out agent.json --summary agent.md
 
 dotnet run --project eval/PaymentOps.Evaluation -c Release -- retrieval-eval \
   --endpoint <search endpoint> --ai ai --sources data/knowledge/src \
   --dataset eval/datasets/retrieval-heldout.json --out retrieval.json --summary retrieval.md
 ```
 
-`--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the frozen thresholds, `--no-judge` skips the judge, and `--index evaluation` reads the release's evaluation index (`knowledge-eval-v1`) instead of the live one; every report names the index it read. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
+`--content-safety` is required: without Prompt Shields the app withholds every untrusted value, and a run would measure that rather than the system. `--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the frozen thresholds, `--no-judge` skips the judge, and `--index evaluation` reads the release's evaluation index (`knowledge-eval-v1`) instead of the live one; every report names the index it read. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
 
 ### Running in CI
 

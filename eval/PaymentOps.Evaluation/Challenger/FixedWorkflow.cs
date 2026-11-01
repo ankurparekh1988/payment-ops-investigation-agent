@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Model;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
 using PaymentOps.Evaluation.Prompts;
@@ -29,6 +30,7 @@ internal sealed class FixedWorkflow(
     IOptions<InvestigationLimits> options,
     IOptions<ToolOptions> toolOptions,
     TimeProvider time,
+    IUntrustedTextScreen screen,
     IReadOnlyList<KnownProcessor> processors)
 {
     public static EvaluationPrompt Prompt { get; } = EvaluationPrompt.Load("prompts/fixed-workflow.md");
@@ -48,7 +50,7 @@ internal sealed class FixedWorkflow(
         }
 
         var turn = new TurnState();
-        var guard = new ToolGuard(turn, _limits, time, user, progress);
+        var guard = new ToolGuard(turn, _limits, time, user, progress, screen);
         var readTools = tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).ToDictionary(tool => tool.Name, guard.Wrap, StringComparer.Ordinal);
         var fanOut = new FanOut(readTools, _limits.MaxToolCalls);
         return await TurnOutcome.RunAsync(

@@ -8,6 +8,7 @@ using PaymentOps.Agent;
 using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
 using PaymentOps.Evaluation.Running;
@@ -45,6 +46,7 @@ internal sealed class FixedWorkflowCaseRunner(
             services.GetRequiredService<IOptions<InvestigationLimits>>(),
             services.GetRequiredService<IOptions<ToolOptions>>(),
             services.GetRequiredService<TimeProvider>(),
+            services.GetRequiredService<IUntrustedTextScreen>(),
             Processors);
         var result = await workflow.InvestigateAsync(question, progress, cancellationToken) with { InvestigationId = Guid.NewGuid() };
 

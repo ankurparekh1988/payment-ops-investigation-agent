@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Security;
@@ -31,7 +32,7 @@ internal static class EvaluationServices
 
     /// <summary>
     /// The app configuration a live evaluation supplies, under the keys the app reads in Azure: the Content Safety
-    /// endpoint, when there is one, and the Foundry token scope, which every investigation evaluation has.
+    /// endpoint and the Foundry token scope.
     /// </summary>
     public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint, string foundryTokenScope) => services =>
         services.Replace(ServiceDescriptor.Singleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -69,6 +70,9 @@ internal static class EvaluationServices
         Wrap<IInvestigationTool>(services, (_, tool) => recorder.Observe(tool));
         Wrap<IIncidentStore>(services, (_, store) => recorder.Observe(store));
         configure?.Invoke(services);
+
+        // After configure, so whichever screen the case runs with, the app's or a test's, is the one observed.
+        Wrap<IUntrustedTextScreen>(services, (_, screen) => recorder.Observe(screen));
         return services.BuildServiceProvider();
     }
 
