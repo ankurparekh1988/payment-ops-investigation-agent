@@ -57,9 +57,17 @@ public sealed class ProposalValidationTests
     public void An_incomplete_outcomes_ticket_is_not_checked() =>
         Assert.Empty(AssessmentValidator.Check(With(Ticket() with { MerchantIds = ["M-9999"], StartDate = "2026-01-01" }, "incomplete"), _turn, Today));
 
+    // A refusal shows only the server's notice, so its ticket is dropped unchecked and never reaches anyone.
     [Fact]
-    public void A_refusal_carries_no_ticket() =>
-        Assert.Contains("proposed_ticket: a refusal carries no ticket.", AssessmentValidator.Check(With(Ticket(), "refused"), _turn, Today));
+    public void A_refusals_ticket_is_discarded_not_checked()
+    {
+        var refusal = With(Ticket() with { MerchantIds = ["M-9999"] }, "refused");
+
+        Assert.Empty(AssessmentValidator.Check(refusal, _turn, Today));
+        var result = AssessmentPolicy.Apply(refusal, _turn);
+        Assert.Null(result.Proposal);
+        Assert.False(result.ProposalWithheld);
+    }
 
     [Fact]
     public void A_ticket_needs_record_evidence() =>

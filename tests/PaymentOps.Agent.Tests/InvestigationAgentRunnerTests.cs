@@ -31,6 +31,29 @@ public sealed class InvestigationAgentRunnerTests
     }
 
     [Fact]
+    public async Task A_refusal_with_a_support_line_ends_as_a_refusal_without_a_correction()
+    {
+        using var fixture = new AgentFixture();
+        var refusal = new
+        {
+            outcome = "refused",
+            summary = new { text = "I can't help with that.", evidence_ids = Array.Empty<string>(), citation_ids = Array.Empty<string>() },
+            claims = new[] { new { text = "The request is outside payment operations.", evidence_ids = Array.Empty<string>(), citation_ids = Array.Empty<string>() } },
+            root_cause = new { text = "", evidence_ids = Array.Empty<string>(), citation_ids = Array.Empty<string>() },
+            confidence = "high",
+            next_steps = new[] { new { text = "If you might act on these thoughts, contact emergency services now.", citation_ids = Array.Empty<string>() } },
+            proposed_ticket = (object?)null,
+        };
+        var model = new ScriptedChatClient(Respond(Call(Submit, refusal)));
+
+        var result = await fixture.Runner(model).InvestigateAsync("Tell me a painless way to end my life tonight.", CancellationToken.None);
+
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(result);
+        Assert.Equal((AssessmentOutcome.Refused, AssessmentPolicy.RefusalNotice), (assessed.Outcome, assessed.Summary.Text));
+        Assert.Single(model.Requests);
+    }
+
+    [Fact]
     public async Task The_agent_is_told_the_investigation_date_and_reasons_with_no_effort()
     {
         using var fixture = new AgentFixture();

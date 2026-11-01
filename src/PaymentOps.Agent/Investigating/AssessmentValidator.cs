@@ -34,19 +34,10 @@ internal static class AssessmentValidator
             failures.Add("confidence: must be high, medium or low.");
         }
 
-        // A refusal's summary is never shown, so it asks for nothing; the server's notice stands in its place.
+        // Nothing a refusal carries is shown: the server's notice stands in its place and the rest is discarded, so
+        // extra lines, such as a support line on a self-harm question, can't turn a refusal into an unverified result.
         if (submission.Outcome == "refused")
         {
-            if (submission.Claims.Count > 0 || !string.IsNullOrWhiteSpace(submission.RootCause.Text) || submission.NextSteps.Count > 0)
-            {
-                failures.Add("outcome: a refusal carries no claims, no root cause and no next steps.");
-            }
-
-            if (submission.ProposedTicket is not null)
-            {
-                failures.Add("proposed_ticket: a refusal carries no ticket.");
-            }
-
             return failures;
         }
 
