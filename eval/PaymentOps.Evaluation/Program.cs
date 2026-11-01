@@ -15,7 +15,7 @@
 //        PaymentOps.Evaluation kill-test --agent <report.json> --challenger <report.json> --out <file> --summary <file>
 //        PaymentOps.Evaluation retrieval-compare --endpoint <url> --ai <dir> --dataset <file> --sources <dir> --out <file> --summary <file>
 //        PaymentOps.Evaluation classify-change --changed <file> --base-manifest <file> --head-manifest <file> --same-repository true|false --actor-type <User|Bot> --github-output <file>
-//        PaymentOps.Evaluation record-evaluation --investigations <report.json> --retrieval <report.json> --ingestion-endpoint <url> --rule <immutable id> --evaluation-id <id> --trigger schedule|workflow_dispatch
+//        PaymentOps.Evaluation record-evaluation --investigations <report.json> --retrieval <report.json> --safety <report.json> --ingestion-endpoint <url> --rule <immutable id> --evaluation-id <id> --trigger schedule|workflow_dispatch
 
 using PaymentOps.Evaluation.Commands;
 

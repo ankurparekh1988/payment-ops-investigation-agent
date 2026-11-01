@@ -12,10 +12,10 @@ namespace PaymentOps.Evaluation.Commands;
 internal static class RecordEvaluationCommand
 {
     public const string Usage =
-        "record-evaluation --investigations <report.json> --retrieval <report.json> --ingestion-endpoint <url> --rule <immutable id> " +
+        "record-evaluation --investigations <report.json> --retrieval <report.json> --safety <report.json> --ingestion-endpoint <url> --rule <immutable id> " +
         "--evaluation-id <id> --trigger schedule|workflow_dispatch";
 
-    private static readonly string[] Valued = ["investigations", "retrieval", "ingestion-endpoint", "rule", "evaluation-id", "trigger"];
+    private static readonly string[] Valued = ["investigations", "retrieval", "safety", "ingestion-endpoint", "rule", "evaluation-id", "trigger"];
     private static readonly string[] Triggers = ["schedule", "workflow_dispatch"];
 
     public static Task<int> RunAsync(string[] args) => RunAsync(args, null);
@@ -34,7 +34,12 @@ internal static class RecordEvaluationCommand
         }
 
         var rows = EvaluationRows.From(
-            EvaluationReport.Load(options.One("investigations")), EvaluationReport.Load(options.One("retrieval")), evaluationId, trigger, DateTimeOffset.UtcNow);
+            EvaluationReport.Load(options.One("investigations")),
+            EvaluationReport.Load(options.One("retrieval")),
+            EvaluationReport.Load(options.One("safety")),
+            evaluationId,
+            trigger,
+            DateTimeOffset.UtcNow);
         var sink = sinks?.Invoke() ?? new LogsIngestionSink(endpoint, rule, new AzureCliCredential());
         await sink.WriteAsync(rows, CancellationToken.None);
         Console.WriteLine($"Recorded {rows.Count} rows for evaluation {evaluationId}.");
