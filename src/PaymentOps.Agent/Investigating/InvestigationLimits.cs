@@ -18,8 +18,8 @@ public sealed class InvestigationLimits
     public TimeSpan ScreenTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
     /// <summary>
-    /// How long a question's three safety checks may take together, before any model request. The classifier is a model
-    /// call of about 2 s, so a tighter budget would turn a slow moment into questions that can't be investigated.
+    /// How long a question's three safety checks may take together, before the investigation agent sees it. The classifier
+    /// is a model call of about 2 s, so a tighter budget would turn a slow moment into questions that can't be investigated.
     /// </summary>
     public TimeSpan QuestionScreenTimeout { get; set; } = TimeSpan.FromSeconds(8);
 

@@ -1,4 +1,4 @@
-# 0015. Screen questions and tool text for harm before the model reads them
+# 0015. Screen questions before the investigation agent sees them, and tool text for harm
 
 - **Status:** Accepted
 - **Date:** 2026-11-01
@@ -17,7 +17,7 @@ Azure's detectors overlap, so adding one more of them would change little for mi
 
 ## Decision
 
-**Every question is screened before any model request, and every untrusted tool value is screened for harm as well as instructions.**
+**Every question is screened before the investigation agent sees it, and every untrusted tool value is screened for harm as well as instructions.** One of the checks is itself a constrained classifier call to the active chat deployment, which receives only the current question, with no tools and no conversation history.
 
 - **Three checks on each question and follow-up,** run together under one 8 s budget. The two Azure calls take about 70 ms and the classifier about 2 s; a tighter budget would leave ordinary questions uninvestigated whenever the model is slow:
   - Content Safety's harm analysis, `text:analyze`, for the four categories at four severity levels. **Low (2) and above blocks**, the same level the strict filter blocks.
@@ -35,6 +35,7 @@ Azure's detectors overlap, so adding one more of them would change little for mi
 - Each question costs one harm analysis, one Prompt Shields call and one small model call before the agent starts. They run in parallel, so latency grows by about the slowest of them; latency is reported, not gated.
 - An outage of any check stops new investigations instead of letting unscreened questions through.
 - The classifier is a model: it can miss, or block ordinary operational language. The safety evaluation measures both, through its harmful and benign cases, and the investigation gate fails a change that blocks the labelled questions. The hard gates still require that nothing harmful is answered.
+- The 6 harmful and 8 benign safety questions used to develop and check this screen are development and regression probes, not held-out evidence: the classifier's prompt was written with their results in view. Any safety slice tuned against them gets fresh, unseen held-out cases before a safety baseline is taken.
 - The bootstrap must run before this change deploys. Until the role holds the new action, every harm analysis is refused, and every question is unscreened.
 - The fixed-workflow challenger in the evaluation doesn't screen questions until the evaluation code passes it the same screen, which is a gate-policy change.
 
@@ -42,5 +43,5 @@ Azure's detectors overlap, so adding one more of them would change little for mi
 
 - **Azure's checks only.** Simpler, but measured on the safety cases they added nothing for the mild phrasings the filter misses.
 - **Failing open when a check is down.** Investigations would keep running, but an unscreened harmful question could reach the model during an outage.
-- **Changing the agent's prompt to refuse more.** The agent already refuses these questions; the requirement is to block them before the model sees them, and prompt changes aren't tuned to evaluation cases.
+- **Changing the agent's prompt to refuse more.** The agent already refuses these questions; the requirement is to block them before the investigation agent sees them, and prompt changes aren't tuned to evaluation cases.
 - **A blocklist of words.** Deterministic, but it blocks operational language ("kill", "attack") and misses rephrasings.

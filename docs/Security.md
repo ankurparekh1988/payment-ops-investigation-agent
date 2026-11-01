@@ -191,12 +191,12 @@ Evaluation history rows carry metric names, numbers, verdicts, the commit, promp
 
 ## Injection and content safety
 
-Three layers. Every question is screened before any model request is made for it ([ADR 0015](adr/0015-screen-questions-and-tool-text-for-harm.md)). The text tools return is screened for instructions and harm before the model reads it ([ADR 0013](adr/0013-screen-untrusted-tool-text.md)). The deployment's content filter checks every prompt and completion on top of both.
+Three layers. Every question is screened before the investigation agent sees it ([ADR 0015](adr/0015-screen-questions-and-tool-text-for-harm.md)); one of the checks is itself a constrained classifier call to the active chat deployment, which receives only the current question, with no tools and no conversation history. The text tools return is screened for instructions and harm before the model reads it ([ADR 0013](adr/0013-screen-untrusted-tool-text.md)). The deployment's content filter checks every prompt and completion on top of both.
 
 | Threat | Where it enters | Control |
 |---|---|---|
-| Hate, sexual content, violence or self-harm in a question | The question and each follow-up | Content Safety harm analysis (Low and above) and our own classifier, before the agent runs; the investigation ends *blocked*, with a support notice for self-harm |
-| A direct prompt attack | The question | Prompt Shields' user-prompt check before the agent runs, then the filter's prompt-attack detection; the investigation ends *blocked*, and the question is never resent |
+| Hate, sexual content, violence or self-harm in a question | The question and each follow-up | Content Safety harm analysis (Low and above) and our own classifier, before the investigation agent sees it; the investigation ends *blocked*, with a support notice for self-harm |
+| A direct prompt attack | The question | Prompt Shields' user-prompt check before the investigation agent sees it, then the filter's prompt-attack detection; the investigation ends *blocked*, and the question is never resent |
 | A question that can't be screened | Throttling, errors, timeouts of any check | Not investigated: the person is asked to try again |
 | Harmful content in an answer | The completion | Strict content filter on completions; the investigation ends *blocked* |
 | Harmful content in data or documents | The same tool text as instructions, and any future upload | Harm analysis after Prompt Shields; withheld when Low or above |
@@ -205,12 +205,12 @@ Three layers. Every question is screened before any model request is made for it
 | Steered support for a claim or a ticket | A withheld knowledge section | It keeps its citation id but can't support anything |
 | An attack carried into later questions | Conversation history | Only answered turns are carried |
 
-**The question screen.** Three checks run together on every question and follow-up, under one 8 s budget, before the agent starts:
+**The question screen.** Three checks run together on every question and follow-up, under one 8 s budget, before the investigation agent sees it:
 - Content Safety's harm analysis for the four categories, blocking at Low severity and above;
 - Prompt Shields with the question as the user prompt;
-- one structured call to the chat deployment (prompt `harm-screen`), which sees only the question and names any of the four categories that apply.
+- a constrained classifier call to the active chat deployment (prompt `harm-screen`), which receives only the current question, with no tools and no conversation history, and names any of the four categories that apply.
 
-Our classifier is there because Azure's classifiers score some plain requests to hurt someone, or oneself, as safe. Anything found ends the turn as *blocked* before any model request for the investigation. A question about self-harm gets "This question can't be investigated here. If you're thinking about harming yourself, please contact local emergency services or someone you trust now." If a check can't answer, the question isn't investigated and the person is asked to try again. The log records the verdict, never the question.
+Our classifier is there because Azure's classifiers score some plain requests to hurt someone, or oneself, as safe. Anything found ends the turn as *blocked* before the investigation agent sees the question. A question about self-harm gets "This question can't be investigated here. If you're thinking about harming yourself, please contact local emergency services or someone you trust now." If a check can't answer, the question isn't investigated and the person is asked to try again. The log records the verdict, never the question.
 
 **The content filter.** Chat deployments use a strict policy. Anything above "Safe" in the hate, sexual, violence and self-harm categories is blocked, on both prompts and completions, along with prompt attacks in user prompts and protected text in completions. Filtering is synchronous, so blocked output is never streamed. A rejected prompt or a withheld completion ends the investigation as *blocked*, and the person sees "This question can't be investigated: it was blocked by the content safety policy." Nothing partial is shown, and the request isn't retried. Some legitimate operational language may be blocked; the safety evaluation measures how often.
 

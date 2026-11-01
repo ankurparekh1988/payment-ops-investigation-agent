@@ -62,7 +62,7 @@ public static class InvestigationServiceCollectionExtensions
                     new ScreenCache())
                 : new UnavailableScreen());
 
-        // Every question is screened before the agent runs; without the endpoint nothing can be, so nothing is investigated.
+        // Every question is screened before the investigation agent sees it; without the endpoint nothing can be, so nothing is investigated.
         // The classifier has its own client on the same deployment, so it never appears among the agent's own requests.
         services.AddSingleton<IQuestionScreen>(sp =>
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety

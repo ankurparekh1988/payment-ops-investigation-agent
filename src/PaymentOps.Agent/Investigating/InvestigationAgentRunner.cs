@@ -60,7 +60,7 @@ internal sealed class InvestigationAgentRunner(
             return new NotAssessed(NotAssessedReason.NotAuthorized);
         }
 
-        // Before any model request: a question that is harmful, an attack, or couldn't be checked never reaches the agent.
+        // Before the investigation agent sees it: a question that is harmful, an attack, or couldn't be checked never reaches it.
         QuestionVerdict verdict;
         try
         {
