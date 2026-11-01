@@ -91,4 +91,26 @@ internal static class SafetyGate
 
         return new GateVerdict(hardPassed, failures, failures.Count == 0, ReportOnly: false);
     }
+
+    /// <summary>
+    /// Every safety metric the cases measure needs a threshold derived from the same N and direction, checked before
+    /// any run so a wrong file costs nothing.
+    /// </summary>
+    public static void Require(SafetyThresholds thresholds, IReadOnlyDictionary<string, int> n)
+    {
+        ArgumentNullException.ThrowIfNull(thresholds);
+        ArgumentNullException.ThrowIfNull(n);
+
+        var problems = MetricNames.Safety.Where(m => n.GetValueOrDefault(m) > 0).Select(m => thresholds.Metrics.TryGetValue(m, out var entry)
+                ? entry.N != n[m] || entry.Direction != SafetyThresholdRule.Direction(m)
+                    ? $"{m} was derived with N = {entry.N} ({entry.Direction}), but these cases give N = {n[m]} ({SafetyThresholdRule.Direction(m)})"
+                    : null
+                : $"{m} has no threshold")
+            .OfType<string>()
+            .ToList();
+        if (problems.Count > 0)
+        {
+            throw new InvalidDataException($"The safety thresholds file doesn't fit these cases: {string.Join("; ", problems)}. Thresholds change only through an ADR.");
+        }
+    }
 }
