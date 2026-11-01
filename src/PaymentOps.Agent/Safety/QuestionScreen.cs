@@ -26,7 +26,10 @@ public enum QuestionVerdict
     Unavailable,
 }
 
-/// <summary>Screens each question and follow-up before any model request is made for it.</summary>
+/// <summary>
+/// Screens each question and follow-up before the investigation agent sees it. One check is a constrained classifier
+/// call to the chat deployment that receives only the current question, with no tools and no conversation history.
+/// </summary>
 public interface IQuestionScreen
 {
     /// <summary>Only the caller's cancellation throws; a service failure is <see cref="QuestionVerdict.Unavailable"/>.</summary>
@@ -156,13 +159,14 @@ internal sealed class ContentSafetyQuestionScreen(ContentSafetyClient client, Ha
     {
         using var timeout = new CancellationTokenSource(options.Value.QuestionScreenTimeout, time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        var checks = new[] { HarmAsync(question, linked.Token), AttackAsync(question, linked.Token), Bounded(classifier.ClassifyAsync(question, linked.Token)) };
+        var checks = new[] { HarmAsync(question, linked.Token), AttackAsync(question, linked.Token), classifier.ClassifyAsync(question, linked.Token) };
 
         QuestionVerdict[] verdicts;
         try
         {
             verdicts = await Task.WhenAll(checks);
         }
+        // The screen's own deadline: whatever didn't finish couldn't answer. The caller's cancellation propagates instead.
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             verdicts = [.. checks.Select(c => c.IsCompletedSuccessfully ? c.Result : QuestionVerdict.Unavailable)];
@@ -185,18 +189,5 @@ internal sealed class ContentSafetyQuestionScreen(ContentSafetyClient client, Ha
             && detected.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? detected.GetBoolean() ? QuestionVerdict.Attack : QuestionVerdict.Clean
             : QuestionVerdict.Unavailable;
-    }
-
-    // The budget's cancellation reaches the classifier as an exception; it means the check couldn't answer in time.
-    private static async Task<QuestionVerdict> Bounded(Task<QuestionVerdict> check)
-    {
-        try
-        {
-            return await check;
-        }
-        catch (OperationCanceledException)
-        {
-            return QuestionVerdict.Unavailable;
-        }
     }
 }

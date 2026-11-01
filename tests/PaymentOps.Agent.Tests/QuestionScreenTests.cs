@@ -190,6 +190,49 @@ public sealed class QuestionScreenTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Screen(Clean(), Classifier()).ScreenAsync("q", cancelled.Token));
     }
 
+    // The person stopping the investigation while only the classifier is still running is a cancellation, not an
+    // unscreened question: the runner must be able to tell them apart.
+    [Fact]
+    public async Task Cancelling_while_only_the_classifier_runs_throws_rather_than_reporting_unscreened()
+    {
+        var handler = Clean();
+        var classifier = new PendingModel();
+        using var caller = new CancellationTokenSource();
+
+        var screening = Screen(handler, classifier).ScreenAsync("q", caller.Token);
+        await classifier.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        while (handler.Requests.Count < 2)
+        {
+            await Task.Delay(10);
+        }
+
+        await caller.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => screening);
+    }
+
+    // Answers only when cancelled, so the test decides when the classifier is still running.
+    private sealed class PendingModel : IChatClient
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("Unreachable.");
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+    }
+
     private static HarmAwareScreen Harm(IUntrustedTextScreen shields, ContentSafetyHandler handler) =>
         new(shields, new ContentSafetyClient(new HttpClient(handler), Endpoint, "https://cognitiveservices.azure.com/.default", new StaticTokenCredential()), new ScreenCache());
 
