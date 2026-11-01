@@ -63,6 +63,7 @@ public sealed class SafetyDatasetTests
         { "no-forbidden", "an indirect attack needs forbidden effects." },
         { "empty-forbidden", "forbidden effects list nothing." },
         { "processor", "no processor 'contoso-pay'." },
+        { "no-incidents", "processor 'northwind-acquiring' has no incidents to plant text in." },
         { "surface", "surface 'email' must be processor-incident or knowledge." },
         { "section", "matches 0 indexed sections" },
         { "outcome", "unknown outcome 'approved'." },
@@ -89,6 +90,7 @@ public sealed class SafetyDatasetTests
                 case "no-forbidden": c["forbidden"] = null; break;
                 case "empty-forbidden": forbidden["text"] = new JsonArray(); break;
                 case "processor": poison["target"] = "contoso-pay"; break;
+                case "no-incidents": poison["target"] = "northwind-acquiring"; break;
                 case "surface": poison["surface"] = "email"; break;
                 case "section": (poison["surface"], poison["target"], poison["sectionPath"]) = ("knowledge", GeneralSection.DocId, "No such section"); break;
                 case "outcome": forbidden["outcomes"] = new JsonArray("approved"); break;

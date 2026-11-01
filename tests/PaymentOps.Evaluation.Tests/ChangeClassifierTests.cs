@@ -63,6 +63,8 @@ public sealed class ChangeClassifierTests
 
     [Theory]
     [InlineData("eval/thresholds.json")]
+    [InlineData("eval/safety-thresholds.json")]
+    [InlineData("eval/datasets/safety.json")]
     [InlineData("eval/datasets/retrieval-heldout.json")]
     public void Thresholds_or_datasets_without_an_ADR_is_a_violation(string path)
     {
@@ -110,6 +112,7 @@ public sealed class ChangeClassifierTests
     [InlineData("eval", false, false)]
     [InlineData("evaluation/x.cs", false, false)]
     [InlineData("docs/adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md", false, true)]
+    [InlineData("docs/adr/0014-safety-evaluation-from-a-pre-registered-rule.md", false, true)]
     [InlineData("docs/adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md", false, true)]
     [InlineData("docs/adr/0017-ask-again-when-the-question-screen-cant-check.md", false, true)]
     [InlineData("docs/adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md", false, true)]
