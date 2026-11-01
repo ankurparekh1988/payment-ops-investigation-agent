@@ -171,12 +171,13 @@ A question about a merchant's money is investigated by one agent that picks its 
 
 ```mermaid
 flowchart LR
-  Q["Question"] --> A["Agent<br/>PaymentOps.Agent"]
+  Q["Question"] --> QS["Question screen<br/>harm, attack, classifier"]
+  QS -- "clean" --> A["Agent<br/>PaymentOps.Agent"]
   A -- "read-only tool calls" --> G["Guard: role, limits,<br/>timeout, evidence"]
   G --> T["Tools<br/>PaymentOps.Tools"]
   T --> P["Data ports"]
   T --> K["Knowledge retrieval<br/>(the user's access)"]
-  G -- "untrusted text" --> PS["Prompt Shields"]
+  G -- "untrusted text" --> PS["Prompt Shields,<br/>harm analysis"]
   G --> S[("This investigation's<br/>evidence and gaps")]
   A -- "submit_assessment" --> V["Validation against<br/>that evidence"]
   S --> V
@@ -216,7 +217,9 @@ Tool calls run one at a time. An unexpected exception, or a call to a tool that 
 
 ### Screening tool text
 
-Tools mark every string written outside this system (names, incident notes and references, closure reasons, error codes, and knowledge) as untrusted data. Before a tool result reaches the model, the guard sends each marked value to Prompt Shields on the Foundry account, in pieces of up to 9,500 characters overlapping by 500, with at most five pieces and 10,000 characters to a call. A value flagged as an attack, or one that couldn't be checked in time, is replaced by fixed withheld text and recorded as a gap; the rest of the result goes through. Names, codes and references are marked as labels, which the model reads plain once they're screened clean; free text keeps its markers. Verdicts are cached by the text's hash, so repeated names and codes cost nothing. A knowledge section with anything withheld keeps its citation id but can't support a statement ([ADR 0013](adr/0013-screen-untrusted-tool-text.md), [Security](Security.md#injection-and-content-safety)).
+Tools mark every string written outside this system (names, incident notes and references, closure reasons, error codes, and knowledge) as untrusted data. Before a tool result reaches the model, the guard sends each marked value to Prompt Shields on the Foundry account, in pieces of up to 9,500 characters overlapping by 500, with at most five pieces and 10,000 characters to a call. A value flagged as an attack, or one that couldn't be checked in time, is replaced by fixed withheld text and recorded as a gap; the rest of the result goes through. Names, codes and references are marked as labels, which the model reads plain once they're screened clean; free text keeps its markers. Verdicts are cached by the text's hash, so repeated names and codes cost nothing. Whatever Prompt Shields passes is also checked by Content Safety's harm analysis, and text at Low severity or above is withheld as harmful. A knowledge section with anything withheld keeps its citation id but can't support a statement ([ADR 0013](adr/0013-screen-untrusted-tool-text.md), [Security](Security.md#injection-and-content-safety)).
+
+Before any of that, the question itself is screened. Content Safety's harm analysis, Prompt Shields' user-prompt check and a classifier call to the chat deployment (prompt `harm-screen`, which sees only the question) run together under a 3 s budget. A finding ends the turn as *blocked* before the agent makes any request, and a check that can't answer leaves the question uninvestigated ([ADR 0015](adr/0015-screen-questions-and-tool-text-for-harm.md)).
 
 ### Assessments
 

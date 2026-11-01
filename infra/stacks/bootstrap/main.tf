@@ -330,16 +330,19 @@ resource "azurerm_role_assignment" "plan_web_app_config_reader" {
 
 # --- Prompt Shields: screening untrusted text, and nothing else -------------------------------
 
-# The built-in roles that include the shield call also grant every other Foundry data action. The id is
-# fixed so the deploy identity's delegation condition is known at plan time.
+# The built-in roles that include these calls also grant every other Foundry data action. The id is fixed so the
+# deploy identity's delegation condition is known at plan time; the name stays, because the platform assigns by it.
 resource "azurerm_role_definition" "prompt_shields_user" {
   name               = "${var.name_prefix} Prompt Shields User"
   role_definition_id = uuidv5("url", "https://${var.name_prefix}/roles/prompt-shields-user")
   scope              = azurerm_resource_group.workload.id
-  description        = "Call Prompt Shields to screen text for prompt attacks."
+  description        = "Call Prompt Shields and Content Safety harm analysis to screen questions and tool text."
 
   permissions {
-    data_actions = ["Microsoft.CognitiveServices/accounts/ContentSafety/text:shieldprompt/action"]
+    data_actions = [
+      "Microsoft.CognitiveServices/accounts/ContentSafety/text:shieldprompt/action",
+      "Microsoft.CognitiveServices/accounts/ContentSafety/text:analyze/action",
+    ]
   }
 
   assignable_scopes = [azurerm_resource_group.workload.id]
