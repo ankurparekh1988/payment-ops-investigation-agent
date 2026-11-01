@@ -27,7 +27,8 @@ internal abstract class CaseRunner(
     Func<IChatClient, IChatClient>? substituteModel,
     Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge,
     Action<IServiceCollection>? configure,
-    TimeSpan reaskDelay) : ICaseRunner
+    TimeSpan reaskDelay,
+    Func<InvestigationCase, Action<IServiceCollection>?>? overlay = null) : ICaseRunner
 {
     // Throttling is per minute, so asking again at once would mostly meet the same limit.
     protected static readonly TimeSpan DefaultReaskDelay = TimeSpan.FromSeconds(15);
@@ -68,7 +69,7 @@ internal abstract class CaseRunner(
     private async Task<(CaseResult Result, int Tickets)> AskAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
         var recorder = new CaseRecorder();
-        using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge, configure);
+        using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge, configure, overlay?.Invoke(c));
         using var scope = provider.CreateScope();
 
         var timer = Stopwatch.StartNew();
@@ -98,8 +99,9 @@ internal sealed class AgentCaseRunner(
     Func<IChatClient, IChatClient>? substituteModel = null,
     Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge = null,
     Action<IServiceCollection>? configure = null,
-    TimeSpan? reaskDelay = null)
-    : CaseRunner(release, endpoints, credential, substituteModel, substituteKnowledge, configure, reaskDelay ?? DefaultReaskDelay)
+    TimeSpan? reaskDelay = null,
+    Func<InvestigationCase, Action<IServiceCollection>?>? overlay = null)
+    : CaseRunner(release, endpoints, credential, substituteModel, substituteKnowledge, configure, reaskDelay ?? DefaultReaskDelay, overlay)
 {
     protected override Task<AssessmentResult> InvestigateAsync(IServiceProvider services, string question, IProgress<InvestigationProgress> progress, CancellationToken cancellationToken) =>
         services.GetRequiredService<IInvestigationService>().InvestigateAsync(question, progress, cancellationToken);
