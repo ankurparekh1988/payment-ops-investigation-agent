@@ -17,6 +17,12 @@ public sealed class InvestigationLimits
     /// <summary>How long Prompt Shields may take, within what remains of <see cref="ToolResultBudget"/>.</summary>
     public TimeSpan ScreenTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
+    /// <summary>
+    /// How long a question's three safety checks may take together, before the investigation agent sees it. The classifier
+    /// is a model call of about 2 s, so a tighter budget would turn a slow moment into questions that can't be investigated.
+    /// </summary>
+    public TimeSpan QuestionScreenTimeout { get; set; } = TimeSpan.FromSeconds(8);
+
     public TimeSpan TurnTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>Calls with invalid arguments the model may correct before the turn stops.</summary>

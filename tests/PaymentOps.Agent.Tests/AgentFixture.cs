@@ -41,7 +41,7 @@ internal sealed class AgentFixture : IDisposable
             .BuildServiceProvider();
     }
 
-    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null, IUntrustedTextScreen? screen = null) => new(
+    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null, IUntrustedTextScreen? screen = null, IQuestionScreen? questionScreen = null) => new(
         model,
         _provider.GetServices<IInvestigationTool>(),
         FixedPrompt,
@@ -50,6 +50,7 @@ internal sealed class AgentFixture : IDisposable
         Options.Create(new InvestigationLimits()),
         time ?? TimeProvider.System,
         screen ?? ScriptedScreen.AllClean,
+        questionScreen ?? ScriptedQuestionScreen.AllClean,
         logger ?? NullLogger<InvestigationAgentRunner>.Instance);
 
     public FixedPrompt FixedPrompt => new(_provider.GetServices<IInvestigationTool>(), new PromptProvider(Release), _provider.GetRequiredService<IInvestigationClock>());

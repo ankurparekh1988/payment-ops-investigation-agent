@@ -29,9 +29,15 @@ internal sealed record ObservedGap(ObservedGapKind Kind, string Wording)
 
     public static ObservedGap NotAuthorized(string tool) => new(ObservedGapKind.NotAuthorized, $"{tool} wasn't available to this user.");
 
-    public static ObservedGap Withheld(string source, bool flagged) => new(
+    /// <param name="worst">The most specific reason any text was withheld: an instruction, then harmful content, then unchecked text.</param>
+    public static ObservedGap Withheld(string source, Safety.ScreenVerdict worst) => new(
         ObservedGapKind.Withheld,
-        flagged ? $"{source}: some text was withheld because it looked like an instruction to the assistant." : $"{source}: some text was withheld because it couldn't be checked.");
+        worst switch
+        {
+            Safety.ScreenVerdict.Attack => $"{source}: some text was withheld because it looked like an instruction to the assistant.",
+            Safety.ScreenVerdict.Harmful => $"{source}: some text was withheld because it contained harmful content.",
+            _ => $"{source}: some text was withheld because it couldn't be checked.",
+        });
 
     public static ObservedGap LimitReached { get; } = new(ObservedGapKind.LimitReached, "The investigation stopped at its step limit.");
 }

@@ -46,7 +46,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Principal | Scope | Role | Why |
 |---|---|---|---|
 | Web app | Foundry resource | Cognitive Services OpenAI User | Call the chat and embedding deployments |
-| Web app | Foundry resource | Prompt Shields User (custom) | Screen untrusted tool text; the role holds that one action |
+| Web app | Foundry resource | Prompt Shields User (custom) | Screen questions and untrusted tool text; the role holds only the Prompt Shields and harm analysis calls |
 | Web app | Search service | Search Index Data Reader | Retrieve sections for investigations and show cited sections |
 | Web app | Application Insights | Monitoring Metrics Publisher | Send telemetry with an Entra token |
 | Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
@@ -191,16 +191,26 @@ Evaluation history rows carry metric names, numbers, verdicts, the commit, promp
 
 ## Injection and content safety
 
-Two controls with different jobs: the deployment's content filter screens what the person asks and what the model answers, and Prompt Shields screens the text tools return, which the filter never sees ([ADR 0013](adr/0013-screen-untrusted-tool-text.md)).
+Three layers. Every question is screened before the investigation agent sees it ([ADR 0015](adr/0015-screen-questions-and-tool-text-for-harm.md)); one of the checks is itself a constrained classifier call to the active chat deployment, which receives only the current question, with no tools and no conversation history. The text tools return is screened for instructions and harm before the model reads it ([ADR 0013](adr/0013-screen-untrusted-tool-text.md)). The deployment's content filter checks every prompt and completion on top of both.
 
 | Threat | Where it enters | Control |
 |---|---|---|
-| Harmful content in a question or an answer | The question; the completion | Strict content filter on prompts and completions; the investigation ends *blocked* |
-| A direct prompt attack | The question | The filter's prompt-attack detection; the investigation ends *blocked*, and the question is never resent |
+| Hate, sexual content, violence or self-harm in a question | The question and each follow-up | Content Safety harm analysis (Low and above) and our own classifier, before the investigation agent sees it; the investigation ends *blocked*, with a support notice for self-harm |
+| A direct prompt attack | The question | Prompt Shields' user-prompt check before the investigation agent sees it, then the filter's prompt-attack detection; the investigation ends *blocked*, and the question is never resent |
+| A question that can't be screened | Throttling, errors, timeouts of any check | Not investigated: the person is asked to try again |
+| Harmful content in an answer | The completion | Strict content filter on completions; the investigation ends *blocked* |
+| Harmful content in data or documents | The same tool text as instructions, and any future upload | Harm analysis after Prompt Shields; withheld when Low or above |
 | An instruction hidden in data or documents | Names, incident notes, references, closure reasons, error codes, knowledge | Marked where the tool writes it, screened by Prompt Shields, withheld when flagged |
 | A screen that can't answer | Throttling, errors, timeouts | The text is withheld as unchecked; the investigation continues on structured data |
 | Steered support for a claim or a ticket | A withheld knowledge section | It keeps its citation id but can't support anything |
 | An attack carried into later questions | Conversation history | Only answered turns are carried |
+
+**The question screen.** Three checks run together on every question and follow-up, under one 8 s budget, before the investigation agent sees it:
+- Content Safety's harm analysis for the four categories, blocking at Low severity and above;
+- Prompt Shields with the question as the user prompt;
+- a constrained classifier call to the active chat deployment (prompt `harm-screen`), which receives only the current question, with no tools and no conversation history, and names any of the four categories that apply.
+
+Our classifier is there because Azure's classifiers score some plain requests to hurt someone, or oneself, as safe. Anything found ends the turn as *blocked* before the investigation agent sees the question. A question about self-harm gets "This question can't be investigated here. If you're thinking about harming yourself, please contact local emergency services or someone you trust now." If a check can't answer, the question isn't investigated and the person is asked to try again. The log records the verdict, never the question.
 
 **The content filter.** Chat deployments use a strict policy. Anything above "Safe" in the hate, sexual, violence and self-harm categories is blocked, on both prompts and completions, along with prompt attacks in user prompts and protected text in completions. Filtering is synchronous, so blocked output is never streamed. A rejected prompt or a withheld completion ends the investigation as *blocked*, and the person sees "This question can't be investigated: it was blocked by the content safety policy." Nothing partial is shown, and the request isn't retried. Some legitimate operational language may be blocked; the safety evaluation measures how often.
 
@@ -218,7 +228,9 @@ Two controls with different jobs: the deployment's content filter screens what t
 
 Labels are plain because markers around names changed what the model asked for next: with every name marked, it stopped widening a settlement search to the day before, and tool argument accuracy fell below the gate. Ids, dates, amounts, enum values and time zones checked against the IANA list stay plain. A test poisons every string in the data and the knowledge, runs every tool through a screen that flags the poison, and fails if any poison reaches the model, so a new field can't slip past. Evidence labels, which name merchants and processors, are built by the server and shown only to people; the model never reads them.
 
-**Fail closed.** A flagged value is replaced by "[withheld: this text was flagged as a possible instruction to the assistant]"; one that couldn't be checked, by "[withheld: this text couldn't be checked]". The result shows a gap saying which source lost text and why. Without the Content Safety endpoint, which only Development allows, nothing can be checked and every untrusted value is withheld. The log records how many values were screened, flagged and unscreenable, never the text.
+**Fail closed.** A flagged value is replaced by "[withheld: this text was flagged as a possible instruction to the assistant]"; a harmful one, by "[withheld: this text contains harmful content]"; one that couldn't be checked, by "[withheld: this text couldn't be checked]". Every value Prompt Shields passes is also checked by Content Safety's harm analysis, and Low severity or above is withheld. The result shows a gap saying which source lost text and why. Without the Content Safety endpoint, which only Development allows, nothing can be checked: no question is investigated, and every untrusted value would be withheld. The log records how many values were screened, flagged, harmful and unscreenable, never the text.
+
+**Uploads.** There's no upload today. Any upload added later is untrusted text: it reaches the model only through the tool guard, marked and screened for instructions and harm like any tool result, never added to the model's context directly.
 
 **Withheld knowledge supports nothing.** A section with any part withheld can't support a statement, an *Assessment* root cause, high confidence or a ticket; an assessment citing it goes back for correction. Nor does the server copy withheld text anywhere for the model: a processor's reference that was withheld is never put on a proposed ticket.
 

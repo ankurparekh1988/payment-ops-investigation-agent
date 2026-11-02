@@ -17,3 +17,4 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0011](0011-the-model-proposes-the-server-executes.md) | The model proposes; the server executes after the owner approves | Accepted |
 | [0012](0012-evaluation-thresholds-from-a-pre-registered-rule.md) | Evaluation thresholds from a pre-registered rule, applied once to a baseline of `main` | Accepted |
 | [0013](0013-screen-untrusted-tool-text.md) | Screen untrusted tool text before the model reads it | Accepted |
+| [0015](0015-screen-questions-and-tool-text-for-harm.md) | Screen questions before the investigation agent sees them, and tool text for harm | Accepted |

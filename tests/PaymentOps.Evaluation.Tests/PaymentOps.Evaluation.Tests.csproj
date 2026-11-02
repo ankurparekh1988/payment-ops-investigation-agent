@@ -10,6 +10,7 @@
     <Compile Include="..\PaymentOps.Agent.Tests\Fakes.cs" Link="Shared\Fakes.cs" />
     <Compile Include="..\PaymentOps.Agent.Tests\ScriptedChatClient.cs" Link="Shared\ScriptedChatClient.cs" />
     <Compile Include="..\PaymentOps.Agent.Tests\ScriptedScreen.cs" Link="Shared\ScriptedScreen.cs" />
+    <Compile Include="..\PaymentOps.Agent.Tests\ScriptedQuestionScreen.cs" Link="Shared\ScriptedQuestionScreen.cs" />
   </ItemGroup>
 
 </Project>

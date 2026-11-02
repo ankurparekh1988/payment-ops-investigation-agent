@@ -1,9 +1,6 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 
 using Azure.Core;
-using Azure.Identity;
 
 namespace PaymentOps.Agent.Safety;
 
@@ -19,11 +16,7 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
     public const int MaxPieceChars = 9_500;
     public const int OverlapChars = 500;
 
-    private readonly Uri _shieldPrompt = new(endpoint, "contentsafety/text:shieldPrompt?api-version=2024-09-01");
-
-    // Managed identity caches its tokens, but a developer's Azure CLI sign-in starts a process for each one, which
-    // would spend the screening budget. Two calls refreshing at once both fetch one; that's harmless.
-    private volatile CachedToken? _token;
+    private readonly ContentSafetyClient _client = new(http, endpoint, tokenScope, credential);
 
     public async Task<IReadOnlyList<ScreenVerdict>> ScreenAsync(IReadOnlyList<string> segments, CancellationToken cancellationToken)
     {
@@ -113,45 +106,12 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
 
     private async Task<IReadOnlyList<ScreenVerdict>> CallAsync(IReadOnlyList<string> documents, CancellationToken cancellationToken)
     {
-        try
-        {
-            var token = await TokenAsync(cancellationToken);
-            using var request = new HttpRequestMessage(HttpMethod.Post, _shieldPrompt)
-            {
-                Content = JsonContent.Create(new { userPrompt = string.Empty, documents }),
-            };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            using var response = await http.SendAsync(request, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                return UnavailableScreen.AllUnavailable(documents.Count);
-            }
-
-            using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
-            var analysis = body.RootElement.GetProperty("documentsAnalysis");
-            return analysis.GetArrayLength() == documents.Count
-                ? [.. analysis.EnumerateArray().Select(d => d.GetProperty("attackDetected").GetBoolean() ? ScreenVerdict.Attack : ScreenVerdict.Clean)]
-                : UnavailableScreen.AllUnavailable(documents.Count);
-        }
-        catch (Exception ex) when (!cancellationToken.IsCancellationRequested
-            && ex is HttpRequestException or TaskCanceledException or AuthenticationFailedException or JsonException or KeyNotFoundException or InvalidOperationException)
-        {
-            return UnavailableScreen.AllUnavailable(documents.Count);
-        }
+        using var body = await _client.PostAsync("contentsafety/text:shieldPrompt", new { userPrompt = string.Empty, documents }, cancellationToken);
+        return body?.RootElement.TryGetProperty("documentsAnalysis", out var analysis) == true
+            && analysis.ValueKind == JsonValueKind.Array
+            && analysis.GetArrayLength() == documents.Count
+            && analysis.EnumerateArray().All(d => d.TryGetProperty("attackDetected", out var a) && a.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            ? [.. analysis.EnumerateArray().Select(d => d.GetProperty("attackDetected").GetBoolean() ? ScreenVerdict.Attack : ScreenVerdict.Clean)]
+            : UnavailableScreen.AllUnavailable(documents.Count);
     }
-
-    private async Task<string> TokenAsync(CancellationToken cancellationToken)
-    {
-        if (_token is { } cached && cached.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(5))
-        {
-            return cached.Value;
-        }
-
-        var fresh = await credential.GetTokenAsync(new TokenRequestContext([tokenScope]), cancellationToken);
-        _token = new CachedToken(fresh.Token, fresh.ExpiresOn);
-        return fresh.Token;
-    }
-
-    private sealed record CachedToken(string Value, DateTimeOffset ExpiresOn);
 }

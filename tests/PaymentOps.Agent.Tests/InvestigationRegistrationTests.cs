@@ -20,7 +20,7 @@ namespace PaymentOps.Agent.Tests;
 
 public sealed class InvestigationRegistrationTests
 {
-    private static ServiceCollection Services()
+    internal static ServiceCollection Services()
     {
         var services = new ServiceCollection();
         var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
@@ -43,7 +43,7 @@ public sealed class InvestigationRegistrationTests
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<PromptShieldsScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
+        Assert.IsType<HarmAwareScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
     }
 
     [Fact]

@@ -29,6 +29,7 @@ internal sealed class InvestigationAgentRunner(
     IOptions<InvestigationLimits> options,
     TimeProvider time,
     IUntrustedTextScreen screen,
+    IQuestionScreen questionScreen,
     ILogger<InvestigationAgentRunner> logger)
 {
     public const string PromptId = "investigation-agent";
@@ -57,6 +58,28 @@ internal sealed class InvestigationAgentRunner(
         if (!user.IsAuthenticated || !user.IsInRole(OpsRoles.Reader))
         {
             return new NotAssessed(NotAssessedReason.NotAuthorized);
+        }
+
+        // Before the investigation agent sees it: a question that is harmful, an attack, or couldn't be checked never reaches it.
+        QuestionVerdict verdict;
+        try
+        {
+            verdict = await questionScreen.ScreenAsync(question, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new NotAssessed(NotAssessedReason.Cancelled);
+        }
+
+        if (verdict != QuestionVerdict.Clean)
+        {
+            InvestigationLog.QuestionBlocked(logger, investigationId, verdict, timer.ElapsedMilliseconds);
+            return new NotAssessed(verdict switch
+            {
+                QuestionVerdict.SelfHarm => NotAssessedReason.BlockedSelfHarm,
+                QuestionVerdict.Unavailable => NotAssessedReason.Unscreened,
+                _ => NotAssessedReason.Blocked,
+            });
         }
 
         var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);

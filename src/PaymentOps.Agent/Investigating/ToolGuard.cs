@@ -35,6 +35,7 @@ internal sealed class ToolGuard(
 
     private const string Withheld = "[withheld: this text was flagged as a possible instruction to the assistant]";
     private const string Unscreenable = "[withheld: this text couldn't be checked]";
+    private const string HarmfulCopy = "[withheld: this text contains harmful content]";
     private static readonly string CitationIdProperty = ToolJson.Options.PropertyNamingPolicy!.ConvertName("CitationId");
 
     private static readonly string LimitReached = ToolJson.Serialize(new ToolResult.Failed(
@@ -215,6 +216,7 @@ internal sealed class ToolGuard(
 
         var labels = marked.Select(v => UntrustedText.IsLabel(v.GetValue<string>())).ToList();
         var flagged = verdicts.Count(v => v == ScreenVerdict.Attack);
+        var harmful = verdicts.Count(v => v == ScreenVerdict.Harmful);
         var unscreenable = verdicts.Count(v => v == ScreenVerdict.Unavailable);
         for (var i = 0; i < marked.Count; i++)
         {
@@ -222,7 +224,12 @@ internal sealed class ToolGuard(
             if (verdicts[i] != ScreenVerdict.Clean)
             {
                 turn.TextWithheld(text);
-                marked[i].ReplaceWith(JsonValue.Create(UntrustedText.Wrap(verdicts[i] == ScreenVerdict.Attack ? Withheld : Unscreenable)));
+                marked[i].ReplaceWith(JsonValue.Create(UntrustedText.Wrap(verdicts[i] switch
+                {
+                    ScreenVerdict.Attack => Withheld,
+                    ScreenVerdict.Harmful => HarmfulCopy,
+                    _ => Unscreenable,
+                })));
             }
             else if (labels[i])
             {
@@ -230,14 +237,14 @@ internal sealed class ToolGuard(
             }
         }
 
-        if (flagged + unscreenable == 0)
+        if (flagged + harmful + unscreenable == 0)
         {
             return (labels.Contains(true) ? root.ToJsonString(ToolJson.Options) : json, null);
         }
 
-        InvestigationLog.TextWithheld(_logger, investigationId, tool.Name, marked.Count, flagged, unscreenable);
+        InvestigationLog.TextWithheld(_logger, investigationId, tool.Name, marked.Count, flagged, harmful, unscreenable);
 
-        var gap = ObservedGap.Withheld(tool.Source, flagged > 0);
+        var gap = ObservedGap.Withheld(tool.Source, flagged > 0 ? ScreenVerdict.Attack : harmful > 0 ? ScreenVerdict.Harmful : ScreenVerdict.Unavailable);
         turn.AddGap(gap);
         return (root.ToJsonString(ToolJson.Options), gap);
     }
