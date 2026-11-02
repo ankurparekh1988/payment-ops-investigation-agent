@@ -1,6 +1,6 @@
 # 0016. One recorded rerun of a failed evaluation when the agent under test is unchanged
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR 0018](0018-evaluation-thresholds-from-measured-run-to-run-spread.md), under which an evaluation after a branch update counts as the rerun
 - **Date:** 2026-11-02
 
 ## Context
