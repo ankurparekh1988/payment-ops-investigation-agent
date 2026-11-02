@@ -14,10 +14,12 @@ public sealed class AiReleaseLoaderTests
         Assert.Equal("chat-blue", release.ActiveChatDeployment);
         Assert.Equal("embed-v1", release.EmbeddingDeployment);
         Assert.Equal("judge", release.JudgeDeployment);
-        Assert.Equal(["chat-blue", "embed-v1", "judge"], release.Deployments.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("screen", release.ScreenDeployment);
+        Assert.Equal(["chat-blue", "embed-v1", "judge", "screen"], release.Deployments.Keys.Order(StringComparer.Ordinal));
         Assert.Equal(new DeploymentIdentity("gpt-test", "2026-01-01", "GlobalStandard", "strict"), release.Deployments["chat-blue"]);
         Assert.Null(release.Deployments["embed-v1"].ContentFilterPolicy);
         Assert.Equal("default", release.Deployments["judge"].ContentFilterPolicy);
+        Assert.Equal("strict", release.Deployments["screen"].ContentFilterPolicy);
 
         var prompt = new PromptProvider(release).GetPrompt("grounded-answer");
         Assert.Equal("0.1.0", prompt.Version);
@@ -102,6 +104,7 @@ public sealed class AiReleaseLoaderTests
     [InlineData("\n    contentFilterPolicy: default", "", "Missing properties, 'contentFilterPolicy'")]
     [InlineData("deployment: judge", "deployment: embed-v1", "'embed-v1' is used more than once")]
     [InlineData("capacityK: 10\n  judge", "capacityK: 0\n  judge", "capacityK must be positive")]
+    [InlineData("deployment: screen", "deployment: chat-blue", "'chat-blue' is used more than once")]
     public void Manifest_rules_are_enforced(string from, string to, string expected)
     {
         var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: TestRelease.EditModels(from, to))).LoadErrors();

@@ -53,6 +53,7 @@ public sealed class ReleaseChangeCheckTests
     [InlineData("active: blue", "active: green", "blue:\n        deployment: chat-blue", "green:\n        deployment: chat-green", "chat-blue")]
     [InlineData("deployment: embed-v1", "deployment: embed-v2", null, null, "embed-v1")]
     [InlineData("deployment: judge", "deployment: judge-v2", null, null, "judge")]
+    [InlineData("deployment: screen", "deployment: screen-v2", null, null, "screen")]
     public void A_deployment_the_base_release_uses_cannot_be_removed(string from, string to, string? from2, string? to2, string removed)
     {
         // The infrastructure is applied before the new build is deployed, so the running app would call it.
@@ -74,6 +75,7 @@ public sealed class ReleaseChangeCheckTests
     [InlineData("contentFilterPolicy: strict", "contentFilterPolicy: default", "chat-blue", "contentFilterPolicy")]
     [InlineData("model: embed-test", "model: embed-next", "embed-v1", "model")]
     [InlineData("contentFilterPolicy: default", "contentFilterPolicy: strict", "judge", "contentFilterPolicy")]
+    [InlineData("capacityK: 10\n    contentFilterPolicy: strict", "capacityK: 10\n    contentFilterPolicy: default", "screen", "contentFilterPolicy")]
     public void A_deployment_the_base_release_uses_cannot_change_what_it_runs(string from, string to, string deployment, string field)
     {
         // Terraform would change it under the running app, which was built for the old one.

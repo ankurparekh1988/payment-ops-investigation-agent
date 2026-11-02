@@ -56,6 +56,7 @@ public static class AiReleaseLoader
             models.Chat.Deployments[models.Chat.Active].Deployment,
             models.Embedding.Deployment,
             models.Judge.Deployment,
+            models.Screen.Deployment,
             manifest.Retrieval.Index,
             manifest.Retrieval.EvaluationIndex,
             ReleaseManifestValidator.ParseRetrievalMode(manifest.Retrieval.Mode)!.Value,

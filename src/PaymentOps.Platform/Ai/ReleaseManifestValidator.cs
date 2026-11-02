@@ -98,6 +98,7 @@ internal static partial class ReleaseManifestValidator
         manifest.Models.Chat.Deployments.Select(d => ($"models.chat.deployments.{d.Key}", (ModelDeployment)d.Value))
             .Append(("models.embedding", manifest.Models.Embedding))
             .Append(("models.judge", manifest.Models.Judge))
+            .Append(("models.screen", manifest.Models.Screen))
             .ToList();
 
     private static void CheckFilter(string path, string policy, List<string> errors)

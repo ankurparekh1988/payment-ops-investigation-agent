@@ -13,6 +13,7 @@ public sealed record DeploymentIdentity(string Model, string Version, string Dep
 /// The validated AI release built into this artifact: which model deployments the app uses and the
 /// prompts it may send. Immutable once loaded.
 /// </summary>
+/// <param name="ScreenDeployment">The question screen's classifier, kept apart from investigation traffic.</param>
 /// <param name="KnowledgeIndex">The search index the knowledge corpus is published to.</param>
 /// <param name="EvaluationIndex">The index evaluations read, reconciled to the evaluated change's corpus first.</param>
 /// <param name="RetrievalMode">How the knowledge index is queried.</param>
@@ -22,6 +23,7 @@ public sealed record AiRelease(
     string ActiveChatDeployment,
     string EmbeddingDeployment,
     string JudgeDeployment,
+    string ScreenDeployment,
     string KnowledgeIndex,
     string EvaluationIndex,
     RetrievalMode RetrievalMode,

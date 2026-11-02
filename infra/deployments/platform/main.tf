@@ -28,6 +28,13 @@ locals {
       capacity       = local.models.judge.capacityK
       content_filter = local.models.judge.contentFilterPolicy
     }
+    (local.models.screen.deployment) = {
+      model          = local.models.screen.model
+      version        = local.models.screen.version
+      sku            = local.models.screen.deploymentType
+      capacity       = local.models.screen.capacityK
+      content_filter = local.models.screen.contentFilterPolicy
+    }
   })
 }
 

@@ -7,7 +7,7 @@ namespace PaymentOps.Platform.Ai;
 /// Rules about how a release may change relative to its base branch:
 /// <list type="bullet">
 /// <item>a prompt whose body hash changed needs a higher version, and an unchanged one keeps its version;</item>
-/// <item>a deployment the base release uses (active chat, embedding, judge) can't be removed or change
+/// <item>a deployment the base release uses (active chat, embedding, judge, screen) can't be removed or change
 /// its model, version, deployment type or content filter, because the running app keeps calling it until
 /// the new build is deployed, after the infrastructure apply. Capacity can change.</item>
 /// </list>
@@ -114,7 +114,7 @@ public static class ReleaseChangeCheck
         var models = Child(root, "models");
         var chat = Child(models, "chat");
         var activeSlot = Child(Child(chat, "deployments"), Scalar(Child(chat, "active")) ?? string.Empty);
-        YamlNode?[] inUse = [activeSlot, Child(models, "embedding"), Child(models, "judge")];
+        YamlNode?[] inUse = [activeSlot, Child(models, "embedding"), Child(models, "judge"), Child(models, "screen")];
 
         var retrieval = Child(root, "retrieval");
         return new BaseRelease(

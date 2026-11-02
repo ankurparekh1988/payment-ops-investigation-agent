@@ -32,6 +32,13 @@ internal sealed class TestRelease : IAiReleaseSource
             deploymentType: GlobalStandard
             capacityK: 10
             contentFilterPolicy: default
+          screen:
+            deployment: screen
+            model: gpt-test
+            version: "2026-01-01"
+            deploymentType: GlobalStandard
+            capacityK: 10
+            contentFilterPolicy: strict
         """;
 
     public const string Body = "Answer using only the evidence for {{merchantId}}.\n";

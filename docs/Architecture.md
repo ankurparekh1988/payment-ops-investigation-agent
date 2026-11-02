@@ -33,7 +33,7 @@ flowchart LR
   U["Ops users<br/>(browser)"] -->|HTTPS, session cookie| APP["Web app<br/>App Service, Linux, .NET 10"]
   U -->|sign in| E["Microsoft Entra ID<br/>app roles, groups"]
   E -->|"authorization code,<br/>redeemed as the app's managed identity"| APP
-  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>embedding: no filter<br/>judge: default filter"]
+  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>screen: strict filter<br/>embedding: no filter<br/>judge: default filter"]
   APP -->|"Entra token<br/>Search Index Data Reader"| S
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
@@ -70,7 +70,7 @@ flowchart LR
 - **Access.** Code reads prompts through `IPromptProvider`. Placeholders are `{{name}}`, filled in one pass.
 - **Visibility.** At startup the app logs its schema version, deployment names and each prompt's id, version and hash, never prompt text.
 
-*As of 2026-10-22.* The manifest holds one prompt, `investigation-agent` 1.1.0, and the retrieval settings: the index, the mode and an optional semantic floor. Each further prompt is added with the feature that first uses it, and a prompt the code no longer uses is removed with that code.
+*As of 2026-11-01.* The manifest holds two prompts, `investigation-agent` 1.1.0 and `harm-screen` 1.0.0, and the retrieval settings: the index, the mode and an optional semantic floor. Each further prompt is added with the feature that first uses it, and a prompt the code no longer uses is removed with that code.
 
 ## Knowledge corpus
 

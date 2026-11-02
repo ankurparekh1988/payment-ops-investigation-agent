@@ -25,6 +25,7 @@ public sealed class AiReleaseLogTests(PaymentOpsWebApplicationFactory factory) :
         var entry = await capture.ReleaseLoaded.Task.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.True(entry.HostStarted);
         Assert.Contains(entry.State, kv => kv.Key == "ActiveChatDeployment" && Equals(kv.Value, "chat-blue"));
+        Assert.Contains(entry.State, kv => kv.Key == "ScreenDeployment" && Equals(kv.Value, "screen"));
     }
 
     private sealed record Entry(bool HostStarted, IReadOnlyList<KeyValuePair<string, object?>> State);
