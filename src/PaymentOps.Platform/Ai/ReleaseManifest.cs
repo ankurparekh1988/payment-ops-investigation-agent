@@ -2,7 +2,7 @@ namespace PaymentOps.Platform.Ai;
 
 // The YAML shape of ai/manifest.yaml. Every member is required and non-null unless marked optional, and unknown keys are
 // rejected, so a typo or an empty value fails loading instead of silently taking a default. A key is
-// only accepted where something reads it: contentFilterPolicy exists on chat deployments and the judge.
+// only accepted where something reads it: contentFilterPolicy exists on chat deployments, the judge and the screen.
 
 internal sealed class ReleaseManifest
 {
@@ -22,6 +22,9 @@ internal sealed class ManifestModels
     public required ModelDeployment Embedding { get; init; }
 
     public required FilteredModelDeployment Judge { get; init; }
+
+    // The question screen's classifier has its own rate limit, so investigations can't throttle it.
+    public required FilteredModelDeployment Screen { get; init; }
 }
 
 internal sealed class ChatModels

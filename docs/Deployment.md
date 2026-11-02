@@ -147,7 +147,7 @@ The platform stack creates everything the application runs on. Each tier is size
 | Log Analytics and Application Insights | Pay per GB, with a daily cap | Within the free allowance | Ingestion requires Entra ID |
 | Budget and action group | | Free | Emails at 50%, 80% and 100% of actual spend, and on a forecast overrun |
 
-The strict content filter is attached to the chat deployments: anything above "Safe" in the four harm categories is blocked on prompts and completions, as are jailbreak attempts. The evaluation judge uses Microsoft's default filter, because it has to read deliberately unsafe answers when scoring the safety evaluations.
+The strict content filter is attached to the chat deployments and to `screen`, the deployment kept for the question screen's classifier: anything above "Safe" in the four harm categories is blocked on prompts and completions, as are jailbreak attempts. The evaluation judge uses Microsoft's default filter, because it has to read deliberately unsafe answers when scoring the safety evaluations.
 
 The app screens every question, and untrusted tool text, with Prompt Shields and Content Safety's harm analysis on the same Foundry account, through its generic endpoint rather than the model's. The platform sets it as `PaymentOps__ContentSafety__Endpoint`, and the app won't start outside Development without it. Running locally, set `PaymentOps:ContentSafety:Endpoint` in user-secrets to the platform's `content_safety_endpoint` output; without it, no question can be screened, so none is investigated.
 

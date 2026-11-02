@@ -33,7 +33,7 @@ flowchart LR
   U["Ops users<br/>(browser)"] -->|HTTPS, session cookie| APP["Web app<br/>App Service, Linux, .NET 10"]
   U -->|sign in| E["Microsoft Entra ID<br/>app roles, groups"]
   E -->|"authorization code,<br/>redeemed as the app's managed identity"| APP
-  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>embedding: no filter<br/>judge: default filter"]
+  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>screen: strict filter<br/>embedding: no filter<br/>judge: default filter"]
   APP -->|"Entra token<br/>Search Index Data Reader"| S
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
