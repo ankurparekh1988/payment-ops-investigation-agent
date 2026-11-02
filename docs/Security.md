@@ -191,7 +191,7 @@ Evaluation history rows carry metric names, numbers, verdicts, the commit, promp
 
 ## Injection and content safety
 
-Three layers. Every question is screened before the investigation agent sees it ([ADR 0015](adr/0015-screen-questions-and-tool-text-for-harm.md)); one of the checks is itself a constrained classifier call to the active chat deployment, which receives only the current question, with no tools and no conversation history. The text tools return is screened for instructions and harm before the model reads it ([ADR 0013](adr/0013-screen-untrusted-tool-text.md)). The deployment's content filter checks every prompt and completion on top of both.
+Three layers. Every question is screened before the investigation agent sees it ([ADR 0015](adr/0015-screen-questions-and-tool-text-for-harm.md)); one of the checks is itself a constrained classifier call to its own `screen` deployment, which receives only the current question, with no tools and no conversation history. The text tools return is screened for instructions and harm before the model reads it ([ADR 0013](adr/0013-screen-untrusted-tool-text.md)). The deployment's content filter checks every prompt and completion on top of both.
 
 | Threat | Where it enters | Control |
 |---|---|---|
@@ -208,7 +208,7 @@ Three layers. Every question is screened before the investigation agent sees it 
 **The question screen.** Three checks run together on every question and follow-up, under one 8 s budget, before the investigation agent sees it:
 - Content Safety's harm analysis for the four categories, blocking at Low severity and above;
 - Prompt Shields with the question as the user prompt;
-- a constrained classifier call to the active chat deployment (prompt `harm-screen`), which receives only the current question, with no tools and no conversation history, and names any of the four categories that apply.
+- a constrained classifier call to the `screen` deployment (prompt `harm-screen`), which receives only the current question, with no tools and no conversation history, and names any of the four categories that apply.
 
 Our classifier is there because Azure's classifiers score some plain requests to hurt someone, or oneself, as safe. Anything found ends the turn as *blocked* before the investigation agent sees the question. A question about self-harm gets "This question can't be investigated here. If you're thinking about harming yourself, please contact local emergency services or someone you trust now." If a check can't answer, the question isn't investigated and the person is asked to try again. The log records the verdict, never the question.
 
