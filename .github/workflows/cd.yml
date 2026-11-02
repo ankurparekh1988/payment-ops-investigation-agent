@@ -20,8 +20,37 @@ env:
   ENVIRONMENT: ${{ fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment }}
 
 jobs:
+  changes:
+    name: Detect deployable changes
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.detect.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # A push of only docs, tests or other workflows has nothing to deploy; a run started by hand deploys everything.
+      - name: Detect
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            printf 'deploy=true\nreason=started by hand\n' | tee -a "$GITHUB_OUTPUT"
+          else
+            scripts/deployable-changes.sh "$BEFORE" "$AFTER"
+          fi
+          echo "Deploy: $(sed -n 's/^deploy=//p' "$GITHUB_OUTPUT"), because $(sed -n 's/^reason=//p' "$GITHUB_OUTPUT")." >> "$GITHUB_STEP_SUMMARY"
+
   build:
     name: Build and test
+    # Apply, Publish knowledge, Deploy app and Smoke test all wait on Build and Plan, so they skip with them.
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +80,8 @@ jobs:
 
   plan:
     name: Plan
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
