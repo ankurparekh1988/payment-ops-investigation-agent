@@ -198,10 +198,12 @@ The workflows read their configuration from the repository's Actions secrets and
 
 ## Continuous deployment
 
-`.github/workflows/cd.yml` runs on every push to `main`, and on demand.
+`.github/workflows/cd.yml` runs on every push to `main`, and on demand. A push deploys only if it changed something that reaches the app, the infrastructure or the knowledge index; one that changed only documentation, tests, the evaluation suite or other workflows stops after the first job. A run started by hand always deploys everything.
 
 ```mermaid
 flowchart LR
+  C["Detect deployable<br/>changes"] --> B
+  C --> P
   B["Build and test<br/>publish the app once"] --> A
   P["Plan<br/>gh-plan, preflight,<br/>capacity check"] --> A{"Approve<br/>dev-infra"}
   A --> AP["Apply<br/>capacity re-check,<br/>exact saved plan"]
@@ -214,10 +216,11 @@ flowchart LR
 
 | Job | What it does |
 |---|---|
+| Detect deployable changes | `scripts/deployable-changes.sh` compares the push with the commit before it. Only `docs/`, `tests/`, `eval/`, workflows other than CD, the README, the licence and a few repository settings files are skipped; any other path deploys, and so does a push whose previous commit can't be read. When nothing deployable changed, every later job is skipped and the summary says why |
 | Build and test | Builds and runs the full test suite, then publishes the web app once from those binaries; the same artifact is what gets deployed. A failing test stops the deployment, including one that first appears after merging |
 | Plan | Plans the platform as `gh-plan` with the model preflight. If anything would change, it checks model capacity as early feedback and uploads the plan **encrypted**: saved plans hold sensitive values in plain text, and artifacts in a public repository can be downloaded |
 | Apply | Runs only if the build also succeeded, so infrastructure never changes without a deployable app. Waits for approval in the `<env>-infra` environment, checks model capacity again (quota can change while approval waits), then applies exactly the reviewed plan as `gh-deploy`. Terraform refuses if the state changed since planning. Skipped when nothing changed |
-| Publish knowledge | As `gh-deploy` in the `<env>` environment: builds the corpus, publishes it to the index the AI release names, and verifies every stored field. Runs on every deployment, so a recreated free service is filled again; when the index already matches, no section is uploaded or deleted. It also makes sure the evaluation index (`retrieval.evaluationIndex`) exists, without writing documents to it |
+| Publish knowledge | As `gh-deploy` in the `<env>` environment: builds the corpus, publishes it to the index the AI release names, and verifies every stored field. Runs on every deployment, so a recreated free service is filled again (after a teardown, start CD by hand); when the index already matches, no section is uploaded or deleted. It also makes sure the evaluation index (`retrieval.evaluationIndex`) exists, without writing documents to it |
 | Deploy app | Deploys the built artifact to the web app in the `<env>` environment, only after Publish knowledge succeeded: the app reads the index, so it never goes live against one that failed verification |
 | Smoke test | Checks `/health` (the process is up) and `/health/ready` (the app reaches Foundry and queries the knowledge index with its managed identity). Readiness is retried for up to 10 minutes, because a Search role assigned in the same deployment can take that long to take effect; it fails if the app still isn't ready after that |
 

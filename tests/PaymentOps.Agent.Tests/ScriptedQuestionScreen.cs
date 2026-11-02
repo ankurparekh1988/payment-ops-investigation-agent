@@ -2,8 +2,8 @@ using PaymentOps.Agent.Safety;
 
 namespace PaymentOps.Agent.Tests;
 
-/// <summary>Answers every question with one verdict and records what it was asked.</summary>
-internal sealed class ScriptedQuestionScreen(QuestionVerdict verdict) : IQuestionScreen
+/// <summary>Answers each question with the next verdict, repeating the last, and records what it was asked.</summary>
+internal sealed class ScriptedQuestionScreen(params QuestionVerdict[] verdicts) : IQuestionScreen
 {
     public static ScriptedQuestionScreen AllClean => new(QuestionVerdict.Clean);
 
@@ -15,8 +15,7 @@ internal sealed class ScriptedQuestionScreen(QuestionVerdict verdict) : IQuestio
         lock (Screened)
         {
             Screened.Add(question);
+            return Task.FromResult(verdicts[Math.Min(Screened.Count, verdicts.Length) - 1]);
         }
-
-        return Task.FromResult(verdict);
     }
 }

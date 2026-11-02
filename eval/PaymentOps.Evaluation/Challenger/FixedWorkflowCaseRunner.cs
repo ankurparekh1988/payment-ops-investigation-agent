@@ -28,8 +28,9 @@ internal sealed class FixedWorkflowCaseRunner(
     TokenCredential credential,
     Func<IChatClient, IChatClient>? substituteModel = null,
     Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge = null,
-    Action<IServiceCollection>? configure = null)
-    : CaseRunner(release, endpoints, credential, substituteModel, substituteKnowledge, configure)
+    Action<IServiceCollection>? configure = null,
+    TimeSpan? reaskDelay = null)
+    : CaseRunner(release, endpoints, credential, substituteModel, substituteKnowledge, configure, reaskDelay ?? DefaultReaskDelay)
 {
     private static readonly IReadOnlyList<KnownProcessor> Processors = KnownProcessor.FromDemoData();
 

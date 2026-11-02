@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 
+using PaymentOps.Agent.Contracts;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Judging;
 using PaymentOps.Evaluation.Scoring;
@@ -48,6 +49,12 @@ internal static class ReportMarkdown
             });
             md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Set} | {string.Join(" | ", cells)} |");
         }
+
+        // A second ask counts instead of the first, so how often the screen couldn't check a question is shown here.
+        var caseRuns = report.Runs.SelectMany(r => r.Cases).ToList();
+        var reasked = caseRuns.Where(r => r.Reasked).ToList();
+        var stillUnscreened = reasked.Count(r => r.Outcome == Outcomes.NotAssessed(NotAssessedReason.Unscreened));
+        md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {reasked.Count} of {caseRuns.Count} case runs; {stillUnscreened} still unscreened.");
 
         md.AppendLine().AppendLine("### Judge (recorded, not gating)").AppendLine();
         var scores = report.Runs.SelectMany(r => r.Judge.Values).ToList();
