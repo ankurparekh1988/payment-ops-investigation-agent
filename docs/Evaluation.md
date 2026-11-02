@@ -194,7 +194,7 @@ A change to either is evaluated in full against the pull request's own code; any
 | `failed` | The gate failed: a hard gate, viability or a threshold (exit 1) | Fails, as "gate failed" |
 | `passed` | Every gate passed | Passes |
 
-A run that ends in none of these, such as a job that never finished, fails as "the evaluation workflow didn't complete". A failure is never rerun until it passes; a run that fails on variance is recorded as a finding.
+A run that ends in none of these, such as a job that never finished, fails as "the evaluation workflow didn't complete". A failure is recorded as a finding below before anything else happens. It may be rerun once, and only when the agent under test is unchanged ([ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md)); a second failure stands, and a change to AI behaviour is never rerun.
 
 **Weekly, on `main`.** Every Monday at 06:00 UTC, and on demand from `main`, the same evaluation runs with the judge, without approvals, and is recorded in Log Analytics. A run that fails, can't complete or can't record its results opens or updates one `ai-evaluation` issue; the next pass closes it. GitHub disables scheduled workflows in a public repository after 60 days without activity, which stops the weekly run without an issue; that's a limit of the host, and the run can still be started by hand.
 
@@ -210,6 +210,19 @@ A run that ends in none of these, such as a job that never finished, fails as "t
 The hard gates are rows too, with the count of violations as the value, and each report adds one `gate` row for the summary carrying the gate's own verdict and its number of failures, since viability can fail an evaluation whose metric rows all pass. The judge's three dimensions are recorded as `judge_groundedness`, `judge_relevance` and `judge_root_cause_agreement`, never gating: per run, the median of that run's scored cases with `SampleSize` their number, and for the summary, the median of every scored case across the runs, as the report's judge table shows it. An unscored case is left out, never counted as 0. Rows carry no model text, case content, endpoints or identifiers.
 
 There's no evaluation page in the app: the history is meant to be read when the app is down. A workbook in Azure Monitor, readable only by the admin group, will show it.
+
+### Recorded failures and reruns
+
+Every failed pull-request evaluation is recorded here, with the per-run values of each failing metric. A rerun is allowed only under [ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md), and its result is added to the same entry whatever it shows.
+
+**[#44](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/44), 2026-11-02: declare a `screen` deployment.** Run [41378983300](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/41378983300) at head `113409d` failed the gate on two thresholds; both hard gates passed.
+
+| Metric | Runs | Median | Threshold |
+|---|---|---|---|
+| Tool argument accuracy | 0.556, 0.556, 0.704 | 0.556 | 0.62 |
+| Evidence coverage | 0.682, 0.621, 0.758 | 0.682 | 0.69 |
+
+The agent under test is unchanged from #43's passing evaluation: the same prompts (`investigation-agent` 1.1.0, `harm-screen` 1.0.0) and the same `chat-blue` deployment (`gpt-5.4-mini` 2026-03-17, GlobalStandard). The change adds a `screen` deployment to the manifest and Terraform, a `ScreenDeployment` field to the loaded release and the startup log, and the deployment to the release check; nothing calls the deployment, and no agent, tool, knowledge, data or prompt file changes. Across #43 and #44 the same tool-argument labels flipped in both directions, and Azure throttled 12 chat requests during the run against 19 during #43's. Rerun: pending.
 
 ### Proving the gate, 2026-10-25
 
