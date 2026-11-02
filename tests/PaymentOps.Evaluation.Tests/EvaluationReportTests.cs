@@ -85,6 +85,19 @@ public sealed class EvaluationReportTests
     }
 
     [Fact]
+    public void The_report_counts_questions_asked_again_and_those_still_unscreened()
+    {
+        // Moving a second ask off the agent's score mustn't hide how often the screen couldn't check a question.
+        var reasked = Run();
+        reasked = reasked with { Results = [reasked.Results[0] with { Reasked = true }, reasked.Results[1] with { Outcome = "not-assessed:unscreened", Reasked = true }] };
+
+        var report = Report(reasked, Run(), Run());
+
+        Assert.Contains("Asked again after the question screen couldn't check them: 2 of 6 case runs; 1 still unscreened.", ReportMarkdown.Investigations(report), StringComparison.Ordinal);
+        Assert.Contains("\"reasked\": true", report.ToJson(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_stability_view_lists_each_run_per_case()
     {
         var report = Report(Run("incomplete"), Run(), Run());
