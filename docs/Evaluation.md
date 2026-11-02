@@ -224,7 +224,17 @@ Every failed pull-request evaluation is recorded here, with the per-run values o
 | Tool argument accuracy | 0.556, 0.556, 0.704 | 0.556 | 0.62 |
 | Evidence coverage | 0.682, 0.621, 0.758 | 0.682 | 0.69 |
 
-The agent under test is unchanged from #43's passing evaluation: the same prompts (`investigation-agent` 1.1.0, `harm-screen` 1.0.0) and the same `chat-blue` deployment (`gpt-5.4-mini` 2026-03-17, GlobalStandard). The change adds a `screen` deployment to the manifest and Terraform, a `ScreenDeployment` field to the loaded release and the startup log, and the deployment to the release check; nothing calls the deployment, and no agent, tool, knowledge, data or prompt file changes. Across #43 and #44 the same tool-argument labels flipped in both directions, and Azure throttled 12 chat requests during the run against 19 during #43's. Rerun: pending.
+The agent under test is unchanged from #43's passing evaluation: the same prompts (`investigation-agent` 1.1.0, `harm-screen` 1.0.0) and the same `chat-blue` deployment (`gpt-5.4-mini` 2026-03-17, GlobalStandard). The change adds a `screen` deployment to the manifest and Terraform, a `ScreenDeployment` field to the loaded release and the startup log, and the deployment to the release check; nothing calls the deployment, and no agent, tool, knowledge, data or prompt file changes. Across #43 and #44 the same tool-argument labels flipped in both directions, and Azure throttled 12 chat requests during the run against 19 during #43's.
+
+Rerun, 2026-11-02: run [41440883716](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/41440883716) at head `48f13a4`, the branch brought up to date with `main`, which added only this record and [ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md). It failed on a different threshold; both hard gates passed, and Azure throttled 10 chat requests.
+
+| Metric | Runs | Median | Threshold |
+|---|---|---|---|
+| Required tool recall | 0.767, 0.767, 0.791 | 0.767 | 0.77 |
+| Tool argument accuracy | 0.648, 0.667, 0.685 | 0.667 | 0.62 |
+| Evidence coverage | 0.742, 0.727, 0.742 | 0.742 | 0.69 |
+
+Required tool recall needs 67 of 86 required tools called; the runs called 66, 66 and 68. In the second run, `auth-merchant-wording-general` ended *unscreened* after the full 8 s screening budget. The screen's classifier shares `chat-blue` with the investigations, which Azure throttled 10 times during the run. The question never reached the agent and both of its required tools counted as missed. With that question investigated as in the other two runs, the second run would have called 68 and the median would have passed. The first run's failure is different: without its one unscreened question, tool argument accuracy would still have failed. Every evaluation since the screen was added has had unscreened questions (4 in #43, 1 in #44, 1 here), which is what the `screen` deployment in #44 is for. Every evaluation also misses `get_error_events` on 15 cases a run, a steady shortfall rather than noise. The second failure stands: #44 waits for a decision on the gate.
 
 ### Proving the gate, 2026-10-25
 
