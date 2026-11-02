@@ -53,6 +53,12 @@ internal sealed record CaseResult(string CaseId, string Outcome)
     /// <summary>Set when the evaluation environment, not the system under test, failed this case; it invalidates the run.</summary>
     public string? InfrastructureFailure { get; init; }
 
+    /// <summary>
+    /// The question screen couldn't check the first ask, so the question was asked once more and this is the second
+    /// ask's result. The agent never saw the first ask.
+    /// </summary>
+    public bool Reasked { get; init; }
+
     public long LatencyMs { get; init; }
 
     public long? TtfpMs { get; init; }

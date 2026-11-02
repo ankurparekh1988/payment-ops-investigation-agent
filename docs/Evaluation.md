@@ -114,6 +114,8 @@ Evidence and section metrics read only the assessment's own statements. A propos
 
 `investigation-eval` runs every case in order, three times; `retrieval-eval` runs the retrieval set once, since lexical retrieval is deterministic. A run is **invalid** when the evaluation environment couldn't give a fair run: the model unavailable or throttled, Search unavailable (including a failure the app absorbed into an incomplete answer), Prompt Shields unable to screen tool text (which the app absorbs by withholding it), a sign-in failure, or an endpoint that can't be reached. An invalid run is discarded whole and repeated once; a second invalid attempt ends the evaluation as "could not evaluate", never as a pass on fewer runs. The system's own behaviour (an incomplete answer it chose, a limit reached, an unverified assessment, a wrong tool, an allowed refusal) is valid and scored.
 
+A question the question screen couldn't check never reaches the system, so it's asked once more, in fresh services, after 15 s, and the second ask is scored whatever it is; a second unscreened result counts against the system ([ADR 0017](adr/0017-ask-again-when-the-question-screen-cant-check.md)). Each case result records `reasked`, and the job summary counts the case runs asked again and those that stayed unscreened.
+
 Reports carry no model text: per case, the outcome, tool calls with their ids and dates, cited ids, proposal state and timings. Each report has the median, minimum and maximum of every metric, and a stability view of each case's outcome and metrics in every run. There is no pass@k.
 
 ### The threshold rule
