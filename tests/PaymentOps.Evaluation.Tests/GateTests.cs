@@ -28,7 +28,7 @@ public sealed class GateTests
         Scoring.Thresholds.SupportedSchemaVersion,
         new string('a', 40),
         ThresholdRule.Text,
-        entries.ToDictionary(e => e.Metric, e => new ThresholdEntry(e.Value, ThresholdRule.Direction(e.Metric), N.GetValueOrDefault(e.Metric, 30), 0, 0, 0)));
+        entries.ToDictionary(e => e.Metric, e => new ThresholdEntry(e.Value, ThresholdRule.Direction(e.Metric), N.GetValueOrDefault(e.Metric, 30), 0, 0, 0, null, null, [])));
 
     private static GateVerdict Evaluate(IReadOnlyList<RunMetrics> runs, Thresholds? thresholds) =>
         Gate.Evaluate(runs, Aggregation.Summarize(runs, N), thresholds, Applicable);

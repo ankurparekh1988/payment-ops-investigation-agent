@@ -120,17 +120,18 @@ Reports carry no model text: per case, the outcome, tool calls with their ids an
 
 ### The threshold rule
 
-For each soft metric with N > 0, from the three baseline runs:
+For each investigation metric with N > 0, from the mean `μ` and sample standard deviation `s` of ten baseline runs ([ADR 0018](adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md)):
 
 ```
-higher is better:  threshold = floor_to_0.01( min_b − 1/N )
-lower is better:   threshold = ceil_to_0.01( max_b + 1/N )
+margin             = max( 1.6 × s, 1/N )
+higher is better:  threshold = floor_to_0.01( μ − margin )
+lower is better:   threshold = ceil_to_0.01( μ + margin )
 then clamped to [0, 1]
 ```
 
-The gate passes when the median of three runs is at or above the threshold (at or below, when lower is better). For `retrieval_recall_at_5`, the single baseline value is `min_b`. A change passes if its typical run is no worse than the worst baseline run by more than one item, and fails on a sustained loss of two or more. A metric is "n/a" only when the labels give it N = 0; then it never gates.
+The median of three runs varies about two thirds as much as one run, so an unchanged agent's median falls past a threshold about once in a hundred evaluations per metric. A sustained drop of 1.6 × `s` in a metric's mean is caught about half the time, and one of 2.5 × `s` about nine times in ten. `retrieval_recall_at_5` comes from one deterministic run and keeps the [ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md) rule, `floor_to_0.01(min_b − 1/N)`. The gate passes when the median of three runs is at or above the threshold (at or below, when lower is better). A metric is "n/a" only when the labels give it N = 0; then it never gates.
 
-`thresholds` writes `eval/thresholds.json` from the baseline reports and refuses a baseline that isn't three agent runs and one retrieval run from the same clean commit, or that failed a hard gate or viability: such a failure in the baseline is a finding, fixed in its own change, after which the whole baseline is run again. Each command checks only the metrics it measures: a threshold missing for one of them, or derived from a different N, is an input error, found before any run.
+`thresholds` writes `eval/thresholds.json` from the baseline reports, with each metric's mean, standard deviation and per-run values beside its threshold. It refuses a baseline that isn't ten agent runs and one retrieval run from the same clean commit, or that failed a hard gate or viability: such a failure in the baseline is a finding, fixed in its own change, after which the whole baseline is run again. Each command checks only the metrics it measures: a threshold missing for one of them, or derived from a different N, is an input error, found before any run.
 
 ### Judge, recorded, not gating
 
@@ -177,7 +178,7 @@ dotnet run --project eval/PaymentOps.Evaluation -c Release -- retrieval-eval \
 **When evaluation is required.** The classifier, run from the pull request's base commit, sorts the changed paths:
 
 - **AI behaviour:** `ai/**`, `src/PaymentOps.Agent/**`, `src/PaymentOps.Tools/**`, `src/PaymentOps.Knowledge/**`, `src/PaymentOps.Data.Demo/**`, `src/PaymentOps.Domain/**` (roles, investigation and incident rules), `src/PaymentOps.Platform/**`, `data/knowledge/**`, `data/datasets/**`, `tools/PaymentOps.CorpusBuild/**`, `tools/PaymentOps.KnowledgePublish/**`, `Directory.Build.props`, `Directory.Packages.props`, `global.json` and `src/**/*.csproj`.
-- **Gate policy:** `eval/**`, `.github/workflows/ai-evaluation.yml` and `docs/adr/0012-*`.
+- **Gate policy:** `eval/**`, `.github/workflows/ai-evaluation.yml`, and the ADRs that decide thresholds, reruns and how an unscreened question is scored: `docs/adr/0012-*`, `docs/adr/0016-*`, `docs/adr/0017-*` and `docs/adr/0018-*`.
 
 A change to either is evaluated in full against the pull request's own code; anything else isn't required. A pull request that changes both is refused: gate policy and AI behaviour change in separate pull requests, so the agent and the bar it's judged by never move together. A change to `eval/thresholds.json` or to an evaluation dataset, which is where the labels are, also needs an ADR under `docs/adr/` in the same pull request. A pull request that switches `retrieval.index` is evaluated against that index and may not also change the corpus or how it's built ([Deployment](Deployment.md#ai-evaluation) explains why such a switch can't be evaluated before it merges, and what the next migration needs). Fork and bot pull requests get no Azure access: if they need evaluating, the check fails until a maintainer reproduces the change on a branch.
 

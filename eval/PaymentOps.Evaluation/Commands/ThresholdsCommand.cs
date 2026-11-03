@@ -5,14 +5,14 @@ using PaymentOps.Evaluation.Scoring;
 namespace PaymentOps.Evaluation.Commands;
 
 /// <summary>
-/// thresholds: applies the pre-registered rule to a three-run agent baseline and its retrieval run. The output is
+/// thresholds: applies the pre-registered rules to a ten-run agent baseline and its retrieval run. The output is
 /// the thresholds file exactly as frozen; it is never edited by hand.
 /// </summary>
 internal static class ThresholdsCommand
 {
     public const string Usage = "thresholds --investigations <report.json> --retrieval <report.json> --out <file>";
 
-    private const int BaselineRuns = 3;
+    public const int BaselineRuns = 10;
 
     public static Task<int> RunAsync(string[] args) => ExitCodes.GuardAsync("Thresholds", Usage, async () =>
     {
@@ -36,13 +36,17 @@ internal static class ThresholdsCommand
             foreach (var (metric, summary) in report.Summary.Where(s => ThresholdRule.Gating.Contains(s.Key) && s.Value.N > 0))
             {
                 var values = report.Runs.Select(r => r.Metrics.GetValueOrDefault(metric)).OfType<double>().ToList();
+                var spread = report == investigations;
                 metrics[metric] = new ThresholdEntry(
-                    ThresholdRule.Derive(metric, values, summary.N)!.Value,
+                    (spread ? ThresholdRule.FromSpread(metric, values, summary.N) : ThresholdRule.FromWorstRun(metric, values, summary.N))!.Value,
                     ThresholdRule.Direction(metric),
                     summary.N,
                     summary.Min!.Value,
                     summary.Median!.Value,
-                    summary.Max!.Value);
+                    summary.Max!.Value,
+                    values.Average(),
+                    spread ? ThresholdRule.StandardDeviation(values) : null,
+                    values);
             }
         }
 
