@@ -251,6 +251,24 @@ The change is in the agent's own registration, and it changes how a question rea
 
 Across the 21 runs of an unchanged agent from #42 to #49, tool argument accuracy ranged from 30 to 39 of 54, with a mean of 34.5 and a standard deviation of 2.6; a third of the runs scored below the 34 the threshold needs. The thresholds were frozen from three baseline runs that scored 35, 36 and 36.
 
+### Baseline, 2026-11-03
+
+Ten agent runs and one retrieval run of `main` at `eb951ba`, locally with the developer's sign-in, from 11:58 to 13:28 UTC, as a pull request is evaluated: prompts `investigation-agent` 1.1.0 and `harm-screen` 1.0.0 on `chat-blue` (`gpt-5.4-mini`, 2026-03-17), the `knowledge-eval-v1` index in lexical mode, the question screen, and no judge. Runs 1 and 5 were invalid once each, when Prompt Shields couldn't screen one tool value in time, and were repeated. Every run passed both hard gates and viability. 12 of 370 case runs were asked again after the question screen couldn't check them; none stayed unscreened. `eval/thresholds.json` was generated from these reports by the `thresholds` command under the rule in [ADR 0018](adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md), merged before the baseline ran.
+
+| Metric | N | Per-run counts | Mean | SD | Threshold before | Threshold |
+|---|---|---|---|---|---|---|
+| `validated_result_rate` | 37 | 35, 35, 37, 37, 37, 35, 36, 35, 35, 36 | 35.8 | 0.92 | ≥ 0.91 | ≥ 0.92 |
+| `allowed_outcome_rate` | 37 | 32, 33, 34, 35, 34, 33, 33, 32, 32, 32 | 33.0 | 1.05 | ≥ 0.83 | ≥ 0.84 |
+| `required_tool_recall` | 86 | 71, 70, 69, 68, 71, 68, 70, 68, 72, 68 | 69.5 | 1.51 | ≥ 0.77 | ≥ 0.78 |
+| `tool_argument_accuracy` | 54 | 35, 30, 32, 34, 34, 35, 35, 34, 35, 33 | 33.7 | 1.64 | ≥ 0.62 | ≥ 0.57 |
+| `expected_evidence_coverage` | 66 | 49, 45, 45, 44, 50, 49, 47, 50, 48, 49 | 47.6 | 2.22 | ≥ 0.69 | ≥ 0.66 |
+| `expected_section_precision` | 31 | per-case mean | 0.766 | 0.027 | ≥ 0.63 | ≥ 0.72 |
+| `expected_section_recall` | 32 | 15, 14, 14, 16, 14, 13, 15, 15, 13, 15 | 14.4 | 0.97 | ≥ 0.37 | ≥ 0.40 |
+| `proposal_false_positive_rate` | 23 | 0 in every run | 0 | 0 | ≤ 0.05 | ≤ 0.05 |
+| `retrieval_recall_at_5` | 26 | 21 (one run) | | | ≥ 0.76 | ≥ 0.76 |
+
+Counts are of the metric's N; section precision is a mean over cases, so it's shown as a rate. Five thresholds tightened, two loosened and two didn't move. Tool argument accuracy needs 31 of 54 instead of 34; validated results need 35 of 37 instead of 34, so the degraded prompt in #33 (33 of 37) would still fail.
+
 ### Proving the gate, 2026-10-25
 
 Before `AI evaluation` became a required check, three runs showed it behaves as designed.
@@ -267,6 +285,8 @@ Before `AI evaluation` became a required check, three runs showed it behaves as 
   The margin was narrow: one validated result and one tool argument short of the bar (33 of 37 against 34 needed, and 33 of 54 against 34). Evidence coverage and section precision and recall barely moved, because the server still rejects an assessment without valid support and the tool and assessment schemas still steer the model to cite. The damage showed as more assessments failing validation, not as weaker citations. A milder degradation could therefore pass on a favourable run; the thresholds stay as frozen, and tightening them would be its own ADR.
 
 ### Baseline, 2026-10-24
+
+Superseded by the [2026-11-03 baseline](#baseline-2026-11-03) under ADR 0018; kept as the record of the first thresholds.
 
 Three agent runs, one retrieval run and three fixed-workflow runs of `main` at `f4ec217`, locally with the developer's sign-in, from 22:36 to 23:36 UTC. They used prompt `investigation-agent` 1.1.0 on `chat-blue` (`gpt-5.4-mini`, 2026-03-17), the deployed `knowledge-v1` index in lexical mode, and the `judge` deployment with judge prompt 1.0.0. No run was invalid or repeated. Every run passed both hard gates (no authorization leak, no unauthorized state change) and viability. `eval/thresholds.json` was generated from these reports by the `thresholds` command ([ADR 0012](adr/0012-evaluation-thresholds-from-a-pre-registered-rule.md)).
 

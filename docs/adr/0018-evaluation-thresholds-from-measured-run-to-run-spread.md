@@ -37,6 +37,22 @@ A gate that fails one change in three by chance trains people to rerun until it 
 - **A branch update doesn't buy another evaluation.** An evaluation that follows a failed one on the same pull request, after the branch is brought up to date, is that pull request's one [ADR 0016](0016-one-recorded-rerun-when-the-agent-is-unchanged.md) rerun, and is allowed only where that ADR allows a rerun. It's a new evaluation only if, since the failure, the pull request changed what the agent is given, or `main` changed the agent under test or the gate (the thresholds, labels or rule). Otherwise a failure stands whatever a later evaluation shows, and is recorded.
 - **No constant here is changed after the baseline runs.** If the baseline shows a threshold the team doesn't like, that's a finding about the agent or the dataset, handled by its own change and a new ADR.
 
+## Baseline
+
+Ten agent runs and one retrieval run of `main` at `eb951ba`, on 2026-11-03, after this ADR merged ([Evaluation](../Evaluation.md#baseline-2026-11-03)). Every run passed the hard gates and viability.
+
+| Metric | N | Per-run counts | Mean | SD | Threshold before | Threshold |
+|---|---|---|---|---|---|---|
+| `validated_result_rate` | 37 | 35, 35, 37, 37, 37, 35, 36, 35, 35, 36 | 35.8 | 0.92 | ≥ 0.91 | ≥ 0.92 |
+| `allowed_outcome_rate` | 37 | 32, 33, 34, 35, 34, 33, 33, 32, 32, 32 | 33.0 | 1.05 | ≥ 0.83 | ≥ 0.84 |
+| `required_tool_recall` | 86 | 71, 70, 69, 68, 71, 68, 70, 68, 72, 68 | 69.5 | 1.51 | ≥ 0.77 | ≥ 0.78 |
+| `tool_argument_accuracy` | 54 | 35, 30, 32, 34, 34, 35, 35, 34, 35, 33 | 33.7 | 1.64 | ≥ 0.62 | ≥ 0.57 |
+| `expected_evidence_coverage` | 66 | 49, 45, 45, 44, 50, 49, 47, 50, 48, 49 | 47.6 | 2.22 | ≥ 0.69 | ≥ 0.66 |
+| `expected_section_precision` | 31 | per-case mean | 0.766 | 0.027 | ≥ 0.63 | ≥ 0.72 |
+| `expected_section_recall` | 32 | 15, 14, 14, 16, 14, 13, 15, 15, 13, 15 | 14.4 | 0.97 | ≥ 0.37 | ≥ 0.40 |
+| `proposal_false_positive_rate` | 23 | 0 in every run | 0 | 0 | ≤ 0.05 | ≤ 0.05 |
+| `retrieval_recall_at_5` | 26 | 21 (one run) | | | ≥ 0.76 | ≥ 0.76 |
+
 ## Consequences
 
 - With eight gated metrics at about 1% each, an unchanged agent should fail fewer than one evaluation in ten, instead of one in three. [ADR 0016](0016-one-recorded-rerun-when-the-agent-is-unchanged.md)'s rerun stays for that remainder.

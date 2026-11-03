@@ -1,63 +1,161 @@
 {
-  "schema_version": 1,
-  "baseline_commit": "f4ec2177493dcc18e1b08f8dd8e2310d8194adbd",
-  "rule": "higher: floor_to_0.01(min_b - 1/N); lower: ceil_to_0.01(max_b \u002B 1/N); clamp to [0,1]; gate on median of 3",
+  "schema_version": 2,
+  "baseline_commit": "eb951ba2088fd15def990d431231c5b4753db819",
+  "rule": "investigations, over 10 baseline runs: higher: floor_to_0.01(mean_b - max(1.6*sd_b, 1/N)); lower: ceil_to_0.01(mean_b \u002B max(1.6*sd_b, 1/N)); retrieval, over 1 run: floor_to_0.01(min_b - 1/N); clamp to [0,1]; gate on median of 3",
   "metrics": {
     "validated_result_rate": {
-      "threshold": 0.91,
+      "threshold": 0.92,
       "direction": "higher",
       "n": 37,
       "baseline_min": 0.9459459459459459,
-      "baseline_median": 0.9459459459459459,
-      "baseline_max": 0.972972972972973
+      "baseline_median": 0.9594594594594594,
+      "baseline_max": 1,
+      "baseline_mean": 0.9675675675675676,
+      "baseline_standard_deviation": 0.024836123877640042,
+      "baseline_runs": [
+        0.9459459459459459,
+        0.9459459459459459,
+        1,
+        1,
+        1,
+        0.9459459459459459,
+        0.972972972972973,
+        0.9459459459459459,
+        0.9459459459459459,
+        0.972972972972973
+      ]
     },
     "allowed_outcome_rate": {
-      "threshold": 0.83,
+      "threshold": 0.84,
       "direction": "higher",
       "n": 37,
       "baseline_min": 0.8648648648648649,
-      "baseline_median": 0.918918918918919,
-      "baseline_max": 0.918918918918919
+      "baseline_median": 0.8918918918918919,
+      "baseline_max": 0.9459459459459459,
+      "baseline_mean": 0.8918918918918921,
+      "baseline_standard_deviation": 0.02848898792944485,
+      "baseline_runs": [
+        0.8648648648648649,
+        0.8918918918918919,
+        0.918918918918919,
+        0.9459459459459459,
+        0.918918918918919,
+        0.8918918918918919,
+        0.8918918918918919,
+        0.8648648648648649,
+        0.8648648648648649,
+        0.8648648648648649
+      ]
     },
     "required_tool_recall": {
-      "threshold": 0.77,
+      "threshold": 0.78,
       "direction": "higher",
       "n": 86,
       "baseline_min": 0.7906976744186046,
-      "baseline_median": 0.7906976744186046,
-      "baseline_max": 0.813953488372093
+      "baseline_median": 0.8081395348837209,
+      "baseline_max": 0.8372093023255814,
+      "baseline_mean": 0.8081395348837208,
+      "baseline_standard_deviation": 0.017549196004142315,
+      "baseline_runs": [
+        0.8255813953488372,
+        0.813953488372093,
+        0.8023255813953488,
+        0.7906976744186046,
+        0.8255813953488372,
+        0.7906976744186046,
+        0.813953488372093,
+        0.7906976744186046,
+        0.8372093023255814,
+        0.7906976744186046
+      ]
     },
     "tool_argument_accuracy": {
-      "threshold": 0.62,
+      "threshold": 0.57,
       "direction": "higher",
       "n": 54,
-      "baseline_min": 0.6481481481481481,
-      "baseline_median": 0.6666666666666666,
-      "baseline_max": 0.6666666666666666
+      "baseline_min": 0.5555555555555556,
+      "baseline_median": 0.6296296296296297,
+      "baseline_max": 0.6481481481481481,
+      "baseline_mean": 0.624074074074074,
+      "baseline_standard_deviation": 0.03030354989786068,
+      "baseline_runs": [
+        0.6481481481481481,
+        0.5555555555555556,
+        0.5925925925925926,
+        0.6296296296296297,
+        0.6296296296296297,
+        0.6481481481481481,
+        0.6481481481481481,
+        0.6296296296296297,
+        0.6481481481481481,
+        0.6111111111111112
+      ]
     },
     "expected_evidence_coverage": {
-      "threshold": 0.69,
+      "threshold": 0.66,
       "direction": "higher",
       "n": 66,
-      "baseline_min": 0.7121212121212122,
-      "baseline_median": 0.7424242424242424,
-      "baseline_max": 0.7424242424242424
+      "baseline_min": 0.6666666666666666,
+      "baseline_median": 0.7348484848484849,
+      "baseline_max": 0.7575757575757576,
+      "baseline_mean": 0.7212121212121212,
+      "baseline_standard_deviation": 0.033653194442338774,
+      "baseline_runs": [
+        0.7424242424242424,
+        0.6818181818181818,
+        0.6818181818181818,
+        0.6666666666666666,
+        0.7575757575757576,
+        0.7424242424242424,
+        0.7121212121212122,
+        0.7575757575757576,
+        0.7272727272727273,
+        0.7424242424242424
+      ]
     },
     "expected_section_precision": {
-      "threshold": 0.63,
+      "threshold": 0.72,
       "direction": "higher",
       "n": 31,
-      "baseline_min": 0.6672043010752688,
-      "baseline_median": 0.7359447004608296,
-      "baseline_max": 0.7709677419354839
+      "baseline_min": 0.7370967741935486,
+      "baseline_median": 0.7620967741935485,
+      "baseline_max": 0.8258064516129032,
+      "baseline_mean": 0.7663978494623657,
+      "baseline_standard_deviation": 0.02667212194171043,
+      "baseline_runs": [
+        0.7370967741935486,
+        0.749462365591398,
+        0.7381720430107528,
+        0.7586021505376344,
+        0.7715053763440861,
+        0.7505376344086022,
+        0.7838709677419355,
+        0.7833333333333334,
+        0.8258064516129032,
+        0.7655913978494625
+      ]
     },
     "expected_section_recall": {
-      "threshold": 0.37,
+      "threshold": 0.4,
       "direction": "higher",
       "n": 32,
       "baseline_min": 0.40625,
-      "baseline_median": 0.46875,
-      "baseline_max": 0.53125
+      "baseline_median": 0.453125,
+      "baseline_max": 0.5,
+      "baseline_mean": 0.45,
+      "baseline_standard_deviation": 0.030190368221227996,
+      "baseline_runs": [
+        0.46875,
+        0.4375,
+        0.4375,
+        0.5,
+        0.4375,
+        0.40625,
+        0.46875,
+        0.46875,
+        0.40625,
+        0.46875
+      ]
     },
     "proposal_false_positive_rate": {
       "threshold": 0.05,
@@ -65,7 +163,21 @@
       "n": 23,
       "baseline_min": 0,
       "baseline_median": 0,
-      "baseline_max": 0
+      "baseline_max": 0,
+      "baseline_mean": 0,
+      "baseline_standard_deviation": 0,
+      "baseline_runs": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
     },
     "retrieval_recall_at_5": {
       "threshold": 0.76,
@@ -73,7 +185,12 @@
       "n": 26,
       "baseline_min": 0.8076923076923077,
       "baseline_median": 0.8076923076923077,
-      "baseline_max": 0.8076923076923077
+      "baseline_max": 0.8076923076923077,
+      "baseline_mean": 0.8076923076923077,
+      "baseline_standard_deviation": null,
+      "baseline_runs": [
+        0.8076923076923077
+      ]
     }
   }
 }
