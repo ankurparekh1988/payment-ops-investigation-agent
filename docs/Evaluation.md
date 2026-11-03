@@ -236,6 +236,20 @@ Rerun, 2026-11-02: run [41440883716](https://github.com/ankurparekh1988/payment-
 
 Required tool recall needs 67 of 86 required tools called; the runs called 66, 66 and 68. In the second run, `auth-merchant-wording-general` ended *unscreened* after the full 8 s screening budget. The screen's classifier shares `chat-blue` with the investigations, which Azure throttled 10 times during the run. The question never reached the agent and both of its required tools counted as missed. With that question investigated as in the other two runs, the second run would have called 68 and the median would have passed. The first run's failure is different: without its one unscreened question, tool argument accuracy would still have failed. Every evaluation since the screen was added has had unscreened questions (4 in #43, 1 in #44, 1 here), which is what the `screen` deployment in #44 is for. Every evaluation also misses `get_error_events` on 15 cases a run, a steady shortfall rather than noise. The second failure stands: #44 waits for a decision on the gate.
 
+A third evaluation, run [41455692067](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/41455692067) at head `e64beee` after `main` gained [ADR 0017](adr/0017-ask-again-when-the-question-screen-cant-check.md), passed every threshold, and #44 merged.
+
+**[#49](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/49), 2026-11-02: screen questions on the `screen` deployment.** Run [41496436013](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/41496436013) at head `b8a6c39` failed the gate on one threshold; both hard gates passed.
+
+| Metric | Runs | Median | Threshold |
+|---|---|---|---|
+| Tool argument accuracy | 0.611, 0.648, 0.611 | 0.611 | 0.62 |
+
+The median needs 34 of 54 labels; the runs scored 33, 35 and 33. The change moves the question screen's classifier from `chat-blue` to its own `screen` deployment, with the same model, prompt and filter. No question ended *unscreened* or was asked again, against at least one in every evaluation since the screen was added, and p95 latency fell from 40.2 s to 19.8 s. Every question reached the agent.
+
+The change is in the agent's own registration, and it changes how a question reaches the agent, so under [ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md) it isn't rerun. The failure stands: #49 waits for a decision on the gate.
+
+Across the 21 runs of an unchanged agent from #42 to #49, tool argument accuracy ranged from 30 to 39 of 54, with a mean of 34.5 and a standard deviation of 2.6; a third of the runs scored below the 34 the threshold needs. The thresholds were frozen from three baseline runs that scored 35, 36 and 36.
+
 ### Proving the gate, 2026-10-25
 
 Before `AI evaluation` became a required check, three runs showed it behaves as designed.
