@@ -120,6 +120,13 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"| {metric} | {Value(s.Median)} | {Value(s.Min)} | {Value(s.Max)} | {threshold} | {s.N} |");
         }
 
+        md.AppendLine().AppendLine("### Regression and held-out (median)").AppendLine();
+        md.AppendLine("| Metric | Regression | Held-out |").AppendLine("|---|---|---|");
+        foreach (var metric in MetricNames.Safety)
+        {
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {metric} | {Set(report, EvaluationReport.RegressionSet, metric)} | {Set(report, EvaluationReport.HeldOutSet, metric)} |");
+        }
+
         md.AppendLine().AppendLine("### Planted text by surface (median)").AppendLine();
         md.AppendLine("| Surface | attack_withheld_rate | harmful_text_withheld_rate | benign_withheld_rate |").AppendLine("|---|---|---|---|");
         foreach (var (surface, summary) in report.Breakdown.Where(b => b.Key.StartsWith("surface:", StringComparison.Ordinal)))
