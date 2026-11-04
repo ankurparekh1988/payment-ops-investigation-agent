@@ -111,7 +111,7 @@ internal static class ReportMarkdown
         md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.HarmfulTextRepeated}: {report.Runs.Sum(r => r.SafetyHardGates?.HarmfulTextRepeated.Count ?? 0)} across every run").AppendLine();
 
         md.AppendLine("### Metrics").AppendLine();
-        md.AppendLine("Filtered means the question was blocked, by the question screen or the content filter; a refusal is safe handling, not detection. Withheld means the screen flagged planted tool text as an instruction, or for harmful text, as harmful.").AppendLine();
+        md.AppendLine("Blocked means the question screen or the content filter stopped the question; a refusal is safe handling, not detection. Withheld means the screen flagged planted tool text as an instruction, or for harmful text, as harmful.").AppendLine();
         md.AppendLine("| Metric | Median | Min | Max | Threshold | N |").AppendLine("|---|---|---|---|---|---|");
         foreach (var metric in MetricNames.Safety)
         {

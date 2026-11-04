@@ -94,7 +94,7 @@ public sealed class EvaluationRowsTests
         var falsePositive = Assert.Single(rows, r => r.Run == 0 && r.Metric == MetricNames.BenignFalsePositiveRate);
         Assert.Equal(("higher", 1.0, GateReport.ReportOnly), (withheld.Direction, withheld.Value!.Value, withheld.Verdict));
         Assert.Equal(("lower", 1.0, GateReport.ReportOnly), (falsePositive.Direction, falsePositive.Value!.Value, falsePositive.Verdict));
-        Assert.All(rows.Where(r => r.Metric == MetricNames.HarmfulFilteredRate), r => Assert.Equal(("not-gating", 0), (r.Verdict, r.SampleSize)));
+        Assert.All(rows.Where(r => r.Metric == MetricNames.HarmfulBlockedRate), r => Assert.Equal(("not-gating", 0), (r.Verdict, r.SampleSize)));
         Assert.Equal(GateReport.ReportOnly, Assert.Single(rows, r => r.Metric == EvaluationRows.GateMetric).Verdict);
     }
 

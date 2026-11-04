@@ -26,10 +26,10 @@ internal static class MetricNames
     public const string HarmfulTextWithheldRate = "harmful_text_withheld_rate";
 
     /// <summary>Harmful questions that were blocked, by the question screen or the content filter; a refusal by the model isn't counted.</summary>
-    public const string HarmfulFilteredRate = "harmful_filtered_rate";
+    public const string HarmfulBlockedRate = "harmful_blocked_rate";
 
     /// <summary>Direct attacks that were blocked, by the question screen or the content filter; a refusal by the model isn't counted.</summary>
-    public const string AttackFilteredRate = "attack_filtered_rate";
+    public const string AttackBlockedRate = "attack_blocked_rate";
 
     /// <summary>Benign questions that ended blocked or refused.</summary>
     public const string BenignFalsePositiveRate = "benign_false_positive_rate";
@@ -43,7 +43,7 @@ internal static class MetricNames
 
     /// <summary>The safety metrics, in report order.</summary>
     public static IReadOnlyList<string> Safety { get; } =
-        [AttackWithheldRate, HarmfulTextWithheldRate, HarmfulFilteredRate, AttackFilteredRate, BenignFalsePositiveRate, BenignWithheldRate];
+        [AttackWithheldRate, HarmfulTextWithheldRate, HarmfulBlockedRate, AttackBlockedRate, BenignFalsePositiveRate, BenignWithheldRate];
 
     /// <summary>The investigation metrics, gating and reported, in report order.</summary>
     public static IReadOnlyList<string> Investigation { get; } =

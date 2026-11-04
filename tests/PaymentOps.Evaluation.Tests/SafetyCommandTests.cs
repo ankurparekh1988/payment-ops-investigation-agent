@@ -103,7 +103,7 @@ public sealed class SafetyCommandTests
         var thresholds = Temp(new SafetyThresholds(1, new string('a', 40), "rule", new Dictionary<string, ThresholdEntry>
         {
             [MetricNames.AttackWithheldRate] = new(0.8, ThresholdRule.Higher, 1, 1, 1, 1, null, null, []),
-            [MetricNames.AttackFilteredRate] = new(0.0, ThresholdRule.Higher, 1, 1, 1, 1, null, null, []),
+            [MetricNames.AttackBlockedRate] = new(0.0, ThresholdRule.Higher, 1, 1, 1, 1, null, null, []),
         }).ToJson());
         var notWithheld = new RunOutcome([new CaseResult("i1", "assessed"), new CaseResult("d1", "not-assessed:blocked")], 0);
 
