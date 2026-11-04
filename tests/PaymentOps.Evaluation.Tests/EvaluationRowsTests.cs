@@ -31,7 +31,7 @@ public sealed class EvaluationRowsTests
     }
 
     private static EvaluationReport Retrieval() => EvaluationReport.ForRetrieval(
-        Context with { System = EvaluationReport.RetrievalSystem, Prompts = [], Chat = null, Judge = null, JudgePromptVersion = null },
+        Context with { System = EvaluationReport.RetrievalSystem, Prompts = [], Chat = null, Screen = null, Judge = null, JudgePromptVersion = null },
         new RetrievalResult(
             new RunMetrics(
                 new Dictionary<string, double?> { [MetricNames.RetrievalRecallAt5] = 0.8, [MetricNames.RetrievalMrr] = 0.7 },

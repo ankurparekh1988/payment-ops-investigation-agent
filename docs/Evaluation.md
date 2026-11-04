@@ -116,7 +116,7 @@ Evidence and section metrics read only the assessment's own statements. A propos
 
 A question the question screen couldn't check never reaches the system, so it's asked once more, in fresh services, after 15 s, and the second ask is scored whatever it is; a second unscreened result counts against the system ([ADR 0017](adr/0017-ask-again-when-the-question-screen-cant-check.md)). Each case result records `reasked`, and the job summary counts the case runs asked again and those that stayed unscreened.
 
-Reports carry no model text: per case, the outcome, tool calls with their ids and dates, cited ids, proposal state and timings. Each report has the median, minimum and maximum of every metric, and a stability view of each case's outcome and metrics in every run. There is no pass@k.
+Reports carry no model text: per case, the outcome, tool calls with their ids and dates, cited ids, proposal state and timings. Each report names the chat and question-screen deployments it ran on and has the median, minimum and maximum of every metric, and a stability view of each case's outcome and metrics in every run. There is no pass@k.
 
 ### The threshold rule
 
@@ -151,7 +151,7 @@ Both systems run the same cases three times. The rule, fixed before either ran:
 - **Keep the agent** when the challenger fails a hard gate or is more than 0.05 worse on any gating metric's median.
 - **Keep the agent, mixed** otherwise, with the result recorded.
 
-`kill-test` compares only three-run reports of the same cases, commit and chat deployment. The result is recorded whichever way it falls. The gate's thresholds come only from the agent's baseline.
+`kill-test` compares only three-run reports of the same cases, commit, chat deployment and screen deployment. The result is recorded whichever way it falls. The gate's thresholds come only from the agent's baseline.
 
 ### Safety evaluation
 

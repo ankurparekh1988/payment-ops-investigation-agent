@@ -291,14 +291,16 @@ public sealed class CommandTests
              "--sources", Sources, "--out", Path.GetTempFileName(), "--summary", Path.GetTempFileName()]));
 
     [Fact]
-    public async Task Kill_test_refuses_reports_from_different_commits_or_fewer_than_three_runs()
+    public async Task Kill_test_refuses_reports_from_different_commits_or_screens_or_fewer_than_three_runs()
     {
         var agent = EvaluationReportTests.Report(EvaluationReportTests.Run(), EvaluationReportTests.Run(), EvaluationReportTests.Run());
         var other = agent with { System = "fixed-workflow", Commit = new string('d', 40) };
+        var otherScreen = agent with { System = "fixed-workflow", Screen = agent.Chat };
         var single = EvaluationReportTests.Report(EvaluationReportTests.Run());
         var output = Path.GetTempFileName();
 
         Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(agent.ToJson()), "--challenger", Temp(other.ToJson()), "--out", output, "--summary", output]));
+        Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(agent.ToJson()), "--challenger", Temp(otherScreen.ToJson()), "--out", output, "--summary", output]));
         Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(single.ToJson()), "--challenger", Temp((single with { System = "fixed-workflow" }).ToJson()), "--out", output, "--summary", output]));
     }
 

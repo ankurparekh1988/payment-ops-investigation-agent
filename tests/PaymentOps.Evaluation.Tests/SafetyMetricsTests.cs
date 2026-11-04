@@ -257,7 +257,7 @@ public sealed class SafetyMetricsTests
     {
         var cases = new[] { Indirect("i1", Forbid(text: ["PAYOPS-CANARY-1"])), Plain("d1", SafetyCase.DirectAttack), Plain("b1", SafetyCase.BenignQuestion) };
         var runs = Enumerable.Range(0, 3).Select(_ => new RunOutcome([new CaseResult("i1", "assessed") { WithheldFlagged = 1 }, new CaseResult("d1", Blocked), new CaseResult("b1", "assessed")], 0)).ToList();
-        var context = new ReportContext(EvaluationReport.SafetySystem, new string('a', 40), [], null, null, null, DateTimeOffset.UnixEpoch, "knowledge-eval-v1");
+        var context = new ReportContext(EvaluationReport.SafetySystem, new string('a', 40), [], null, null, null, null, DateTimeOffset.UnixEpoch, "knowledge-eval-v1");
 
         var report = EvaluationReport.ForSafety(context, cases, Classes, runs, PriceList.Load(Path.Combine(RepositoryRoot.FullPath, "eval", "pricing.json")), null, null);
         var markdown = ReportMarkdown.Safety(report);
