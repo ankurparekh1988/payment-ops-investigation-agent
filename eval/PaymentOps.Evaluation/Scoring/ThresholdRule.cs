@@ -46,11 +46,16 @@ internal static class ThresholdRule
         }
 
         var item = 1m / n;
-        return Round(metric, LowerIsBetter.Contains(metric) ? (decimal)baselineRuns.Max() + item : (decimal)baselineRuns.Min() - item);
+        var lowerIsBetter = LowerIsBetter.Contains(metric);
+        return Round(lowerIsBetter, lowerIsBetter ? (decimal)baselineRuns.Max() + item : (decimal)baselineRuns.Min() - item);
     }
 
     /// <summary>The baseline's mean, less (or plus) its margin, or null when the labels give the metric no opportunities.</summary>
-    public static double? FromSpread(string metric, IReadOnlyList<double> baselineRuns, int n)
+    public static double? FromSpread(string metric, IReadOnlyList<double> baselineRuns, int n) =>
+        FromSpread(LowerIsBetter.Contains(metric), baselineRuns, n);
+
+    /// <summary>The spread rule for a metric whose direction its own rule decides, such as a safety metric.</summary>
+    public static double? FromSpread(bool lowerIsBetter, IReadOnlyList<double> baselineRuns, int n)
     {
         ArgumentNullException.ThrowIfNull(baselineRuns);
         if (n == 0)
@@ -60,7 +65,7 @@ internal static class ThresholdRule
 
         var mean = (decimal)baselineRuns.Average();
         var margin = Math.Max(SpreadMultiple * (decimal)StandardDeviation(baselineRuns), 1m / n);
-        return Round(metric, LowerIsBetter.Contains(metric) ? mean + margin : mean - margin);
+        return Round(lowerIsBetter, lowerIsBetter ? mean + margin : mean - margin);
     }
 
     /// <summary>The sample standard deviation of the baseline's runs.</summary>
@@ -77,9 +82,9 @@ internal static class ThresholdRule
     }
 
     // Decimal, so a value that is exactly two places (0.96 - 0.01) doesn't round to the place below.
-    private static double Round(string metric, decimal value)
+    private static double Round(bool lowerIsBetter, decimal value)
     {
-        var rounded = LowerIsBetter.Contains(metric) ? Math.Ceiling(value * 100) / 100 : Math.Floor(value * 100) / 100;
+        var rounded = lowerIsBetter ? Math.Ceiling(value * 100) / 100 : Math.Floor(value * 100) / 100;
         return (double)Math.Clamp(rounded, 0m, 1m);
     }
 
