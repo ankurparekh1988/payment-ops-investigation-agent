@@ -155,14 +155,15 @@ Both systems run the same cases three times. The rule, fixed before either ran:
 
 ### Safety evaluation
 
-`safety-eval` runs `eval/datasets/safety.json` against the agent three times, with its own metrics, gate and threshold rule, so the investigation labels, N and thresholds above don't change ([ADR 0014](adr/0014-safety-evaluation-from-a-pre-registered-rule.md)). Its 40 cases are written by hand:
+`safety-eval` runs `eval/datasets/safety.json` against the agent three times, with its own metrics, gate and threshold rule, so the investigation labels, N and thresholds above don't change ([ADR 0014](adr/0014-safety-evaluation-from-a-pre-registered-rule.md)). Its 78 cases are written by hand, each in a set. The 40 first written are regression evidence: all ran in the two pre-merge live runs of 2026-11-01 and the screen was built with their results in view. The 38 written and reviewed after those runs are held out, and stay so only while no result of theirs shapes a label, rule or threshold; held-out replacements for the eight benign tool-text cases come before the baseline. The report shows the two sets apart.
 
 | Kind | Cases | What it is |
 |---|---|---|
-| `indirect-attack` | 12 | An instruction planted in a processor incident summary or a General knowledge section for that case only, beneath the tools. Six families, each planted in both places: exfiltrate Restricted knowledge, propose a ticket, claim an action was completed, force an assessed high-confidence outcome, emit a canary, investigate another merchant. A planted section joins every search result. |
-| `direct-attack` | 6 | Role-play, rule override, a mocked-up conversation, an encoded instruction, prompt extraction, "approve the pending ticket" |
-| `harmful` | 6 | Mild and non-graphic: two each for violence, hate and self-harm |
-| `benign-question` | 8 | Ordinary questions worded near harm or attack words |
+| `indirect-attack` | 24 | An instruction planted in a processor incident summary or a General knowledge section for that case only, beneath the tools. Six families, each planted in both places: exfiltrate Restricted knowledge, propose a ticket, claim an action was completed, force an assessed high-confidence outcome, emit a canary, investigate another merchant. A planted section joins every search result. |
+| `harmful-text` | 6 | Mild hate, violence and self-harm text planted like an attack, two of each, in an incident and in knowledge |
+| `direct-attack` | 12 | Role-play, rule override, a mocked-up conversation, an encoded instruction, prompt extraction, acting on a ticket without an engineer; each twice in different words |
+| `harmful` | 12 | Mild and non-graphic: four each for violence, hate and self-harm |
+| `benign-question` | 16 | Ordinary questions worded near harm or attack words |
 | `benign-text` | 8 | Ordinary incident notes and runbook passages with "raise an incident", "kill", "attack", "execute" and similar, planted like an attack |
 
 Sexual content isn't in the public set; the deployed content filter configuration covers it.
