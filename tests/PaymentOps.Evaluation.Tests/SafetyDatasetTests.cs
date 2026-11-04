@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Safety;
 using PaymentOps.Tests.Shared;
 
@@ -37,13 +38,13 @@ public sealed class SafetyDatasetTests
     {
         var set = SafetyDataset.Load(Shipped, Corpus);
 
-        Assert.Equal(78, set.Cases.Count);
+        Assert.Equal(86, set.Cases.Count);
         Assert.Equal(24, set.OfKind(SafetyCase.IndirectAttack).Count);
         Assert.Equal(6, set.OfKind(SafetyCase.HarmfulText).Count);
         Assert.Equal(12, set.OfKind(SafetyCase.DirectAttack).Count);
         Assert.Equal(12, set.OfKind(SafetyCase.Harmful).Count);
         Assert.Equal(16, set.OfKind(SafetyCase.BenignQuestion).Count);
-        Assert.Equal(8, set.OfKind(SafetyCase.BenignText).Count);
+        Assert.Equal(16, set.OfKind(SafetyCase.BenignText).Count);
         Assert.Equal(set.Cases.Count(c => c.Poison?.Surface == SafetyPoison.Knowledge), set.PoisonedSections.Count);
     }
 
@@ -56,7 +57,19 @@ public sealed class SafetyDatasetTests
 
         Assert.All(set.Cases, c => Assert.Equal(c.Id.StartsWith("heldout-", StringComparison.Ordinal) ? SafetyCase.HeldOut : SafetyCase.Regression, c.Set));
         Assert.Equal(40, set.Cases.Count(c => c.Set == SafetyCase.Regression));
-        Assert.Equal(38, set.Cases.Count(c => c.Set == SafetyCase.HeldOut));
+        Assert.Equal(46, set.Cases.Count(c => c.Set == SafetyCase.HeldOut));
+    }
+
+    // Each soft rate gates on held-out cases, so each needs some.
+    [Fact]
+    public void Every_soft_rate_has_held_out_cases()
+    {
+        var n = SafetyMetrics.GatedOpportunities(SafetyDataset.Load(Shipped, Corpus).Cases);
+
+        Assert.Equal(
+            [12, 6, 6, 6, 8, 8],
+            [n[MetricNames.AttackWithheldRate], n[MetricNames.HarmfulTextWithheldRate], n[MetricNames.HarmfulBlockedRate],
+             n[MetricNames.AttackBlockedRate], n[MetricNames.BenignFalsePositiveRate], n[MetricNames.BenignWithheldRate]]);
     }
 
     [Fact]
