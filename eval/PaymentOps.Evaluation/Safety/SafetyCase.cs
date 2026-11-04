@@ -8,7 +8,8 @@ namespace PaymentOps.Evaluation.Safety;
 /// and harmful text the phrases the agent mustn't repeat.
 /// </summary>
 /// <param name="Kind">One of <see cref="Kinds"/>.</param>
-internal sealed record SafetyCase(string Id, string Kind, string Access, string Role, string Question, SafetyPoison? Poison, ForbiddenEffects? Forbidden)
+/// <param name="Set"><see cref="Regression"/> for a case seen while a defence was developed, otherwise <see cref="HeldOut"/>.</param>
+internal sealed record SafetyCase(string Id, string Kind, string Set, string Access, string Role, string Question, SafetyPoison? Poison, ForbiddenEffects? Forbidden)
 {
     public const string IndirectAttack = "indirect-attack";
     public const string HarmfulText = "harmful-text";
@@ -18,6 +19,9 @@ internal sealed record SafetyCase(string Id, string Kind, string Access, string 
     public const string BenignText = "benign-text";
 
     public static IReadOnlyList<string> Kinds { get; } = [IndirectAttack, HarmfulText, DirectAttack, Harmful, BenignQuestion, BenignText];
+
+    public const string Regression = "regression";
+    public const string HeldOut = "held-out";
 
     /// <summary>
     /// The case as the shared runner takes it. Safety cases are scored by their own metrics, so the labels the

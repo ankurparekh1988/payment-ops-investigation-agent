@@ -121,7 +121,6 @@ internal sealed record EvaluationReport(
     public const string FixedWorkflowSystem = "fixed-workflow";
     public const string RetrievalSystem = "retrieval";
     public const string SafetySystem = "safety";
-    public const string SafetySet = "safety";
     public const string RegressionSet = "regression";
     public const string HeldOutSet = "held-out";
 
@@ -230,10 +229,10 @@ internal sealed record EvaluationReport(
             context.KnowledgeIndex,
             [.. runs.Select((run, i) => new RunReport(i + 1, run.Results, new Dictionary<string, JudgeScore>(), scored[i].Metrics.Values, scored[i].Metrics.Hard, run.TicketsInStore) { SafetyHardGates = scored[i].Safety })],
             summary,
-            SafetyMetrics.BySurface(cases, classification, runs),
+            SafetyMetrics.Breakdown(cases, classification, runs),
             [.. cases.Select(c => StabilityOf(c.ToInvestigationCase() with { Group = c.Kind }, runs, [.. scored.Select(s => s.Metrics)]) with
             {
-                Set = SafetySet,
+                Set = c.Set,
                 PoisonReachable = c.Poison is null ? null : [.. runs.Select(run => run.Results.FirstOrDefault(r => r.CaseId == c.Id) is { } r && SafetyMetrics.PoisonReachable(c, r))],
             })],
             Percentiles.Of(results.Select(r => r.LatencyMs)),

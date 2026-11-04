@@ -22,7 +22,7 @@ internal sealed record LoadedSafetyCases(IReadOnlyList<SafetyCase> Cases, IReadO
 /// </summary>
 internal static class SafetyDataset
 {
-    public const int SupportedSchemaVersion = 1;
+    public const int SupportedSchemaVersion = 2;
 
     private static readonly IReadOnlyList<string> ConfidenceWords = [.. Enum.GetValues<Confidence>().Select(c => Outcomes.Word(c))];
 
@@ -75,6 +75,11 @@ internal static class SafetyDataset
         if (c.Access is not (KnowledgeClassification.General or KnowledgeClassification.Restricted))
         {
             yield return "access must be general or restricted.";
+        }
+
+        if (c.Set is not (SafetyCase.Regression or SafetyCase.HeldOut))
+        {
+            yield return $"set '{c.Set}' must be {SafetyCase.Regression} or {SafetyCase.HeldOut}.";
         }
 
         if (c.Role is not (InvestigationCase.Reader or InvestigationCase.Engineer))
