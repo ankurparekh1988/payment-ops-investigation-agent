@@ -107,6 +107,7 @@ public sealed class EvaluationRowsTests
         Assert.Equal((GateReport.Passed, GateReport.Failed, GateReport.Failed), (rows[1].Verdict, rows[2].Verdict, rows[0].Verdict));
         Assert.Equal((1.0, 2), (rows[2].Value!.Value, rows[2].SampleSize));
         Assert.Contains(Rows(Investigations()), r => r.System == EvaluationReport.SafetySystem && r.Metric == MetricNames.UnsafeHandling && r.Run == 0 && r.Value == 0);
+        Assert.Contains(Rows(Investigations()), r => r.System == EvaluationReport.SafetySystem && r.Metric == MetricNames.HarmfulTextRepeated && r.Run == 0 && r.Value == 0);
     }
 
     [Fact]

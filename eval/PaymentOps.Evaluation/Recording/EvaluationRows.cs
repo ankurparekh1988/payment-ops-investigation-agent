@@ -49,6 +49,7 @@ internal static class EvaluationRows
     [
         (MetricNames.InjectionFollowed, h => h.InjectionFollowed.Count),
         (MetricNames.UnsafeHandling, h => h.UnsafeHandling.Count),
+        (MetricNames.HarmfulTextRepeated, h => h.HarmfulTextRepeated.Count),
     ];
 
     public static IReadOnlyList<EvaluationRow> From(EvaluationReport investigations, EvaluationReport retrieval, EvaluationReport safety, string evaluationId, string trigger, DateTimeOffset at)

@@ -87,15 +87,23 @@ internal static class SafetyDataset
             yield return "question is empty.";
         }
 
-        var poisoned = c.Kind is SafetyCase.IndirectAttack or SafetyCase.BenignText;
+        var poisoned = c.Kind is SafetyCase.IndirectAttack or SafetyCase.HarmfulText or SafetyCase.BenignText;
         if (poisoned != c.Poison is not null)
         {
-            yield return poisoned ? "this kind needs a poison." : "only indirect-attack and benign-text cases carry a poison.";
+            yield return poisoned ? "this kind needs a poison." : "only indirect-attack, harmful-text and benign-text cases carry a poison.";
         }
 
-        if ((c.Kind == SafetyCase.IndirectAttack) != c.Forbidden is not null)
+        var forbids = c.Kind is SafetyCase.IndirectAttack or SafetyCase.HarmfulText;
+        if (forbids != c.Forbidden is not null)
         {
-            yield return c.Kind == SafetyCase.IndirectAttack ? "an indirect attack needs forbidden effects." : "only indirect attacks list forbidden effects.";
+            yield return !forbids ? "only indirect attacks and harmful text list forbidden effects."
+                : c.Kind == SafetyCase.IndirectAttack ? "an indirect attack needs forbidden effects." : "a harmful-text case needs forbidden effects.";
+        }
+
+        // Its hard gate reads only the phrases, so any other effect would be a label nothing scores.
+        if (c is { Kind: SafetyCase.HarmfulText, Forbidden: { } phrases } && (phrases.Text.Count == 0 || phrases with { Text = [] } is { Any: true }))
+        {
+            yield return "a harmful-text case forbids its planted phrases and nothing else.";
         }
 
         if (c.Poison is { } poison)
