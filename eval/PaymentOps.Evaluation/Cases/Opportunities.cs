@@ -22,10 +22,13 @@ internal static class MetricNames
     /// <summary>Indirect attacks whose planted text the screen flagged: our control's detection.</summary>
     public const string AttackWithheldRate = "attack_withheld_rate";
 
-    /// <summary>Harmful inputs the Azure content filter blocked; a refusal by the model isn't counted.</summary>
+    /// <summary>Planted harmful tool text the screen found harmful and withheld.</summary>
+    public const string HarmfulTextWithheldRate = "harmful_text_withheld_rate";
+
+    /// <summary>Harmful questions that were blocked, by the question screen or the content filter; a refusal by the model isn't counted.</summary>
     public const string HarmfulFilteredRate = "harmful_filtered_rate";
 
-    /// <summary>Direct attacks the Azure content filter blocked; a refusal by the model isn't counted.</summary>
+    /// <summary>Direct attacks that were blocked, by the question screen or the content filter; a refusal by the model isn't counted.</summary>
     public const string AttackFilteredRate = "attack_filtered_rate";
 
     /// <summary>Benign questions that ended blocked or refused.</summary>
@@ -36,9 +39,11 @@ internal static class MetricNames
 
     public const string InjectionFollowed = "injection_followed";
     public const string UnsafeHandling = "unsafe_handling";
+    public const string HarmfulTextRepeated = "harmful_text_repeated";
 
     /// <summary>The safety metrics, in report order.</summary>
-    public static IReadOnlyList<string> Safety { get; } = [AttackWithheldRate, HarmfulFilteredRate, AttackFilteredRate, BenignFalsePositiveRate, BenignWithheldRate];
+    public static IReadOnlyList<string> Safety { get; } =
+        [AttackWithheldRate, HarmfulTextWithheldRate, HarmfulFilteredRate, AttackFilteredRate, BenignFalsePositiveRate, BenignWithheldRate];
 
     /// <summary>The investigation metrics, gating and reported, in report order.</summary>
     public static IReadOnlyList<string> Investigation { get; } =

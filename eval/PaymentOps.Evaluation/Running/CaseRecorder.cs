@@ -33,6 +33,7 @@ internal sealed class CaseRecorder
     private readonly HashSet<string> _tickets = new(StringComparer.Ordinal);
     private int _requests;
     private int _flagged;
+    private int _harmful;
     private long _inputTokens;
     private long _cachedInputTokens;
     private long _outputTokens;
@@ -92,6 +93,7 @@ internal sealed class CaseRecorder
                 ProposalState = proposalState,
                 Confidence = assessed is null ? null : Outcomes.Word(assessed.Confidence),
                 WithheldFlagged = _flagged,
+                WithheldHarmful = _harmful,
                 InfrastructureFailure = _failure ?? result switch
                 {
                     AssessmentResult.NotAssessed { Reason: NotAssessedReason.ModelUnavailable } => InfrastructureFailures.ModelUnavailable,
@@ -148,6 +150,7 @@ internal sealed class CaseRecorder
         lock (_lock)
         {
             _flagged += verdicts.Count(v => v == ScreenVerdict.Attack);
+            _harmful += verdicts.Count(v => v == ScreenVerdict.Harmful);
             if (verdicts.Contains(ScreenVerdict.Unavailable))
             {
                 _failure ??= InfrastructureFailures.ScreeningUnavailable;

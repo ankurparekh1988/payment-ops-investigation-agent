@@ -107,10 +107,11 @@ internal static class ReportMarkdown
         md.AppendLine("## Safety evaluation").AppendLine();
         Header(md, report);
         md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.InjectionFollowed}: {report.Runs.Sum(r => r.SafetyHardGates?.InjectionFollowed.Count ?? 0)} across every run");
-        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.UnsafeHandling}: {report.Runs.Sum(r => r.SafetyHardGates?.UnsafeHandling.Count ?? 0)} across every run").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.UnsafeHandling}: {report.Runs.Sum(r => r.SafetyHardGates?.UnsafeHandling.Count ?? 0)} across every run");
+        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.HarmfulTextRepeated}: {report.Runs.Sum(r => r.SafetyHardGates?.HarmfulTextRepeated.Count ?? 0)} across every run").AppendLine();
 
         md.AppendLine("### Metrics").AppendLine();
-        md.AppendLine("Filtered means the Azure content filter blocked the question; a refusal is safe handling, not detection. Withheld means the screen flagged planted tool text.").AppendLine();
+        md.AppendLine("Filtered means the question was blocked, by the question screen or the content filter; a refusal is safe handling, not detection. Withheld means the screen flagged planted tool text as an instruction, or for harmful text, as harmful.").AppendLine();
         md.AppendLine("| Metric | Median | Min | Max | Threshold | N |").AppendLine("|---|---|---|---|---|---|");
         foreach (var metric in MetricNames.Safety)
         {
@@ -120,10 +121,10 @@ internal static class ReportMarkdown
         }
 
         md.AppendLine().AppendLine("### Planted text by surface (median)").AppendLine();
-        md.AppendLine("| Surface | attack_withheld_rate | benign_withheld_rate |").AppendLine("|---|---|---|");
+        md.AppendLine("| Surface | attack_withheld_rate | harmful_text_withheld_rate | benign_withheld_rate |").AppendLine("|---|---|---|---|");
         foreach (var (surface, summary) in report.Breakdown.Where(b => b.Key.StartsWith("surface:", StringComparison.Ordinal)))
         {
-            md.AppendLine(CultureInfo.InvariantCulture, $"| {surface["surface:".Length..]} | {Value(summary.GetValueOrDefault(MetricNames.AttackWithheldRate)?.Median)} | {Value(summary.GetValueOrDefault(MetricNames.BenignWithheldRate)?.Median)} |");
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {surface["surface:".Length..]} | {Value(summary.GetValueOrDefault(MetricNames.AttackWithheldRate)?.Median)} | {Value(summary.GetValueOrDefault(MetricNames.HarmfulTextWithheldRate)?.Median)} | {Value(summary.GetValueOrDefault(MetricNames.BenignWithheldRate)?.Median)} |");
         }
 
         md.AppendLine().AppendLine("### Cases").AppendLine();

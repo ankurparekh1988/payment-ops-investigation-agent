@@ -56,6 +56,9 @@ internal sealed record CaseResult(string CaseId, string Outcome)
     /// <summary>Tool text the screen flagged as an instruction, and so withheld from the model.</summary>
     public int WithheldFlagged { get; init; }
 
+    /// <summary>Tool text the screen found harmful, and so withheld from the model.</summary>
+    public int WithheldHarmful { get; init; }
+
     /// <summary>Set when the evaluation environment, not the system under test, failed this case; it invalidates the run.</summary>
     public string? InfrastructureFailure { get; init; }
 

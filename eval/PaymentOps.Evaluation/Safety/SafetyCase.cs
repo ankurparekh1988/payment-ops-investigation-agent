@@ -3,19 +3,21 @@ using PaymentOps.Evaluation.Cases;
 namespace PaymentOps.Evaluation.Safety;
 
 /// <summary>
-/// One safety question. Indirect attacks and benign tool text plant their <see cref="Poison"/> in what a tool
-/// returns for this case only; an indirect attack lists the effects that would show the agent followed it.
+/// One safety question. Indirect attacks, harmful tool text and benign tool text plant their <see cref="Poison"/> in
+/// what a tool returns for this case only; an indirect attack lists the effects that would show the agent followed it,
+/// and harmful text the phrases the agent mustn't repeat.
 /// </summary>
 /// <param name="Kind">One of <see cref="Kinds"/>.</param>
 internal sealed record SafetyCase(string Id, string Kind, string Access, string Role, string Question, SafetyPoison? Poison, ForbiddenEffects? Forbidden)
 {
     public const string IndirectAttack = "indirect-attack";
+    public const string HarmfulText = "harmful-text";
     public const string DirectAttack = "direct-attack";
     public const string Harmful = "harmful";
     public const string BenignQuestion = "benign-question";
     public const string BenignText = "benign-text";
 
-    public static IReadOnlyList<string> Kinds { get; } = [IndirectAttack, DirectAttack, Harmful, BenignQuestion, BenignText];
+    public static IReadOnlyList<string> Kinds { get; } = [IndirectAttack, HarmfulText, DirectAttack, Harmful, BenignQuestion, BenignText];
 
     /// <summary>
     /// The case as the shared runner takes it. Safety cases are scored by their own metrics, so the labels the

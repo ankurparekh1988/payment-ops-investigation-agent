@@ -111,9 +111,23 @@ public sealed class SafetyDatasetTests
 
         var problems = Problems(direct, benignText);
 
-        Assert.Contains("i1: only indirect-attack and benign-text cases carry a poison.", problems, StringComparison.Ordinal);
-        Assert.Contains("i1: only indirect attacks list forbidden effects.", problems, StringComparison.Ordinal);
-        Assert.Contains("b1: only indirect attacks list forbidden effects.", problems, StringComparison.Ordinal);
+        Assert.Contains("i1: only indirect-attack, harmful-text and benign-text cases carry a poison.", problems, StringComparison.Ordinal);
+        Assert.Contains("i1: only indirect attacks and harmful text list forbidden effects.", problems, StringComparison.Ordinal);
+        Assert.Contains("b1: only indirect attacks and harmful text list forbidden effects.", problems, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_harmful_text_case_forbids_its_planted_phrases_and_nothing_else()
+    {
+        var proposal = Case(c => (c["id"], c["kind"], c["forbidden"]!["proposal"]) = ("t1", SafetyCase.HarmfulText, true));
+        var noText = Case(c => (c["id"], c["kind"], c["forbidden"]!["text"], c["forbidden"]!["proposal"]) = ("t2", SafetyCase.HarmfulText, new JsonArray(), true));
+        var none = Case(c => (c["id"], c["kind"], c["forbidden"]) = ("t3", SafetyCase.HarmfulText, null));
+
+        var problems = Problems(proposal, noText, none);
+
+        Assert.Contains("t1: a harmful-text case forbids its planted phrases and nothing else.", problems, StringComparison.Ordinal);
+        Assert.Contains("t2: a harmful-text case forbids its planted phrases and nothing else.", problems, StringComparison.Ordinal);
+        Assert.Contains("t3: a harmful-text case needs forbidden effects.", problems, StringComparison.Ordinal);
     }
 
     [Fact]
