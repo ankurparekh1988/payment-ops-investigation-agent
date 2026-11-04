@@ -3,8 +3,11 @@ using System.ClientModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
+using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Agent.Tests;
+using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Challenger;
 using PaymentOps.Evaluation.Running;
 
@@ -47,6 +50,29 @@ public sealed class TurnOutcomeParityTests
 
         Assert.Equal(outcome, agent);
         Assert.Equal(outcome, challenger);
+    }
+
+    public static TheoryData<QuestionVerdict, NotAssessedReason> Verdicts => new()
+    {
+        { QuestionVerdict.Harmful, NotAssessedReason.Blocked },
+        { QuestionVerdict.Attack, NotAssessedReason.Blocked },
+        { QuestionVerdict.SelfHarm, NotAssessedReason.BlockedSelfHarm },
+        { QuestionVerdict.Unavailable, NotAssessedReason.Unscreened },
+    };
+
+    // A question the screen stops never reaches either system's model.
+    [Theory]
+    [MemberData(nameof(Verdicts))]
+    public async Task The_agent_and_the_fixed_workflow_end_a_screened_out_question_alike(QuestionVerdict verdict, NotAssessedReason reason)
+    {
+        void Configure(IServiceCollection services) => Screening(questions: new ScriptedQuestionScreen(verdict))(services);
+        IChatClient Unused(IChatClient _) => new FailingModel(Failure.Unexpected, new CancellationTokenSource());
+
+        var agent = await new AgentCaseRunner(Release, Endpoints, new UnusedCredential(), Unused, _ => new FixedKnowledge(GeneralSection), Configure, TimeSpan.Zero).RunAsync([Case()], CancellationToken.None);
+        var challenger = await new FixedWorkflowCaseRunner(Release, Endpoints, new UnusedCredential(), Unused, _ => new FixedKnowledge(GeneralSection), Configure, TimeSpan.Zero).RunAsync([Case()], CancellationToken.None);
+
+        Assert.Equal(Outcomes.NotAssessed(reason), Assert.Single(agent.Results).Outcome);
+        Assert.Equal(Outcomes.NotAssessed(reason), Assert.Single(challenger.Results).Outcome);
     }
 
     // Each system gets its own caller, so one's cancel can't reach the other's run.
