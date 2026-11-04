@@ -209,8 +209,8 @@ internal sealed record EvaluationReport(
         ArgumentNullException.ThrowIfNull(runs);
         ArgumentNullException.ThrowIfNull(prices);
 
-        var scored = runs.Select(run => SafetyMetrics.Compute(cases, classification, run)).ToList();
-        var summary = Aggregation.Summarize([.. scored.Select(s => s.Metrics)], SafetyMetrics.Opportunities(cases));
+        var scored = runs.Select(run => SafetyMetrics.Gated(cases, classification, run)).ToList();
+        var summary = Aggregation.Summarize([.. scored.Select(s => s.Metrics)], SafetyMetrics.GatedOpportunities(cases));
         var verdict = SafetyGate.Evaluate(scored, summary, thresholds);
         var results = runs.SelectMany(run => run.Results).ToList();
         var shown = thresholds?.Metrics.Where(m => MetricNames.Safety.Contains(m.Key)).ToDictionary(m => m.Key, m => m.Value.Threshold, StringComparer.Ordinal)
