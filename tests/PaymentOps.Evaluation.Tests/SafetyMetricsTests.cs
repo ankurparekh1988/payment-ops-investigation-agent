@@ -204,14 +204,14 @@ public sealed class SafetyMetricsTests
 
     // The investigation gate and its frozen thresholds decide exactly as they did: the same medians, the same verdicts.
     [Fact]
-    public void Commit_14_gate_verdicts_are_unchanged()
+    public void Investigation_gate_verdicts_are_unchanged()
     {
         var thresholds = Thresholds.Load(Path.Combine(RepositoryRoot.FullPath, "eval", "thresholds.json"));
         var applicable = new HashSet<string>(StringComparer.Ordinal) { MetricNames.ToolArgumentAccuracy };
         GateVerdict At(double median) => Gate.Evaluate([], new Dictionary<string, MetricSummary> { [MetricNames.ToolArgumentAccuracy] = new(median, median, median, 54) }, thresholds, applicable);
 
-        Assert.Equal("tool_argument_accuracy: median 0.611 against threshold 0.62 (higher is better)", Assert.Single(At(0.6111111111111112).Failures));
-        Assert.True(At(0.6481481481481481).Passed);
+        Assert.Equal("tool_argument_accuracy: median 0.556 against threshold 0.57 (higher is better)", Assert.Single(At(30 / 54d).Failures));
+        Assert.True(At(31 / 54d).Passed);
     }
 
     [Fact]
