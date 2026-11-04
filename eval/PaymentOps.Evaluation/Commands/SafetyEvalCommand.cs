@@ -69,6 +69,7 @@ internal static class SafetyEvalCommand
             RepositoryCommit.Current(),
             [.. release.Prompts.Values.Select(p => new PromptInfo(p.Id, p.Version))],
             ModelInfo.From(release, release.ActiveChatDeployment),
+            ModelInfo.From(release, release.ScreenDeployment),
             null,
             null,
             DateTimeOffset.UtcNow,

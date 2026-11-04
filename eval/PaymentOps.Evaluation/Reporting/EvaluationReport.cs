@@ -28,11 +28,13 @@ internal sealed record ModelInfo(string Deployment, string Model, string Version
 }
 
 /// <summary>What was evaluated: the system, the commit, its prompts and models, the knowledge index it read, and when.</summary>
+/// <param name="Screen">The question screen's classifier deployment; null where no question is screened.</param>
 internal sealed record ReportContext(
     string System,
     string Commit,
     IReadOnlyList<PromptInfo> Prompts,
     ModelInfo? Chat,
+    ModelInfo? Screen,
     ModelInfo? Judge,
     string? JudgePromptVersion,
     DateTimeOffset StartedAt,
@@ -99,6 +101,7 @@ internal sealed record EvaluationReport(
     string Commit,
     IReadOnlyList<PromptInfo> Prompts,
     ModelInfo? Chat,
+    ModelInfo? Screen,
     ModelInfo? Judge,
     string? JudgePromptVersion,
     DateTimeOffset StartedAt,
@@ -113,7 +116,7 @@ internal sealed record EvaluationReport(
     GateReport Gate,
     IReadOnlyList<CaseRun> RetrievalCases)
 {
-    public const int SupportedSchemaVersion = 1;
+    public const int SupportedSchemaVersion = 2;
     public const string AgentSystem = "agent";
     public const string FixedWorkflowSystem = "fixed-workflow";
     public const string RetrievalSystem = "retrieval";
@@ -175,6 +178,7 @@ internal sealed record EvaluationReport(
             context.Commit,
             context.Prompts,
             context.Chat,
+            context.Screen,
             context.Judge,
             context.JudgePromptVersion,
             context.StartedAt,
@@ -219,6 +223,7 @@ internal sealed record EvaluationReport(
             context.Commit,
             context.Prompts,
             context.Chat,
+            context.Screen,
             context.Judge,
             context.JudgePromptVersion,
             context.StartedAt,
@@ -251,6 +256,7 @@ internal sealed record EvaluationReport(
             context.Commit,
             context.Prompts,
             context.Chat,
+            context.Screen,
             context.Judge,
             context.JudgePromptVersion,
             context.StartedAt,

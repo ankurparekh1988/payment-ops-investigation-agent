@@ -75,6 +75,7 @@ internal static class InvestigationEvalCommand
             RepositoryCommit.Current(),
             Prompts(release, settings.System),
             ModelInfo.From(release, release.ActiveChatDeployment),
+            ModelInfo.From(release, release.ScreenDeployment),
             judge is null ? null : ModelInfo.From(release, release.JudgeDeployment),
             judge is null ? null : Judge.Prompt.Version,
             DateTimeOffset.UtcNow,

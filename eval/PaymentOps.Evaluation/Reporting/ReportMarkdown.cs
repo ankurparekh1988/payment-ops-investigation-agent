@@ -160,7 +160,7 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"- {failure}");
         }
 
-        md.AppendLine(CultureInfo.InvariantCulture, $"Commit `{report.Commit}`; prompts {string.Join(", ", report.Prompts.Select(p => $"{p.Id} {p.Version}"))}; chat {report.Chat?.Deployment ?? "none"} ({report.Chat?.Model} {report.Chat?.Version}); index {report.KnowledgeIndex}; started {report.StartedAt:yyyy-MM-dd HH:mm} UTC; {report.Runs.Count} run(s).").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"Commit `{report.Commit}`; prompts {string.Join(", ", report.Prompts.Select(p => $"{p.Id} {p.Version}"))}; chat {report.Chat?.Deployment ?? "none"} ({report.Chat?.Model} {report.Chat?.Version}); screen {report.Screen?.Deployment ?? "none"} ({report.Screen?.Model} {report.Screen?.Version}); index {report.KnowledgeIndex}; started {report.StartedAt:yyyy-MM-dd HH:mm} UTC; {report.Runs.Count} run(s).").AppendLine();
 
         md.AppendLine("### Hard gates").AppendLine();
         var leaks = report.Runs.Sum(r => r.HardGates.AuthorizationLeaks.Count);

@@ -29,10 +29,10 @@ internal static class KillTestCommand
         }
 
         if (agent.Runs.Count != ComparedRuns || challenger.Runs.Count != ComparedRuns
-            || agent.Commit != challenger.Commit || agent.Chat != challenger.Chat
+            || agent.Commit != challenger.Commit || agent.Chat != challenger.Chat || agent.Screen != challenger.Screen
             || !agent.Stability.Select(s => s.CaseId).Order().SequenceEqual(challenger.Stability.Select(s => s.CaseId).Order()))
         {
-            throw new InvalidDataException($"Both reports must cover the same cases over {ComparedRuns} runs, from the same commit and chat deployment.");
+            throw new InvalidDataException($"Both reports must cover the same cases over {ComparedRuns} runs, from the same commit, chat deployment and screen deployment.");
         }
 
         var (a, c) = (Side(agent), Side(challenger));
