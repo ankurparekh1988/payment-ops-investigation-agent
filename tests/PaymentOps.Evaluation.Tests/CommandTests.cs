@@ -73,9 +73,9 @@ public sealed class CommandTests
     [Fact]
     public async Task A_thresholds_file_missing_an_applicable_metric_exits_2_before_any_run()
     {
-        var thresholds = Temp(new Thresholds(1, new string('a', 40), ThresholdRule.Text, new Dictionary<string, ThresholdEntry>
+        var thresholds = Temp(new Thresholds(Thresholds.SupportedSchemaVersion, new string('a', 40), ThresholdRule.Text, new Dictionary<string, ThresholdEntry>
         {
-            [MetricNames.RetrievalRecallAt5] = new(0.9, ThresholdRule.Higher, 30, 0.95, 0.95, 0.95),
+            [MetricNames.RetrievalRecallAt5] = new(0.9, ThresholdRule.Higher, 30, 0.95, 0.95, 0.95, 0.95, null, [0.95]),
         }).ToJson());
         var runner = new ScriptedRunner(Run());
 
@@ -158,7 +158,7 @@ public sealed class CommandTests
     [Fact]
     public async Task Thresholds_command_derives_every_gating_metric_from_the_baseline_report()
     {
-        var investigations = Temp(EvaluationReportTests.Report(EvaluationReportTests.Run(), EvaluationReportTests.Run("incomplete"), EvaluationReportTests.Run()).ToJson());
+        var investigations = Temp(EvaluationReportTests.Report(Baseline(EvaluationReportTests.Run("incomplete"))).ToJson());
         var retrieval = Temp(RetrievalReport(recall: 0.9).ToJson());
         var output = Path.GetTempFileName();
 
@@ -167,19 +167,32 @@ public sealed class CommandTests
         var thresholds = Thresholds.Load(output);
         Assert.Equal(new string('c', 40), thresholds.BaselineCommit);
         Assert.Equal(ThresholdRule.Text, thresholds.Rule);
-        Assert.Equal(ThresholdRule.Derive(MetricNames.ExpectedEvidenceCoverage, [1, 0, 1], 1), thresholds.Metrics[MetricNames.ExpectedEvidenceCoverage].Threshold);
-        Assert.Equal(ThresholdRule.Derive(MetricNames.RetrievalRecallAt5, [0.9], 10), thresholds.Metrics[MetricNames.RetrievalRecallAt5].Threshold);
+        double[] evidence = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1];
+        var coverage = thresholds.Metrics[MetricNames.ExpectedEvidenceCoverage];
+        Assert.Equal(ThresholdRule.FromSpread(MetricNames.ExpectedEvidenceCoverage, evidence, 1), coverage.Threshold);
+        Assert.Equal(evidence, coverage.BaselineRuns);
+        Assert.Equal(0.9, coverage.BaselineMean!.Value, 10);
+        Assert.NotNull(coverage.BaselineStandardDeviation);
+        var recall = thresholds.Metrics[MetricNames.RetrievalRecallAt5];
+        Assert.Equal(ThresholdRule.FromWorstRun(MetricNames.RetrievalRecallAt5, [0.9], 10), recall.Threshold);
+        Assert.Null(recall.BaselineStandardDeviation);
         Assert.DoesNotContain(MetricNames.ToolArgumentAccuracy, thresholds.Metrics.Keys);
         Assert.DoesNotContain(MetricNames.ProposalRecall, thresholds.Metrics.Keys);
     }
 
-    [Fact]
-    public async Task Thresholds_come_only_from_a_three_run_agent_baseline()
+    // A baseline of ten runs, with the given run second.
+    private static RunOutcome[] Baseline(RunOutcome second) =>
+        [.. Enumerable.Range(0, ThresholdsCommand.BaselineRuns).Select(i => i == 1 ? second : EvaluationReportTests.Run())];
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public async Task Thresholds_come_only_from_a_ten_run_agent_baseline(int runs)
     {
-        var oneRun = Temp(EvaluationReportTests.Report(EvaluationReportTests.Run()).ToJson());
+        var report = Temp(EvaluationReportTests.Report([.. Enumerable.Range(0, runs).Select(_ => EvaluationReportTests.Run())]).ToJson());
         var retrieval = Temp(RetrievalReport(recall: 0.9).ToJson());
 
-        Assert.Equal(2, await ThresholdsCommand.RunAsync(["--investigations", oneRun, "--retrieval", retrieval, "--out", Path.GetTempFileName()]));
+        Assert.Equal(2, await ThresholdsCommand.RunAsync(["--investigations", report, "--retrieval", retrieval, "--out", Path.GetTempFileName()]));
     }
 
     [Fact]
@@ -279,7 +292,7 @@ public sealed class CommandTests
     [Fact]
     public async Task A_baseline_from_an_uncommitted_tree_is_refused()
     {
-        var dirty = EvaluationReportTests.Report(EvaluationReportTests.Run(), EvaluationReportTests.Run(), EvaluationReportTests.Run()) with { Commit = new string('c', 40) + RepositoryCommit.DirtySuffix };
+        var dirty = EvaluationReportTests.Report(Baseline(EvaluationReportTests.Run())) with { Commit = new string('c', 40) + RepositoryCommit.DirtySuffix };
         var retrieval = RetrievalReport(recall: 0.9) with { Commit = dirty.Commit };
 
         Assert.Equal(2, await ThresholdsCommand.RunAsync(["--investigations", Temp(dirty.ToJson()), "--retrieval", Temp(retrieval.ToJson()), "--out", Path.GetTempFileName()]));
@@ -313,7 +326,7 @@ public sealed class CommandTests
     public async Task A_baseline_run_with_no_validated_result_defines_no_thresholds()
     {
         var dead = new RunOutcome([new CaseResult("reg-1", "not-assessed:assessment-unverified"), new CaseResult("held-1", "not-assessed:limit-reached")], 0);
-        var baseline = EvaluationReportTests.Report(EvaluationReportTests.Run(), dead, EvaluationReportTests.Run());
+        var baseline = EvaluationReportTests.Report(Baseline(dead));
         var output = Path.GetTempFileName();
         File.Delete(output);
 
