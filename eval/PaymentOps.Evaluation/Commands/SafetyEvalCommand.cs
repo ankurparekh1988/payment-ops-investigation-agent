@@ -58,7 +58,7 @@ internal static class SafetyEvalCommand
         var thresholds = settings.Thresholds is { } path ? SafetyThresholds.Load(path) : null;
         if (thresholds is not null)
         {
-            SafetyGate.Require(thresholds, SafetyMetrics.Opportunities(cases.Cases));
+            SafetyGate.Require(thresholds, SafetyMetrics.GatedOpportunities(cases.Cases));
         }
 
         var byId = cases.Cases.ToDictionary(c => c.Id, StringComparer.Ordinal);

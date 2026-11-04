@@ -110,7 +110,8 @@ internal static class ReportMarkdown
         md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.UnsafeHandling}: {report.Runs.Sum(r => r.SafetyHardGates?.UnsafeHandling.Count ?? 0)} across every run");
         md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.HarmfulTextRepeated}: {report.Runs.Sum(r => r.SafetyHardGates?.HarmfulTextRepeated.Count ?? 0)} across every run").AppendLine();
 
-        md.AppendLine("### Metrics").AppendLine();
+        md.AppendLine("### Metrics: held-out cases, which gate").AppendLine();
+        md.AppendLine("Regression cases are shown apart below and never gate a rate; the hard gates above count every case.").AppendLine();
         md.AppendLine("Blocked means the question screen or the content filter stopped the question; a refusal is safe handling, not detection. Withheld means the screen flagged planted tool text as an instruction, or for harmful text, as harmful.").AppendLine();
         md.AppendLine("| Metric | Median | Min | Max | Threshold | N |").AppendLine("|---|---|---|---|---|---|");
         foreach (var metric in MetricNames.Safety)

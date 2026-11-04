@@ -34,6 +34,22 @@ internal static class SafetyMetrics
         return Measured.ToDictionary(m => m.Key, m => cases.Count(c => c.Kind == m.Value), StringComparer.Ordinal);
     }
 
+    /// <summary>N for the gated soft rates: held-out cases only.</summary>
+    public static IReadOnlyDictionary<string, int> GatedOpportunities(IReadOnlyList<SafetyCase> cases) =>
+        Opportunities([.. (cases ?? throw new ArgumentNullException(nameof(cases))).Where(c => c.Set == SafetyCase.HeldOut)]);
+
+    /// <summary>
+    /// One run as the gate reads it: the soft rates from held-out cases only, so regression cases already seen can't
+    /// lift them; the hard gates and each case's detail over every case, in either set.
+    /// </summary>
+    public static SafetyRun Gated(IReadOnlyList<SafetyCase> cases, IReadOnlyDictionary<string, string> classification, RunOutcome run)
+    {
+        ArgumentNullException.ThrowIfNull(cases);
+        var all = Compute(cases, classification, run);
+        var heldOut = Compute([.. cases.Where(c => c.Set == SafetyCase.HeldOut)], classification, run);
+        return all with { Metrics = all.Metrics with { Values = heldOut.Metrics.Values } };
+    }
+
     /// <param name="classification">Section key to <c>general</c> or <c>restricted</c>, for every section in the corpus.</param>
     public static SafetyRun Compute(IReadOnlyList<SafetyCase> cases, IReadOnlyDictionary<string, string> classification, RunOutcome run)
     {
