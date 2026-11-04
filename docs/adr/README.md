@@ -18,5 +18,6 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0012](0012-evaluation-thresholds-from-a-pre-registered-rule.md) | Evaluation thresholds from a pre-registered rule, applied once to a baseline of `main` | Accepted |
 | [0013](0013-screen-untrusted-tool-text.md) | Screen untrusted tool text before the model reads it | Accepted |
 | [0015](0015-screen-questions-and-tool-text-for-harm.md) | Screen questions before the investigation agent sees them, and tool text for harm | Accepted |
-| [0016](0016-one-recorded-rerun-when-the-agent-is-unchanged.md) | One recorded rerun of a failed evaluation when the agent under test is unchanged | Accepted |
+| [0016](0016-one-recorded-rerun-when-the-agent-is-unchanged.md) | One recorded rerun of a failed evaluation when the agent under test is unchanged | Accepted; amended by 0018 |
 | [0017](0017-ask-again-when-the-question-screen-cant-check.md) | Ask a question again when the question screen couldn't check it | Accepted |
+| [0018](0018-evaluation-thresholds-from-measured-run-to-run-spread.md) | Evaluation thresholds from measured run-to-run spread, and a branch update counts as the rerun | Accepted |
