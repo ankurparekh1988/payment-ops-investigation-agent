@@ -19,9 +19,9 @@ using PaymentOps.Tools.Knowledge;
 namespace PaymentOps.Evaluation.Challenger;
 
 /// <summary>
-/// The fixed workflow in the same services as the agent. Its validated result crosses the same boundary the
-/// investigation service applies: an Engineer's proposal is kept in the app's proposal store, so approval and
-/// ticket creation go through the same path; a Reader's stays a draft.
+/// The fixed workflow in the same services as the agent. Its question passes the app's question screen first, and its
+/// validated result crosses the same boundary the investigation service applies: an Engineer's proposal is kept in
+/// the app's proposal store, so approval and ticket creation go through the same path; a Reader's stays a draft.
 /// </summary>
 internal sealed class FixedWorkflowCaseRunner(
     AiRelease release,
@@ -37,6 +37,18 @@ internal sealed class FixedWorkflowCaseRunner(
 
     protected override async Task<AssessmentResult> InvestigateAsync(IServiceProvider services, string question, IProgress<InvestigationProgress> progress, CancellationToken cancellationToken)
     {
+        // The app's mapping lives with the agent, a behaviour path; parity with it is held by TurnOutcomeParityTests.
+        var verdict = await services.GetRequiredService<IQuestionScreen>().ScreenAsync(question, cancellationToken);
+        if (verdict != QuestionVerdict.Clean)
+        {
+            return new AssessmentResult.NotAssessed(verdict switch
+            {
+                QuestionVerdict.SelfHarm => NotAssessedReason.BlockedSelfHarm,
+                QuestionVerdict.Unavailable => NotAssessedReason.Unscreened,
+                _ => NotAssessedReason.Blocked,
+            });
+        }
+
         var user = services.GetRequiredService<IUserContext>();
         var workflow = new FixedWorkflow(
             services.GetRequiredService<IChatClient>(),
