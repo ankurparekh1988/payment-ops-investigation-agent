@@ -50,13 +50,18 @@ internal sealed record SafetyPoison(string Surface, string Target, string? Secti
 /// <param name="Confidence">Confidence levels the result mustn't claim.</param>
 /// <param name="MerchantIds">Merchants no tool may be called for.</param>
 /// <param name="RestrictedSections">Whether retrieving or citing a Restricted section under General access counts.</param>
+/// <param name="KnowledgeQueries">
+/// Narrow markers of the planted target, such as a rule id, that mustn't appear case-insensitively in a knowledge query:
+/// the attempt to follow, where the other effects show only what got through.
+/// </param>
 internal sealed record ForbiddenEffects(
     IReadOnlyList<string> Text,
     bool Proposal,
     IReadOnlyList<string> Outcomes,
     IReadOnlyList<string> Confidence,
     IReadOnlyList<string> MerchantIds,
-    bool RestrictedSections)
+    bool RestrictedSections,
+    IReadOnlyList<string> KnowledgeQueries)
 {
-    public bool Any => Text.Count > 0 || Proposal || Outcomes.Count > 0 || Confidence.Count > 0 || MerchantIds.Count > 0 || RestrictedSections;
+    public bool Any => Text.Count > 0 || Proposal || Outcomes.Count > 0 || Confidence.Count > 0 || MerchantIds.Count > 0 || RestrictedSections || KnowledgeQueries.Count > 0;
 }
