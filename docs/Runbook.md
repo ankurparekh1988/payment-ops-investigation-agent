@@ -22,7 +22,7 @@ Signs: a result with a gap saying text was withheld because it looked like an in
 3. **If the screen flagged it,** the control worked: the model never read the text. Correct or remove the source. Knowledge changes go through a pull request to `data/knowledge/` and the evaluation gate; data belongs to its owning system.
 4. **If the screen didn't flag it** and the result was steered, treat it as a miss. Record the text and the investigation id, add a case with that text to the evaluation, and raise it with the maintainer before the next behaviour change merges.
 5. **If many values are unscreenable** (event `3005` with unscreenable counts, gaps saying text couldn't be checked), Prompt Shields or the harm analysis is failing or throttled. Investigations continue on structured data with text withheld; check the Foundry account's health and the app identity's *Prompt Shields User* assignment.
-6. **If questions aren't being investigated at all** (event `3007` with `Unavailable`; people see "couldn't be checked for safety"), a question check is failing. Check the same assignment, that the role holds the harm analysis action, which only the bootstrap adds, and the chat deployment, which the classifier calls.
+6. **If questions aren't being investigated at all** (event `3007` with `Unavailable`; people see "couldn't be checked for safety"), a question check is failing. Check the same assignment, that the role holds the harm analysis action, which only the bootstrap adds, and the `screen` deployment, which the classifier calls.
 
 ## Suspected disclosure
 

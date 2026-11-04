@@ -55,6 +55,19 @@ public sealed class InvestigationRegistrationTests
     }
 
     [Fact]
+    public void The_question_classifier_calls_the_screen_deployment()
+    {
+        using var provider = Services().BuildServiceProvider();
+        var release = provider.GetRequiredService<AiRelease>();
+
+        var classifier = provider.GetRequiredKeyedService<IChatClient>(HarmClassifier.PromptId);
+        var investigation = provider.GetRequiredService<IChatClient>();
+
+        Assert.Equal(release.ScreenDeployment, classifier.GetService<ChatClientMetadata>()?.DefaultModelId);
+        Assert.Equal(release.ActiveChatDeployment, investigation.GetService<ChatClientMetadata>()?.DefaultModelId);
+    }
+
+    [Fact]
     public void The_investigation_is_gated_and_scoped()
     {
         var services = Services();

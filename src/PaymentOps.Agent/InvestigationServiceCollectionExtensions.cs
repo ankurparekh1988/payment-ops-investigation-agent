@@ -63,13 +63,15 @@ public static class InvestigationServiceCollectionExtensions
                 : new UnavailableScreen());
 
         // Every question is screened before the investigation agent sees it; without the endpoint nothing can be, so nothing is investigated.
-        // The classifier has its own client on the same deployment, so it never appears among the agent's own requests.
+        // The classifier calls its own deployment, so investigations can't throttle it and it never appears among the agent's requests.
+        services.AddKeyedSingleton<IChatClient>(HarmClassifier.PromptId, (sp, _) =>
+            ContentFilter.Checked(ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ScreenDeployment)));
         services.AddSingleton<IQuestionScreen>(sp =>
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
                 ? new ContentSafetyQuestionScreen(
                     new ContentSafetyClient(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
                     new HarmClassifier(
-                        ContentFilter.Checked(ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment)),
+                        sp.GetRequiredKeyedService<IChatClient>(HarmClassifier.PromptId),
                         sp.GetRequiredService<IPromptProvider>().GetPrompt(HarmClassifier.PromptId).Template.Render(new Dictionary<string, string>())),
                     sp.GetRequiredService<IOptions<InvestigationLimits>>(),
                     sp.GetService<TimeProvider>() ?? TimeProvider.System)
