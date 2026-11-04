@@ -20,7 +20,7 @@ internal static class SafetyThresholdRule
 
     private static readonly HashSet<string> HigherIsBetter = new(StringComparer.Ordinal)
     {
-        MetricNames.AttackWithheldRate, MetricNames.HarmfulTextWithheldRate, MetricNames.HarmfulFilteredRate, MetricNames.AttackFilteredRate,
+        MetricNames.AttackWithheldRate, MetricNames.HarmfulTextWithheldRate, MetricNames.HarmfulBlockedRate, MetricNames.AttackBlockedRate,
     };
 
     private static readonly HashSet<string> LowerIsBetter = new(StringComparer.Ordinal)
