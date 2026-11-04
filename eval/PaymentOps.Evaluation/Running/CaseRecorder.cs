@@ -27,6 +27,7 @@ internal sealed class CaseRecorder
 
     private readonly Lock _lock = new();
     private readonly List<ToolCallRecord> _calls = [];
+    private readonly List<string> _queries = [];
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RetrievedSection> _retrieved = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _facts = new(StringComparer.Ordinal);
@@ -85,6 +86,7 @@ internal sealed class CaseRecorder
             return new CaseResult(caseId, Outcomes.Of(result))
             {
                 Calls = [.. _calls],
+                KnowledgeQueries = [.. _queries],
                 AssessmentEvidenceIds = evidence,
                 AssessmentSectionKeys = sections,
                 ProposalEvidenceIds = [.. proposal?.Evidence.Select(e => e.Id) ?? []],
@@ -126,6 +128,10 @@ internal sealed class CaseRecorder
             foreach (var call in sent.Concat(response.Messages).SelectMany(m => m.Contents).OfType<FunctionCallContent>().Where(call => _callIds.Add(call.CallId)))
             {
                 _calls.Add(Record(call));
+                if (call.Name == ToolNames.KnowledgeSearch && call.Arguments is { } arguments && arguments.TryGetValue("query", out var query) && Text(query) is { } text)
+                {
+                    _queries.Add(text);
+                }
             }
         }
     }

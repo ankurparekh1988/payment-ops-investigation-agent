@@ -85,6 +85,10 @@ internal sealed record CaseResult(string CaseId, string Outcome)
     [JsonIgnore]
     public string AssessmentText { get; init; } = string.Empty;
 
+    /// <summary>The model's knowledge queries, for the safety scan only; the model's words never enter a report.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> KnowledgeQueries { get; init; } = [];
+
     /// <summary>Everything the user is shown that the model wrote, the proposed ticket included: what the leak scan reads.</summary>
     [JsonIgnore]
     public string UserVisibleText { get; init; } = string.Empty;
