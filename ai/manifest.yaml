@@ -45,8 +45,8 @@ models:
     capacityK: 50
     contentFilterPolicy: default
 
-  # The question screen's classifier. It has its own rate limit so investigation traffic can't throttle
-  # it into failing closed, and the same model and filter as chat, since it reads every question first.
+  # The harm classifiers for questions and tool text. It has its own rate limit so investigation traffic
+  # can't throttle them into failing closed, and the same model and filter as chat, since it reads every question first.
   screen:
     deployment: screen
     model: gpt-5.4-mini
@@ -74,3 +74,6 @@ prompts:
   harm-screen:
     version: 1.0.0
     sha256: sha256:18c1c05feb6298186eb71e7af3e7daa3afa71485d292e69efe0aa4ad3c2133ce
+  tool-text-harm-screen:
+    version: 1.0.0
+    sha256: sha256:ac609d0ecaf9af6f3273c0c8539cdcca006f11e0afb7fc0efb6095c9a6a21b57

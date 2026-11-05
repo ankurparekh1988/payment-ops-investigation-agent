@@ -236,8 +236,84 @@ public sealed class QuestionScreenTests
         }
     }
 
-    private static HarmAwareScreen Harm(IUntrustedTextScreen shields, ContentSafetyHandler handler) =>
-        new(shields, new ContentSafetyClient(new HttpClient(handler), Endpoint, "https://cognitiveservices.azure.com/.default", new StaticTokenCredential()), new ScreenCache());
+    private static HarmAwareScreen Harm(IUntrustedTextScreen shields, ContentSafetyHandler handler, TextClassifier? classifier = null) =>
+        new(shields, new ContentSafetyClient(new HttpClient(handler), Endpoint, "https://cognitiveservices.azure.com/.default", new StaticTokenCredential()),
+            new HarmClassifier(classifier ?? new TextClassifier(_ => []), "Classify."), new ScreenCache());
+
+    /// <summary>Answers each text on its own, as concurrent calls do; null stands for a call that fails.</summary>
+    internal sealed class TextClassifier(Func<string, string[]?> categories) : IChatClient
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<(IReadOnlyList<ChatMessage> Messages, ChatOptions? Options)> Requests { get; } = new();
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var list = messages.ToList();
+            Requests.Enqueue((list, options));
+            return categories(list[^1].Text) is { } found
+                ? Task.FromResult(ScriptedChatClient.Text(JsonSerializer.Serialize(new { categories = found })))
+                : throw new HttpRequestException("down", null, HttpStatusCode.ServiceUnavailable);
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    // Azure scores mild threats at 0; the classifier is what catches them in tool text, as it does in questions.
+    [Fact]
+    public async Task Tool_text_Azure_scores_safe_is_harmful_when_the_classifier_finds_harm()
+    {
+        var classifier = new TextClassifier(text => text.Contains("threat", StringComparison.Ordinal) ? ["violence"] : []);
+
+        var verdicts = await Harm(ScriptedScreen.AllClean, Clean(), classifier).ScreenAsync(["Settlement delayed.", "a threat to an engineer"], CancellationToken.None);
+
+        Assert.Equal([ScreenVerdict.Clean, ScreenVerdict.Harmful], verdicts);
+    }
+
+    [Fact]
+    public async Task The_classifier_sees_each_distinct_tool_text_alone_with_no_tools()
+    {
+        var classifier = new TextClassifier(_ => []);
+
+        await Harm(ScriptedScreen.AllClean, Clean(), classifier).ScreenAsync(["note", "name", "note"], CancellationToken.None);
+
+        Assert.Equal(["name", "note"], classifier.Requests.Select(r => r.Messages[^1].Text).Order(StringComparer.Ordinal));
+        Assert.All(classifier.Requests, r =>
+        {
+            Assert.Equal([ChatRole.System, ChatRole.User], r.Messages.Select(m => m.Role));
+            Assert.Null(r.Options?.Tools);
+        });
+    }
+
+    [Fact]
+    public async Task A_harm_finding_on_tool_text_stands_when_the_other_check_cannot_answer()
+    {
+        var analysisDown = new ContentSafetyHandler(_ => (HttpStatusCode.ServiceUnavailable, "{}"), _ => Attack(false));
+        var classifierDown = new TextClassifier(_ => null);
+
+        Assert.Equal([ScreenVerdict.Harmful], await Harm(ScriptedScreen.AllClean, analysisDown, new TextClassifier(_ => ["violence"])).ScreenAsync(["note"], CancellationToken.None));
+        Assert.Equal([ScreenVerdict.Harmful], await Harm(ScriptedScreen.AllClean, new ContentSafetyHandler(_ => Severities(hate: 2), _ => Attack(false)), classifierDown).ScreenAsync(["note"], CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Tool_text_the_classifier_cannot_answer_is_unscreenable_and_never_cached()
+    {
+        var down = true;
+        var classifier = new TextClassifier(_ => down ? null : []);
+        var screen = Harm(ScriptedScreen.AllClean, Clean(), classifier);
+
+        Assert.Equal([ScreenVerdict.Unavailable], await screen.ScreenAsync(["note"], CancellationToken.None));
+        down = false;
+        Assert.Equal([ScreenVerdict.Clean], await screen.ScreenAsync(["note"], CancellationToken.None));
+        Assert.Equal([ScreenVerdict.Clean], await screen.ScreenAsync(["note"], CancellationToken.None));
+
+        Assert.Equal(2, classifier.Requests.Count);
+    }
 
     [Fact]
     public async Task Tool_text_Prompt_Shields_passes_is_checked_for_harm()
