@@ -61,6 +61,17 @@ public sealed class ToolEdgeCaseTests
         Assert.DoesNotContain("processor:p-gone", Ids(ok));
     }
 
+    // No events is an answer, not a failure, but it returns nothing an assessment could cite.
+    [Fact]
+    public async Task No_error_events_in_the_range_is_an_answer_with_no_evidence()
+    {
+        using var tools = new ToolFixture();
+
+        var ok = Ok(await tools.Tool<ErrorEventsTool>().RunAsync(new ErrorEventsRequest(null, "M-5150", "2026-11-04", "2026-11-04"), TestUser.Reader, CancellationToken.None));
+
+        Assert.Empty(ok.Evidence);
+    }
+
     // Models often send unused optional parameters as empty strings.
     [Fact]
     public async Task A_blank_optional_id_counts_as_not_given()

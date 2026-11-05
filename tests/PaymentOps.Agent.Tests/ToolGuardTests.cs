@@ -218,13 +218,28 @@ public sealed class ToolGuardTests
         Assert.Empty(_turn.Gaps);
     }
 
+    // An empty list, such as no error events in the range, answers the question but returns no fact to cite.
     [Fact]
-    public async Task One_lookup_that_finds_something_means_something_was_found()
+    public async Task A_lookup_that_answers_with_no_evidence_finds_nothing()
+    {
+        var tool = new StubTool(ToolNames.ErrorEvents) { Result = new ToolResult.Ok(new { groups = Array.Empty<object>() }, [], []) };
+
+        await Guard().Wrap(tool).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
+
+        Assert.True(_turn.NothingFound);
+        Assert.False(_turn.EveryStructuredSourceFailed);
+    }
+
+    [Fact]
+    public async Task One_lookup_that_returns_evidence_means_something_was_found()
     {
         var guard = Guard();
 
         await guard.Wrap(new StubTool { Result = new ToolResult.Failed(ToolErrorCode.NotFound, "No merchant M-1.") }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
-        await guard.Wrap(new StubTool()).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-2" });
+        await guard.Wrap(new StubTool(ToolNames.ErrorEvents) { Result = new ToolResult.Ok(new { groups = Array.Empty<object>() }, [], []) }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-2" });
+        Assert.True(_turn.NothingFound);
+
+        await guard.Wrap(new StubTool { Result = new ToolResult.Ok(new { ok = true }, [new RecordEvidence("merchant:M-3", "Merchant M-3")], []) }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-3" });
 
         Assert.False(_turn.NothingFound);
     }
