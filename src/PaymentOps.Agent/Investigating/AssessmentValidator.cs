@@ -54,6 +54,12 @@ internal static class AssessmentValidator
             Citations($"next_steps[{i}]", submission.NextSteps[i].CitationIds, turn, failures);
         }
 
+        // Knowledge is never a fact about a merchant or payment, so with every lookup empty there is nothing to assess.
+        if (submission.Outcome is "assessed" or "escalated" && turn.NothingFound)
+        {
+            failures.Add("outcome: no data tool found anything for this question, so it can't be assessed or escalated; use incomplete or refused.");
+        }
+
         if (submission.Outcome == "assessed" && submission.Claims.Count == 0)
         {
             failures.Add("claims: an assessed outcome needs at least one claim.");

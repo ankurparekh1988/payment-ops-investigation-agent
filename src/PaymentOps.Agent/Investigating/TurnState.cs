@@ -21,6 +21,7 @@ internal sealed class TurnState
     private readonly List<ObservedGap> _gaps = [];
     private bool _structuredAnswered;
     private bool _structuredFailed;
+    private bool _structuredFound;
 
     public bool Stopped { get; private set; }
 
@@ -46,6 +47,18 @@ internal sealed class TurnState
             lock (_lock)
             {
                 return _structuredFailed && !_structuredAnswered;
+            }
+        }
+    }
+
+    /// <summary>A structured data tool answered and none found anything: no fact about a merchant or payment was returned.</summary>
+    public bool NothingFound
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _structuredAnswered && !_structuredFound;
             }
         }
     }
@@ -193,12 +206,14 @@ internal sealed class TurnState
 
     public void Accept(AssessmentSubmission submission) => Accepted = submission;
 
-    public void StructuredOutcome(bool answered)
+    /// <param name="found">False when the source answered that nothing matched, such as an unknown merchant.</param>
+    public void StructuredOutcome(bool answered, bool found = true)
     {
         lock (_lock)
         {
             _structuredAnswered |= answered;
             _structuredFailed |= !answered;
+            _structuredFound |= answered && found;
         }
     }
 }

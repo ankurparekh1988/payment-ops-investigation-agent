@@ -206,6 +206,29 @@ public sealed class ToolGuardTests
         Assert.Contains(_turn.Gaps, g => g.Kind == ObservedGapKind.Unavailable && g.Wording == "Settlement data was unavailable.");
     }
 
+    [Fact]
+    public async Task A_lookup_that_finds_nothing_answers_but_finds_nothing()
+    {
+        var tool = new StubTool { Result = new ToolResult.Failed(ToolErrorCode.NotFound, "No merchant M-1.") };
+
+        await Guard().Wrap(tool).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
+
+        Assert.True(_turn.NothingFound);
+        Assert.False(_turn.EveryStructuredSourceFailed);
+        Assert.Empty(_turn.Gaps);
+    }
+
+    [Fact]
+    public async Task One_lookup_that_finds_something_means_something_was_found()
+    {
+        var guard = Guard();
+
+        await guard.Wrap(new StubTool { Result = new ToolResult.Failed(ToolErrorCode.NotFound, "No merchant M-1.") }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
+        await guard.Wrap(new StubTool()).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-2" });
+
+        Assert.False(_turn.NothingFound);
+    }
+
     // Citation ids belong to the turn: the same section keeps its id across searches.
     [Fact]
     public async Task Knowledge_sections_are_numbered_across_searches_in_the_turn()
