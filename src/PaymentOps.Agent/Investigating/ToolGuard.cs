@@ -183,7 +183,8 @@ internal sealed class ToolGuard(
         // Knowledge failing is a gap, but only the data tools decide whether any structured source answered.
         if (tool.Source != DataSources.Knowledge && (result is ToolResult.Ok or ToolResult.Failed { Code: ToolErrorCode.NotFound } || gap?.Kind is ObservedGapKind.Unavailable or ObservedGapKind.Timeout))
         {
-            turn.StructuredOutcome(answered: gap is null);
+            // An empty answer, such as no error events in the range, returns nothing an assessment could cite.
+            turn.StructuredOutcome(answered: gap is null, found: result is ToolResult.Ok { Evidence.Count: > 0 });
         }
 
         return (ToolJson.Serialize(result), gap);

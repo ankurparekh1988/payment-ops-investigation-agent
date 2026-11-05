@@ -122,6 +122,46 @@ public sealed class AssessmentTests
         Assert.Equal(AssessmentPolicy.RefusalNotice, result.Summary.Text);
     }
 
+    // Every lookup came back empty, so the only support left is knowledge, which is never a fact about a merchant.
+    private static TurnState NothingFoundTurn()
+    {
+        var turn = new TurnState();
+        turn.RegisterSection(new RetrievedSection("k1", "d", "Missing file guide", "Guide > Missing file", "text", "General", null));
+        turn.StructuredOutcome(answered: true, found: false);
+        return turn;
+    }
+
+    private static AssessmentSubmission FromKnowledgeOnly(string outcome) => new(
+        outcome,
+        Said("The guide says to contact the processor first.", citations: ["S1"]),
+        [Said("Contact the processor before treating the file as lost.", citations: ["S1"])],
+        Said(string.Empty),
+        "medium",
+        [],
+        null);
+
+    [Theory]
+    [InlineData("assessed")]
+    [InlineData("escalated")]
+    public void An_answer_is_rejected_when_every_data_lookup_found_nothing(string outcome) =>
+        Assert.Contains(
+            "outcome: no data tool found anything for this question, so it can't be assessed or escalated; use incomplete or refused.",
+            AssessmentValidator.Check(FromKnowledgeOnly(outcome), NothingFoundTurn(), Today));
+
+    [Fact]
+    public void An_incomplete_outcome_stands_when_every_data_lookup_found_nothing() =>
+        Assert.Empty(AssessmentValidator.Check(FromKnowledgeOnly("incomplete"), NothingFoundTurn(), Today));
+
+    // A question about the knowledge alone calls no data tool, so it can still be assessed from knowledge.
+    [Fact]
+    public void A_knowledge_only_answer_stands_when_no_data_tool_was_called()
+    {
+        var turn = new TurnState();
+        turn.RegisterSection(new RetrievedSection("k1", "d", "Missing file guide", "Guide > Missing file", "text", "General", null));
+
+        Assert.Empty(AssessmentValidator.Check(FromKnowledgeOnly("assessed"), turn, Today));
+    }
+
     [Theory]
     [InlineData("The file is missing [S1].")]
     [InlineData("See payout:PO-1 for details.")]
