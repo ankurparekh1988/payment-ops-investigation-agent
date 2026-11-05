@@ -38,8 +38,8 @@ public sealed class SafetyDatasetTests
     {
         var set = SafetyDataset.Load(Shipped, Corpus);
 
-        Assert.Equal(86, set.Cases.Count);
-        Assert.Equal(24, set.OfKind(SafetyCase.IndirectAttack).Count);
+        Assert.Equal(87, set.Cases.Count);
+        Assert.Equal(25, set.OfKind(SafetyCase.IndirectAttack).Count);
         Assert.Equal(6, set.OfKind(SafetyCase.HarmfulText).Count);
         Assert.Equal(12, set.OfKind(SafetyCase.DirectAttack).Count);
         Assert.Equal(12, set.OfKind(SafetyCase.Harmful).Count);
@@ -49,14 +49,17 @@ public sealed class SafetyDatasetTests
     }
 
     // Every original case ran in the pre-merge live runs of 2026-11-01, so all 40 are regression evidence; only cases
-    // written and reviewed afterwards, and never run, are held out.
+    // written and reviewed afterwards are held out, and one whose result shaped a rule has left the held-out set.
     [Fact]
     public void Only_cases_written_after_the_pre_merge_runs_are_held_out()
     {
         var set = SafetyDataset.Load(Shipped, Corpus);
+        string[] shapedARule = ["heldout-force-knowledge"];
 
-        Assert.All(set.Cases, c => Assert.Equal(c.Id.StartsWith("heldout-", StringComparison.Ordinal) ? SafetyCase.HeldOut : SafetyCase.Regression, c.Set));
-        Assert.Equal(40, set.Cases.Count(c => c.Set == SafetyCase.Regression));
+        Assert.All(set.Cases, c => Assert.Equal(
+            c.Id.StartsWith("heldout-", StringComparison.Ordinal) && !shapedARule.Contains(c.Id) ? SafetyCase.HeldOut : SafetyCase.Regression,
+            c.Set));
+        Assert.Equal(41, set.Cases.Count(c => c.Set == SafetyCase.Regression));
         Assert.Equal(46, set.Cases.Count(c => c.Set == SafetyCase.HeldOut));
     }
 
@@ -123,13 +126,14 @@ public sealed class SafetyDatasetTests
         Assert.Contains("schema version 1", Assert.Throws<InvalidDataException>(() => SafetyDataset.Load(path, Corpus)).Message, StringComparison.Ordinal);
     }
 
+    // The held-out attacks gate, so they stay balanced across the two surfaces.
     [Fact]
-    public void Each_injection_family_has_an_incident_and_a_knowledge_case()
+    public void Held_out_injections_are_planted_on_both_surfaces_equally()
     {
-        var indirect = SafetyDataset.Load(Shipped, Corpus).OfKind(SafetyCase.IndirectAttack);
+        var indirect = SafetyDataset.Load(Shipped, Corpus).OfKind(SafetyCase.IndirectAttack).Where(c => c.Set == SafetyCase.HeldOut).ToList();
 
-        Assert.Equal(12, indirect.Count(c => c.Poison!.Surface == SafetyPoison.ProcessorIncident));
-        Assert.Equal(12, indirect.Count(c => c.Poison!.Surface == SafetyPoison.Knowledge));
+        Assert.Equal(6, indirect.Count(c => c.Poison!.Surface == SafetyPoison.ProcessorIncident));
+        Assert.Equal(6, indirect.Count(c => c.Poison!.Surface == SafetyPoison.Knowledge));
     }
 
     public static TheoryData<string, string> Malformations() => new()
