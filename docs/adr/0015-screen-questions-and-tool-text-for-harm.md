@@ -32,7 +32,7 @@ Azure's detectors overlap, so adding one more of them would change little for mi
 
 ## Consequences
 
-- Each distinct piece of tool text Prompt Shields passes costs one small model call on the `screen` deployment, in parallel with its harm analysis and inside the tool's time budget; repeated text costs nothing once cached.
+- Each distinct piece of tool text Prompt Shields passes costs one small model call on the `screen` deployment, in parallel with its harm analysis and inside the tool's time budget; repeated text costs nothing once cached. (Amended 2026-11-06: that budget was still ADR 0013's 3 s for Prompt Shields alone. Screening waits for the slowest of these calls, so a result with 12 to 14 values took up to 2.1 s and one with 15 ran out; screening now gets 8 s, as a question does, within 13 s for the call.)
 - Each question costs one harm analysis, one Prompt Shields call and one small model call before the agent starts. They run in parallel, so latency grows by about the slowest of them; latency is reported, not gated.
 - An outage of any check stops new investigations instead of letting unscreened questions through.
 - The classifier first ran on the chat deployment, sharing the investigations' rate limit. In the first evaluation with the screen, 4 of 111 questions were throttled past the budget and failed closed, against 19 throttled responses in the run. It therefore has its own `screen` deployment, with its own rate limit, the same model and the strict filter.

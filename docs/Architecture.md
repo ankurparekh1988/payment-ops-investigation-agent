@@ -208,8 +208,8 @@ A guard around every tool enforces these in our code; the framework's own iterat
 |---|---|
 | Tool calls per investigation | 10 (submitting the assessment isn't counted) |
 | Time per tool call | 5 s |
-| Time per tool call, including screening its text | 8 s |
-| Time to screen one tool result | 3 s, within what's left of the 8 s |
+| Time per tool call, including screening its text | 13 s |
+| Time to screen one tool result | 8 s, within what's left of the 13 s |
 | Time per investigation | 60 s |
 | The same call with the same arguments | Twice; a third stops the investigation |
 | Calls with invalid arguments | Two corrections; a third stops it |
