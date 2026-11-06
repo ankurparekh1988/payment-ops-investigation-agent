@@ -51,7 +51,7 @@ internal static class RetrievalEvalCommand
         var startedAt = DateTimeOffset.UtcNow;
         var result = await RunPlan.OnceMoreIfInvalidAsync("The retrieval run", () => RetrievalEval.RunAsync(dataset, keys, release, retrieve), _ => null, retryDelay, CancellationToken.None);
 
-        var context = new ReportContext(EvaluationReport.RetrievalSystem, RepositoryCommit.Current(), [], null, null, null, startedAt, release.KnowledgeIndex);
+        var context = new ReportContext(EvaluationReport.RetrievalSystem, RepositoryCommit.Current(), [], null, null, null, null, startedAt, release.KnowledgeIndex);
         var report = EvaluationReport.ForRetrieval(context, result, thresholds, thresholdsPath);
         await File.WriteAllTextAsync(outPath, report.ToJson());
         await File.AppendAllTextAsync(summaryPath, ReportMarkdown.Retrieval(report));

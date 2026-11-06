@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Security;
@@ -31,7 +32,7 @@ internal static class EvaluationServices
 
     /// <summary>
     /// The app configuration a live evaluation supplies, under the keys the app reads in Azure: the Content Safety
-    /// endpoint, when there is one, and the Foundry token scope, which every investigation evaluation has.
+    /// endpoint and the Foundry token scope.
     /// </summary>
     public static Action<IServiceCollection> AppConfiguration(Uri? contentSafetyEndpoint, string foundryTokenScope) => services =>
         services.Replace(ServiceDescriptor.Singleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -43,6 +44,7 @@ internal static class EvaluationServices
     /// <param name="substituteModel">Tests only: replaces the Foundry client with a scripted one.</param>
     /// <param name="substituteKnowledge">Tests only: replaces the release's Search lookup.</param>
     /// <param name="configure">Adjusts the app's services: the configuration a live run supplies, or a test's options such as a shorter turn timeout.</param>
+    /// <param name="overlay">Changes the data this one case's tools read, such as a safety case's planted text.</param>
     public static ServiceProvider Build(
         AiRelease release,
         InvestigationEndpoints endpoints,
@@ -51,7 +53,8 @@ internal static class EvaluationServices
         CaseRecorder recorder,
         Func<IChatClient, IChatClient>? substituteModel,
         Func<IServiceProvider, IKnowledgeLookup>? substituteKnowledge,
-        Action<IServiceCollection>? configure = null)
+        Action<IServiceCollection>? configure = null,
+        Action<IServiceCollection>? overlay = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(release);
@@ -65,15 +68,25 @@ internal static class EvaluationServices
         services.AddDemoData(configuration);
         services.AddInvestigation(endpoints, model => recorder.Observe(substituteModel?.Invoke(model) ?? model));
 
-        Wrap<IKnowledgeLookup>(services, (sp, lookup) => recorder.Observe(substituteKnowledge?.Invoke(sp) ?? lookup));
+        if (substituteKnowledge is not null)
+        {
+            Wrap<IKnowledgeLookup>(services, (sp, _) => substituteKnowledge(sp));
+        }
+
+        // Beneath the recorder, so what it records is what the tools read.
+        overlay?.Invoke(services);
+        Wrap<IKnowledgeLookup>(services, (_, lookup) => recorder.Observe(lookup));
         Wrap<IInvestigationTool>(services, (_, tool) => recorder.Observe(tool));
         Wrap<IIncidentStore>(services, (_, store) => recorder.Observe(store));
         configure?.Invoke(services);
+
+        // After configure, so whichever screen the case runs with, the app's or a test's, is the one observed.
+        Wrap<IUntrustedTextScreen>(services, (_, screen) => recorder.Observe(screen));
         return services.BuildServiceProvider();
     }
 
-    // Every registration of T, wrapped where it stands with its own lifetime, however the app registered it.
-    private static void Wrap<T>(ServiceCollection services, Func<IServiceProvider, T, T> observe)
+    /// <summary>Every registration of T, wrapped where it stands with its own lifetime, however the app registered it.</summary>
+    public static void Wrap<T>(IServiceCollection services, Func<IServiceProvider, T, T> observe)
         where T : class
     {
         foreach (var descriptor in services.Where(d => d.ServiceType == typeof(T)).ToList())

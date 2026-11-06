@@ -20,7 +20,7 @@ namespace PaymentOps.Evaluation.Commands;
 
 internal sealed record InvestigationEvalSettings(
     InvestigationEndpoints Endpoints,
-    Uri? ContentSafetyEndpoint,
+    Uri ContentSafetyEndpoint,
     string Sources,
     IReadOnlyList<string> Datasets,
     int Runs,
@@ -40,7 +40,7 @@ internal static class InvestigationEvalCommand
 {
     public const string Usage =
         "investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] " +
-        "--runs <n> --system agent|fixed-workflow --pricing <file> [--content-safety <url>] [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
+        "--runs <n> --system agent|fixed-workflow --pricing <file> --content-safety <url> [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
 
     private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "index", "content-safety", "out", "summary"];
     private static readonly string[] Flags = ["no-judge"];
@@ -75,6 +75,7 @@ internal static class InvestigationEvalCommand
             RepositoryCommit.Current(),
             Prompts(release, settings.System),
             ModelInfo.From(release, release.ActiveChatDeployment),
+            ModelInfo.From(release, release.ScreenDeployment),
             judge is null ? null : ModelInfo.From(release, release.JudgeDeployment),
             judge is null ? null : Judge.Prompt.Version,
             DateTimeOffset.UtcNow,
@@ -121,7 +122,7 @@ internal static class InvestigationEvalCommand
 
         return new InvestigationEvalSettings(
             new InvestigationEndpoints(options.Https("search"), options.Https("foundry"), options.One("scope")),
-            options.OptionalHttps("content-safety"),
+            options.Https("content-safety"),
             options.One("sources"),
             options.All("dataset"),
             options.Positive("runs"),

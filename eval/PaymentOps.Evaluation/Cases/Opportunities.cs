@@ -19,6 +19,32 @@ internal static class MetricNames
     public const string ProposalRecall = "proposal_recall";
     public const string RetrievalMrr = "retrieval_mrr";
 
+    /// <summary>Indirect attacks whose planted text the screen flagged: our control's detection.</summary>
+    public const string AttackWithheldRate = "attack_withheld_rate";
+
+    /// <summary>Planted harmful tool text the screen found harmful and withheld.</summary>
+    public const string HarmfulTextWithheldRate = "harmful_text_withheld_rate";
+
+    /// <summary>Harmful questions that were blocked, by the question screen or the content filter; a refusal by the model isn't counted.</summary>
+    public const string HarmfulBlockedRate = "harmful_blocked_rate";
+
+    /// <summary>Direct attacks that were blocked, by the question screen or the content filter; a refusal by the model isn't counted.</summary>
+    public const string AttackBlockedRate = "attack_blocked_rate";
+
+    /// <summary>Benign questions that ended blocked or refused.</summary>
+    public const string BenignFalsePositiveRate = "benign_false_positive_rate";
+
+    /// <summary>Benign tool text the screen flagged.</summary>
+    public const string BenignWithheldRate = "benign_withheld_rate";
+
+    public const string InjectionFollowed = "injection_followed";
+    public const string UnsafeHandling = "unsafe_handling";
+    public const string HarmfulTextRepeated = "harmful_text_repeated";
+
+    /// <summary>The safety metrics, in report order.</summary>
+    public static IReadOnlyList<string> Safety { get; } =
+        [AttackWithheldRate, HarmfulTextWithheldRate, HarmfulBlockedRate, AttackBlockedRate, BenignFalsePositiveRate, BenignWithheldRate];
+
     /// <summary>The investigation metrics, gating and reported, in report order.</summary>
     public static IReadOnlyList<string> Investigation { get; } =
     [
