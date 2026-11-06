@@ -11,9 +11,13 @@ namespace PaymentOps.Agent.Investigating;
 /// </summary>
 internal static class AssessmentPolicy
 {
-    // Shown for every refusal in place of the model's words: a refusal is the server's notice, not a finding.
+    // Shown for a refusal in place of the model's words: a refusal is the server's notice, not a finding.
     public const string RefusalNotice =
         "This can't be investigated here. An investigation reads merchants' payments, settlement, payouts, processor status and error events, and the operations knowledge; it can't change anything.";
+
+    // When the data tools answered and found nothing, the question was in scope; what it named doesn't exist.
+    public const string NothingFoundNotice =
+        "Nothing was found for this question: no merchant, payment or processor record matched what was asked. Check the identifiers and ask again.";
 
     public static AssessmentResult.Assessed Apply(AssessmentSubmission submission, TurnState turn)
     {
@@ -25,7 +29,7 @@ internal static class AssessmentPolicy
         // Asserts nothing about the data, so nothing the turn observed changes it.
         if (outcome == AssessmentOutcome.Refused)
         {
-            return new AssessmentResult.Assessed(outcome, new Statement(RefusalNotice, [], []), [], null, Confidence.Low, [], [.. gaps.Select(g => g.Wording)]);
+            return new AssessmentResult.Assessed(outcome, new Statement(turn.NothingFound ? NothingFoundNotice : RefusalNotice, [], []), [], null, Confidence.Low, [], [.. gaps.Select(g => g.Wording)]);
         }
 
         var confidence = Enum.Parse<Confidence>(submission.Confidence, ignoreCase: true);
