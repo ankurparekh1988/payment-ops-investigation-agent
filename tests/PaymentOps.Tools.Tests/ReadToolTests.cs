@@ -37,6 +37,30 @@ public sealed class ReadToolTests
         Assert.Contains("incident:INC-FAB-1109", Ids(ok));
     }
 
+    // An open incident runs to the end of the range asked about; a resolved one to the day it ended.
+    [Theory]
+    [InlineData("2026-11-09", "2026-11-10", "2026-11-09", "2026-11-10")]
+    [InlineData("2026-11-03", "2026-11-05", "2026-11-04", "2026-11-04")]
+    public async Task An_incident_points_to_the_processors_error_events_while_it_lasted(string start, string end, string from, string to)
+    {
+        using var tools = new ToolFixture();
+        var ok = Ok(await tools.Tool<ProcessorStatusTool>().RunAsync(new ProcessorStatusRequest("fabrikam-pay", start, end), TestUser.Reader, CancellationToken.None));
+
+        var check = Assert.Single(Json(ok)["next_checks"]!.AsArray())!;
+        Assert.Equal(
+            ("get_error_events", "fabrikam-pay", from, to, "incident"),
+            ((string?)check["tool"], (string?)check["processor_id"], (string?)check["start_date"], (string?)check["end_date"], (string?)check["because"]));
+    }
+
+    [Fact]
+    public async Task A_processor_with_no_incidents_points_to_no_further_checks()
+    {
+        using var tools = new ToolFixture();
+        var ok = Ok(await tools.Tool<ProcessorStatusTool>().RunAsync(new ProcessorStatusRequest("northwind-acquiring", "2026-11-02", "2026-11-10"), TestUser.Reader, CancellationToken.None));
+
+        Assert.Empty(Json(ok)["next_checks"]!.AsArray());
+    }
+
     // The reference a ticket may carry comes from typed data at registration, never from text the model saw.
     [Fact]
     public async Task The_incident_reference_is_registered_from_typed_data()
