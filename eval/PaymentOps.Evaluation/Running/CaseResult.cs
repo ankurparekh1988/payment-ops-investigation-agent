@@ -1,6 +1,11 @@
 using System.Text.Json.Serialization;
 
+using PaymentOps.Agent.Safety;
+
 namespace PaymentOps.Evaluation.Running;
+
+/// <summary>One untrusted value the tool-text screen checked, with its verdict; held in memory for scoring only.</summary>
+internal sealed record ScreenedText(string Text, ScreenVerdict Verdict);
 
 /// <param name="Arguments">The arguments as the tool received them, by snake_case name: ids, dates and queries.</param>
 internal sealed record ToolCallRecord(string Tool, IReadOnlyDictionary<string, string?> Arguments);
@@ -58,6 +63,10 @@ internal sealed record CaseResult(string CaseId, string Outcome)
 
     /// <summary>Tool text the screen found harmful, and so withheld from the model.</summary>
     public int WithheldHarmful { get; init; }
+
+    /// <summary>Every value the tool-text screen checked, with its verdict, so a case is scored on its own planted text.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<ScreenedText> Screened { get; init; } = [];
 
     /// <summary>Set when the evaluation environment, not the system under test, failed this case; it invalidates the run.</summary>
     public string? InfrastructureFailure { get; init; }

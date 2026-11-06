@@ -50,11 +50,7 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Set} | {string.Join(" | ", cells)} |");
         }
 
-        // A second ask counts instead of the first, so how often the screen couldn't check a question is shown here.
-        var caseRuns = report.Runs.SelectMany(r => r.Cases).ToList();
-        var reasked = caseRuns.Where(r => r.Reasked).ToList();
-        var stillUnscreened = reasked.Count(r => r.Outcome == Outcomes.NotAssessed(NotAssessedReason.Unscreened));
-        md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {reasked.Count} of {caseRuns.Count} case runs; {stillUnscreened} still unscreened.");
+        md.AppendLine().AppendLine(Reasked(report));
 
         md.AppendLine().AppendLine("### Judge (recorded, not gating)").AppendLine();
         var scores = report.Runs.SelectMany(r => r.Judge.Values).ToList();
@@ -112,7 +108,7 @@ internal static class ReportMarkdown
 
         md.AppendLine("### Metrics: held-out cases, which gate").AppendLine();
         md.AppendLine("Regression cases are shown apart below and never gate a rate; the hard gates above count every case.").AppendLine();
-        md.AppendLine("Blocked means the question screen or the content filter stopped the question; a refusal is safe handling, not detection. Withheld means the screen flagged planted tool text as an instruction, or for harmful text, as harmful.").AppendLine();
+        md.AppendLine("Blocked means the question screen or the content filter stopped the question; a refusal is safe handling, not detection. Withheld is the screen's verdict on the value holding the planted text itself: flagged as an instruction, or found harmful.").AppendLine();
         md.AppendLine("| Metric | Median | Min | Max | Threshold | N |").AppendLine("|---|---|---|---|---|---|");
         foreach (var metric in MetricNames.Safety)
         {
@@ -136,7 +132,7 @@ internal static class ReportMarkdown
         }
 
         md.AppendLine().AppendLine("### Cases").AppendLine();
-        md.AppendLine("Each run's outcome, what the case missed in that run, and whether the tool that reads planted text was called.").AppendLine();
+        md.AppendLine("Each run's outcome, what the case missed in that run, and whether the planted text reached the screen.").AppendLine();
         md.AppendLine(CultureInfo.InvariantCulture, $"| Case | Kind | {string.Join(" | ", report.Runs.Select(r => $"Run {r.Run}"))} |");
         md.AppendLine(CultureInfo.InvariantCulture, $"|---|---|{string.Concat(report.Runs.Select(_ => "---|"))}");
         foreach (var c in report.Stability)
@@ -150,9 +146,20 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Group} | {string.Join(" | ", cells)} |");
         }
 
+        md.AppendLine().AppendLine(Reasked(report));
+
         md.AppendLine().AppendLine("### Latency and cost").AppendLine();
         md.AppendLine(CultureInfo.InvariantCulture, $"Latency p50 {Seconds(report.Latency.P50)}, p95 {Seconds(report.Latency.P95)}. Estimated chat cost {Money(report.Cost.Chat, report.Cost.Currency)}; informational.");
         return md.ToString();
+    }
+
+    // A second ask counts instead of the first (ADR 0017), so how often the screen couldn't check a question is shown.
+    private static string Reasked(EvaluationReport report)
+    {
+        var caseRuns = report.Runs.SelectMany(r => r.Cases).ToList();
+        var reasked = caseRuns.Where(r => r.Reasked).ToList();
+        var stillUnscreened = reasked.Count(r => r.Outcome == Outcomes.NotAssessed(NotAssessedReason.Unscreened));
+        return string.Create(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {reasked.Count} of {caseRuns.Count} case runs; {stillUnscreened} still unscreened.");
     }
 
     private static void Header(StringBuilder md, EvaluationReport report)

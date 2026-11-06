@@ -56,7 +56,7 @@ internal sealed record RunReport(
 /// <summary>One case across runs: its outcome in each, and whether each run met each metric it's eligible for.</summary>
 internal sealed record CaseStability(string CaseId, string Group, string Set, IReadOnlyList<string> Outcomes, IReadOnlyDictionary<string, IReadOnlyList<bool>> Metrics)
 {
-    /// <summary>For a poisoned safety case, whether each run called the tool that reads the planted text.</summary>
+    /// <summary>For a poisoned safety case, whether the planted text reached the tool-text screen in each run.</summary>
     public IReadOnlyList<bool>? PoisonReachable { get; init; }
 }
 

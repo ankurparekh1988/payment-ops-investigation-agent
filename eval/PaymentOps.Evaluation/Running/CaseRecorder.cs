@@ -32,6 +32,7 @@ internal sealed class CaseRecorder
     private readonly Dictionary<string, RetrievedSection> _retrieved = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _facts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tickets = new(StringComparer.Ordinal);
+    private readonly List<ScreenedText> _screened = [];
     private int _requests;
     private int _flagged;
     private int _harmful;
@@ -96,6 +97,7 @@ internal sealed class CaseRecorder
                 Confidence = assessed is null ? null : Outcomes.Word(assessed.Confidence),
                 WithheldFlagged = _flagged,
                 WithheldHarmful = _harmful,
+                Screened = [.. _screened],
                 InfrastructureFailure = _failure ?? result switch
                 {
                     AssessmentResult.NotAssessed { Reason: NotAssessedReason.ModelUnavailable } => InfrastructureFailures.ModelUnavailable,
@@ -151,10 +153,11 @@ internal sealed class CaseRecorder
         _ => Convert.ToString(value, CultureInfo.InvariantCulture),
     };
 
-    private void Screened(IReadOnlyList<ScreenVerdict> verdicts)
+    private void Screened(IReadOnlyList<string> segments, IReadOnlyList<ScreenVerdict> verdicts)
     {
         lock (_lock)
         {
+            _screened.AddRange(segments.Zip(verdicts, (text, verdict) => new ScreenedText(text, verdict)));
             _flagged += verdicts.Count(v => v == ScreenVerdict.Attack);
             _harmful += verdicts.Count(v => v == ScreenVerdict.Harmful);
             if (verdicts.Contains(ScreenVerdict.Unavailable))
@@ -277,7 +280,7 @@ internal sealed class CaseRecorder
             try
             {
                 var verdicts = await inner.ScreenAsync(segments, cancellationToken);
-                recorder.Screened(verdicts);
+                recorder.Screened(segments, verdicts);
                 return verdicts;
             }
             catch (OperationCanceledException)
