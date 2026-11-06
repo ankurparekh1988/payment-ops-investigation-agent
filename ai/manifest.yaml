@@ -25,7 +25,7 @@ models:
         model: gpt-5.4-mini
         version: "2026-03-17"
         deploymentType: GlobalStandard
-        capacityK: 50
+        capacityK: 250
         contentFilterPolicy: strict
 
   embedding:
@@ -52,7 +52,7 @@ models:
     model: gpt-5.4-mini
     version: "2026-03-17"
     deploymentType: GlobalStandard
-    capacityK: 50
+    capacityK: 250
     contentFilterPolicy: strict
 
 # The search index the knowledge corpus is published to, and how the app queries it. A schema change
