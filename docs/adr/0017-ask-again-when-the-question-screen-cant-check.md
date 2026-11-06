@@ -20,7 +20,7 @@ The harness's rule for infrastructure failures doesn't fit. It discards the whol
 - **The wait:** throttling is per minute, so asking again at once would mostly meet the same limit.
 - **Visible in every report:** each case result records `reasked`, and the job summary says how many case runs were asked again and how many stayed unscreened, so a screen that fails often is still seen even when the second ask succeeds.
 - **What's scored:** the second ask's outcome, tool calls, evidence, latency and tokens. The first ask made no investigation requests; its 8 s of screening isn't added to the latency.
-- **Applies to both systems.** The fixed workflow doesn't screen questions yet, so for it nothing changes.
+- **Applies to both systems.** The fixed workflow doesn't screen questions yet, so for it nothing changes. (Amended 2026-11-05: the fixed-workflow challenger now screens its question with the same screen, so a question it couldn't check is asked again the same way.)
 
 Thresholds, labels and the formula don't change. The rule changes how one outcome is collected, not what passes, and it applies to every evaluation from the change that adds it.
 

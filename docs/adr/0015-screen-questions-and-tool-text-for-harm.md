@@ -38,7 +38,7 @@ Azure's detectors overlap, so adding one more of them would change little for mi
 - The classifier is a model: it can miss, or block ordinary operational language. The safety evaluation measures both, through its harmful and benign cases, and the investigation gate fails a change that blocks the labelled questions. The hard gates still require that nothing harmful is answered.
 - The 6 harmful and 8 benign safety questions used to develop and check this screen are development and regression probes, not held-out evidence: the classifier's prompt was written with their results in view. Any safety slice tuned against them gets fresh, unseen held-out cases before a safety baseline is taken.
 - The bootstrap must run before this change deploys. Until the role holds the new action, every harm analysis is refused, and every question is unscreened.
-- The fixed-workflow challenger in the evaluation doesn't screen questions until the evaluation code passes it the same screen, which is a gate-policy change.
+- The fixed-workflow challenger in the evaluation didn't screen questions until the evaluation code passed it the same screen, a gate-policy change made with the safety evaluation.
 
 ## Alternatives considered
 
