@@ -349,7 +349,8 @@ public sealed class QuestionScreenTests
         Assert.Equal([ScreenVerdict.Clean], await screen.ScreenAsync(["note"], CancellationToken.None));
         Assert.Equal([ScreenVerdict.Clean], await screen.ScreenAsync(["note"], CancellationToken.None));
 
-        Assert.Equal(2, handler.Requests.Count);
+        // The outage was tried twice (the retry), then the recovered text once: the clean verdict is cached.
+        Assert.Equal(3, handler.Requests.Count);
     }
 
     [Fact]

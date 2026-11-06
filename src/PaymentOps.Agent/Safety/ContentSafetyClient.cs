@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -11,8 +12,13 @@ namespace PaymentOps.Agent.Safety;
 /// Calls the Foundry account's Content Safety REST operations with an Entra token, never a key. Any failure of the
 /// service comes back as null, so a caller can treat it as "couldn't be checked"; only the caller's cancellation throws.
 /// </summary>
-internal sealed class ContentSafetyClient(HttpClient http, Uri endpoint, string tokenScope, TokenCredential credential)
+internal sealed class ContentSafetyClient(HttpClient http, Uri endpoint, string tokenScope, TokenCredential credential, TimeProvider? time = null)
 {
+    // One retry after a throttle or a passing server error, as the SDK retries model calls: a lone 429 would
+    // otherwise leave the text unscreened. The wait follows Retry-After, capped so a screen stays quick.
+    private static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(2);
+
     // Managed identity caches its tokens, but a developer's Azure CLI sign-in starts a process for each one, which
     // would spend the screening budget. Two calls refreshing at once both fetch one; that's harmless.
     private volatile CachedToken? _token;
@@ -22,11 +28,16 @@ internal sealed class ContentSafetyClient(HttpClient http, Uri endpoint, string 
     {
         try
         {
-            var token = await TokenAsync(cancellationToken);
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, $"{operation}?api-version=2024-09-01")) { Content = JsonContent.Create(body) };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var response = await SendAsync(operation, body, cancellationToken);
+            if (IsTransient(response.StatusCode))
+            {
+                var wait = response.Headers.RetryAfter?.Delta ?? DefaultRetryDelay;
+                response.Dispose();
+                await Task.Delay(wait < MaxRetryDelay ? wait : MaxRetryDelay, time ?? TimeProvider.System, cancellationToken);
+                response = await SendAsync(operation, body, cancellationToken);
+            }
 
-            using var response = await http.SendAsync(request, cancellationToken);
+            using var answered = response;
             return response.IsSuccessStatusCode
                 ? await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken)
                 : null;
@@ -37,6 +48,18 @@ internal sealed class ContentSafetyClient(HttpClient http, Uri endpoint, string 
             return null;
         }
     }
+
+    private async Task<HttpResponseMessage> SendAsync(string operation, object body, CancellationToken cancellationToken)
+    {
+        var token = await TokenAsync(cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, $"{operation}?api-version=2024-09-01")) { Content = JsonContent.Create(body) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return await http.SendAsync(request, cancellationToken);
+    }
+
+    private static bool IsTransient(HttpStatusCode status) =>
+        status is HttpStatusCode.TooManyRequests or HttpStatusCode.InternalServerError or HttpStatusCode.BadGateway
+            or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout;
 
     private async Task<string> TokenAsync(CancellationToken cancellationToken)
     {
