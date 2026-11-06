@@ -62,7 +62,7 @@ The suite that decides whether a change to AI behaviour may ship. Everything bel
 | `eval/datasets/investigations-heldout.json` | 26 | Held-out investigation cases written after prompt 1.1.0 was frozen: core scenarios asked differently (6), decoys (4), merchant wording and loose dates (4), knowledge-only procedure questions (3), refusals (3), Restricted-policy questions from General and Restricted users (3), and role and proposal cases (3) |
 | `eval/datasets/retrieval-heldout.json` | 39 | Held-out retrieval cases in the calibration schema, none copied or paraphrased from the calibration set, with 5 probes |
 
-Every label is written by a person from the demo data, the runbooks and the role rules; no model writes or edits one. A held-out case stays held out only while no prompt change is tuned against its per-case results. Reports always show the regression and held-out sets apart, and each group on its own.
+Every label is written by a person from the demo data, the runbooks and the role rules; no model writes or edits one. A held-out case stays held out only while no prompt change is tuned against its per-case results. Reports always show the regression and held-out sets apart, and each group on its own. The next checks that settlement and processor results name were designed after the held-out investigation results showed the agent skipping the error events its runbooks list, so for that change the 26 held-out investigation cases are regression evidence. Fresh held-out investigation cases, written and reviewed after it, are its held-out test; they join the set with the next baseline, since adding cases changes every investigation threshold.
 
 Each investigation case says what a reviewer accepts:
 
