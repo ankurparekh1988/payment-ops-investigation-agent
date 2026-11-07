@@ -297,6 +297,10 @@ The change is in the agent's own registration, and it changes how a question rea
 
 Across the 21 runs of an unchanged agent from #42 to #49, tool argument accuracy ranged from 30 to 39 of 54, with a mean of 34.5 and a standard deviation of 2.6; a third of the runs scored below the 34 the threshold needs. The thresholds were frozen from three baseline runs that scored 35, 36 and 36.
 
+**[#54](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/54), 2026-11-06: a safety evaluation in the AI gate.** Run [42209671119](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/42209671119) at head `fea4ac3` reached no verdict: investigation run 3 was invalid twice, with tool-text screening unavailable on `knowledge-closure-ticket` and then on `core-s1-incident-reference`, so the check failed as "dev environment unavailable". No threshold was applied, so there are no per-run values to record.
+
+The next evaluation of #54 is a new one under [ADR 0018](adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md), not its [ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md) rerun: [#55](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/55) has since changed the agent under test on `main`, including how long tool-text screening may take and how a throttled screening call is retried.
+
 **[#55](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/55), 2026-11-07: agent behaviour fixes, with next checks in tool results.** Run [42226453445](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/42226453445) at head `19b3c61` failed the gate on three thresholds; both hard gates passed.
 
 | Metric | Runs | Median | Threshold |
