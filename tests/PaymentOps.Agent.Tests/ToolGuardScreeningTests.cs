@@ -169,7 +169,7 @@ public sealed class ToolGuardScreeningTests
     }
 
     [Fact]
-    public async Task Screening_never_extends_the_call_past_eight_seconds()
+    public async Task Screening_never_extends_the_call_past_thirteen_seconds()
     {
         var tool = new SlowTool(TimeSpan.FromSeconds(4.9), _time);
 
@@ -177,19 +177,32 @@ public sealed class ToolGuardScreeningTests
 
         Assert.Contains(Unscreenable, json, StringComparison.Ordinal);
         Assert.Contains("\"status\":\"ok\"", json, StringComparison.Ordinal);
-        Assert.InRange(elapsed, TimeSpan.FromSeconds(7.9), TimeSpan.FromSeconds(8.2));
+        Assert.InRange(elapsed, TimeSpan.FromSeconds(12.9), TimeSpan.FromSeconds(13.2));
         Assert.Contains(_turn.Gaps, g => g.Kind == ObservedGapKind.Withheld && g.Wording == "Merchant data: some text was withheld because it couldn't be checked.");
     }
 
     [Fact]
-    public async Task Screening_is_capped_at_three_seconds_even_with_budget_left()
+    public async Task Screening_is_capped_at_eight_seconds_even_with_budget_left()
     {
         var tool = new SlowTool(TimeSpan.FromSeconds(1), _time);
 
         var (json, elapsed) = await DriveAsync(CallAsync(Guard(ScriptedScreen.Hanging(_time)), tool, new() { ["merchant_id"] = "M-1042" }));
 
         Assert.Contains(Unscreenable, json, StringComparison.Ordinal);
-        Assert.InRange(elapsed, TimeSpan.FromSeconds(3.9), TimeSpan.FromSeconds(4.2));
+        Assert.InRange(elapsed, TimeSpan.FromSeconds(8.9), TimeSpan.FromSeconds(9.2));
+    }
+
+    // The harm checks make one call per value, so a result with many values takes seconds, not Prompt Shields' 0.1 s.
+    [Fact]
+    public async Task A_screen_taking_several_seconds_still_answers()
+    {
+        var tool = new SlowTool(TimeSpan.FromSeconds(1), _time);
+        var screen = new ScriptedScreen(_ => ScreenVerdict.Clean, TimeSpan.FromSeconds(4), _time);
+
+        var (json, _) = await DriveAsync(CallAsync(Guard(screen), tool, new() { ["merchant_id"] = "M-1042" }));
+
+        Assert.DoesNotContain(Unscreenable, json, StringComparison.Ordinal);
+        Assert.DoesNotContain(_turn.Gaps, g => g.Kind == ObservedGapKind.Withheld);
     }
 
     [Fact]

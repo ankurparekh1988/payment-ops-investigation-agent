@@ -12,10 +12,13 @@ public sealed class InvestigationLimits
     public TimeSpan ToolTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>The whole guarded call, from starting the tool to finishing its screening; budgets the screening, not the source.</summary>
-    public TimeSpan ToolResultBudget { get; set; } = TimeSpan.FromSeconds(8);
+    public TimeSpan ToolResultBudget { get; set; } = TimeSpan.FromSeconds(13);
 
-    /// <summary>How long Prompt Shields may take, within what remains of <see cref="ToolResultBudget"/>.</summary>
-    public TimeSpan ScreenTimeout { get; set; } = TimeSpan.FromSeconds(3);
+    /// <summary>
+    /// How long screening a tool result may take, within what remains of <see cref="ToolResultBudget"/>. The harm checks
+    /// make one call per value and wait for the slowest, so a result with many values takes seconds; as for a question.
+    /// </summary>
+    public TimeSpan ScreenTimeout { get; set; } = TimeSpan.FromSeconds(8);
 
     /// <summary>
     /// How long a question's three safety checks may take together, before the investigation agent sees it. The classifier

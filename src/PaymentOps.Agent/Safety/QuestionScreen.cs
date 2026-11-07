@@ -103,6 +103,9 @@ internal sealed class HarmClassifier(IChatClient model, string instructions)
 {
     public const string PromptId = "harm-screen";
 
+    /// <summary>The same check worded for text the agent reads from records and runbooks, on the same deployment.</summary>
+    public const string ToolTextPromptId = "tool-text-harm-screen";
+
     private static readonly Dictionary<string, QuestionVerdict> Verdicts = new(StringComparer.Ordinal)
     {
         ["hate"] = QuestionVerdict.Harmful,
