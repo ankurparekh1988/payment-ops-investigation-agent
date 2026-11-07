@@ -24,6 +24,8 @@ The harness's rule for infrastructure failures doesn't fit. It discards the whol
 
 Thresholds, labels and the formula don't change. The rule changes how one outcome is collected, not what passes, and it applies to every evaluation from the change that adds it.
 
+[ADR 0019](0019-retry-the-case-the-environment-spoiled.md) later made the infrastructure rule described above retry one case rather than a whole run. This decision stands: an unscreened question is still asked once more, a second unscreened result still counts against the system, and that outcome is never treated as an infrastructure failure.
+
 ## Consequences
 
 - The gate stops failing on an outcome the agent never had a chance to affect, while a screen that stays down still fails it.

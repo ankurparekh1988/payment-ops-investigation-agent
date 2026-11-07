@@ -49,7 +49,7 @@ internal static class InvestigationEvalCommand
 
     /// <param name="runners">Tests only: the system under evaluation; by default the agent or the fixed workflow, live.</param>
     /// <param name="judges">Tests only: the judge; by default the release's pinned judge deployment.</param>
-    /// <param name="retryDelay">How long to wait before repeating an invalid run.</param>
+    /// <param name="retryDelay">How long to wait before repeating a case the environment spoiled.</param>
     public static Task<int> RunAsync(
         string[] args,
         Func<AiRelease, InvestigationEvalSettings, ICaseRunner>? runners,
@@ -66,9 +66,12 @@ internal static class InvestigationEvalCommand
             Gate.Require(thresholds, EvaluationReport.ApplicableN(Opportunities.Count(cases.Cases)));
         }
 
+        var diagnostics = new EvaluationDiagnostics();
+        using var listening = diagnostics.Listen();
+
         // One sign-in for the whole evaluation, so token fetches stay out of every case's timings.
-        var credential = new CachedTokenCredential(new AzureCliCredential());
-        var runner = runners?.Invoke(release, settings) ?? Runner(release, settings, credential);
+        var credential = new CachedTokenCredential(new AzureCliCredential(), diagnostics.SignInFailed);
+        var runner = runners?.Invoke(release, settings) ?? Runner(release, settings, credential, diagnostics);
         var judge = judges is not null ? judges(release) : settings.Judge ? LiveJudge(release, settings, credential) : null;
         var context = new ReportContext(
             settings.System,
@@ -80,7 +83,24 @@ internal static class InvestigationEvalCommand
             DateTimeOffset.UtcNow,
             release.KnowledgeIndex);
 
-        var runs = await RunPlan.RunAsync(runner, cases.Cases, settings.Runs, retryDelay, CancellationToken.None);
+        IReadOnlyList<RunOutcome> runs;
+        try
+        {
+            runs = await RunPlan.RunAsync(runner, cases.Cases, settings.Runs, retryDelay, diagnostics, CancellationToken.None);
+        }
+        catch (CouldNotEvaluateException ex)
+        {
+            // No report is written on this path, so what failed goes to the summary and the annotation.
+            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish(ex.Message, diagnostics.Snapshot()));
+            throw new CouldNotEvaluateException($"{ex.Message} Across the evaluation: {diagnostics.Describe()}.");
+        }
+        catch (Exception ex)
+        {
+            // A fault in the harness still crashes the command, after a possibly long run; the counts outlive it. Its type only: a message can hold anything.
+            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish($"The evaluation stopped on an unexpected {ex.GetType().Name}.", diagnostics.Snapshot()));
+            throw;
+        }
+
         var byId = cases.Cases.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var judged = new List<IReadOnlyDictionary<string, JudgeScore>>();
         foreach (var run in runs)
@@ -97,7 +117,7 @@ internal static class InvestigationEvalCommand
             judged.Add(scores);
         }
 
-        var report = EvaluationReport.ForInvestigations(context, cases, runs, judged, prices, thresholds, settings.Thresholds);
+        var report = EvaluationReport.ForInvestigations(context, cases, runs, judged, prices, thresholds, settings.Thresholds) with { Diagnostics = diagnostics.Snapshot() };
         await File.WriteAllTextAsync(settings.Out, report.ToJson());
         await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.Investigations(report));
         Console.WriteLine($"{settings.System}: gate {report.Gate.Verdict} over {runs.Count} run(s).");
@@ -135,9 +155,9 @@ internal static class InvestigationEvalCommand
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
-    private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential)
+    private static ICaseRunner Runner(AiRelease release, InvestigationEvalSettings settings, TokenCredential credential, EvaluationDiagnostics diagnostics)
     {
-        var configure = EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint, settings.Endpoints.FoundryTokenScope);
+        var configure = diagnostics.Observing(EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint, settings.Endpoints.FoundryTokenScope));
         return settings.System == EvaluationReport.AgentSystem
             ? new AgentCaseRunner(release, settings.Endpoints, credential, configure: configure)
             : new FixedWorkflowCaseRunner(release, settings.Endpoints, credential, configure: configure);

@@ -73,7 +73,7 @@ internal static class EvaluationServices
     }
 
     // Every registration of T, wrapped where it stands with its own lifetime, however the app registered it.
-    private static void Wrap<T>(ServiceCollection services, Func<IServiceProvider, T, T> observe)
+    public static void Wrap<T>(IServiceCollection services, Func<IServiceProvider, T, T> observe)
         where T : class
     {
         foreach (var descriptor in services.Where(d => d.ServiceType == typeof(T)).ToList())

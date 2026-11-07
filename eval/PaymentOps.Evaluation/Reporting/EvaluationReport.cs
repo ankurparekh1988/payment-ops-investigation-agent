@@ -102,7 +102,8 @@ internal sealed record EvaluationReport(
     Percentiles TimeToFirstProgress,
     CostReport Cost,
     GateReport Gate,
-    IReadOnlyList<CaseRun> RetrievalCases)
+    IReadOnlyList<CaseRun> RetrievalCases,
+    ScreeningDiagnostics? Diagnostics = null)
 {
     public const int SupportedSchemaVersion = 1;
     public const string AgentSystem = "agent";

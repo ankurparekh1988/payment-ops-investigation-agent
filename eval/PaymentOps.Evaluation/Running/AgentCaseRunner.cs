@@ -18,7 +18,8 @@ namespace PaymentOps.Evaluation.Running;
 /// case gets its own services, so nothing (conversation, proposals, tickets) carries from one case to the next.
 /// A system under evaluation differs only in how it investigates; proposals are settled the same way for both.
 /// A question the screen couldn't check never reached the system, so it's asked once more, as the app tells the person
-/// to; a second unscreened ask counts against the system.
+/// to; a second unscreened ask counts against the system. A retry for an environment failure is the run plan's, and
+/// starts the whole case over.
 /// </summary>
 internal abstract class CaseRunner(
     AiRelease release,
@@ -34,38 +35,24 @@ internal abstract class CaseRunner(
 
     private static readonly string Unscreened = Outcomes.NotAssessed(NotAssessedReason.Unscreened);
 
-    public async Task<RunOutcome> RunAsync(IReadOnlyList<InvestigationCase> cases, CancellationToken cancellationToken)
+    public async Task<CaseAttempt> RunCaseAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
-        var results = new List<CaseResult>();
-        var tickets = 0;
-        foreach (var c in cases)
+        var attempt = await AskAsync(c, cancellationToken);
+        if (attempt.Result.Outcome == Unscreened && attempt.Result.InfrastructureFailure is null)
         {
-            var (recorded, caseTickets) = await AskAsync(c, cancellationToken);
-            if (recorded.Outcome == Unscreened && recorded.InfrastructureFailure is null)
-            {
-                await Task.Delay(reaskDelay, cancellationToken);
-                (recorded, caseTickets) = await AskAsync(c, cancellationToken);
-                recorded = recorded with { Reasked = true };
-            }
-
-            results.Add(recorded);
-            tickets += caseTickets;
-
-            // The run will be discarded, so the rest of it would only spend tokens.
-            if (recorded.InfrastructureFailure is not null)
-            {
-                break;
-            }
+            await Task.Delay(reaskDelay, cancellationToken);
+            attempt = await AskAsync(c, cancellationToken);
+            attempt = attempt with { Result = attempt.Result with { Reasked = true } };
         }
 
-        return new RunOutcome(results, tickets);
+        return attempt;
     }
 
     /// <summary>One question, with an Engineer's proposal already kept by the app's proposal store.</summary>
     protected abstract Task<AssessmentResult> InvestigateAsync(IServiceProvider services, string question, IProgress<InvestigationProgress> progress, CancellationToken cancellationToken);
 
     // Fresh services for every ask, so nothing from an earlier ask carries into this one.
-    private async Task<(CaseResult Result, int Tickets)> AskAsync(InvestigationCase c, CancellationToken cancellationToken)
+    private async Task<CaseAttempt> AskAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
         var recorder = new CaseRecorder();
         using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge, configure);
@@ -86,7 +73,7 @@ internal abstract class CaseRunner(
 
         var latency = timer.ElapsedMilliseconds;
         var proposal = await EvaluationServices.SettleProposalAsync(result, scope.ServiceProvider.GetRequiredService<IApprovalService>(), cancellationToken);
-        return (recorder.ToResult(c.Id, result, proposal, latency, first.FirstMs), recorder.Tickets);
+        return new CaseAttempt(recorder.ToResult(c.Id, result, proposal, latency, first.FirstMs), recorder.Tickets);
     }
 }
 

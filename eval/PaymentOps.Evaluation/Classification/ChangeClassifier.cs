@@ -26,7 +26,7 @@ internal static class ChangeClassifier
     ];
 
     // The ADRs that decide thresholds, reruns and how an unscreened question is scored are gate policy too.
-    public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*", "docs/adr/0016-*", "docs/adr/0017-*", "docs/adr/0018-*"];
+    public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*", "docs/adr/0016-*", "docs/adr/0017-*", "docs/adr/0018-*", "docs/adr/0019-*"];
 
     private static readonly Regex[] Behaviour = Globs(BehaviourPaths);
     private static readonly Regex[] GatePolicy = Globs(GatePolicyPaths);
