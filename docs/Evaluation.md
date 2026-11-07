@@ -251,6 +251,18 @@ The change is in the agent's own registration, and it changes how a question rea
 
 Across the 21 runs of an unchanged agent from #42 to #49, tool argument accuracy ranged from 30 to 39 of 54, with a mean of 34.5 and a standard deviation of 2.6; a third of the runs scored below the 34 the threshold needs. The thresholds were frozen from three baseline runs that scored 35, 36 and 36.
 
+**[#55](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/55), 2026-11-07: agent behaviour fixes, with next checks in tool results.** Run [42226453445](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/42226453445) at head `19b3c61` failed the gate on three thresholds; both hard gates passed.
+
+| Metric | Runs | Median | Threshold |
+|---|---|---|---|
+| Validated result rate | 0.973, 0.919, 0.919 | 0.919 | 0.92 |
+| Evidence coverage | 0.697, 0.576, 0.652 | 0.652 | 0.66 |
+| Section precision | 0.733, 0.635, 0.704 | 0.704 | 0.72 |
+
+The change is to what the agent is given, so under [ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md) it isn't rerun. It isn't run-to-run spread either: across the 27 runs of the nine evaluations before it, evidence coverage never fell below 0.667 or section precision below 0.672. Required tool recall rose to 0.884 and tool argument accuracy to 0.796, with `get_error_events` called in 40 of 111 case runs against 1 to 7 before. Among cases that require a knowledge search, 12 of 96 case runs skipped it, against 25 of 864 before, and more submissions were rejected. Scanned three times each, the tool-text classifier flagged none of the 94 knowledge sections or 231 record values and section titles, so it isn't withholding what the agent needs.
+
+The results point to next checks but don't prove them, so they leave #55 for a pull request of their own, evaluated on its own. The rest of #55 is evaluated without them.
+
 ### Baseline, 2026-11-03
 
 Ten agent runs and one retrieval run of `main` at `eb951ba`, locally with the developer's sign-in, from 11:58 to 13:28 UTC, as a pull request is evaluated: prompts `investigation-agent` 1.1.0 and `harm-screen` 1.0.0 on `chat-blue` (`gpt-5.4-mini`, 2026-03-17), the `knowledge-eval-v1` index in lexical mode, the question screen, and no judge. Runs 1 and 5 were invalid once each, when Prompt Shields couldn't screen one tool value in time, and were repeated. Every run passed both hard gates and viability. 12 of 370 case runs were asked again after the question screen couldn't check them; none stayed unscreened. `eval/thresholds.json` was generated from these reports by the `thresholds` command under the rule in [ADR 0018](adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md), merged before the baseline ran.
