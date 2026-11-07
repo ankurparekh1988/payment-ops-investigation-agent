@@ -59,6 +59,7 @@ public static class InvestigationServiceCollectionExtensions
                 ? new HarmAwareScreen(
                     new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>()),
                     new ContentSafetyClient(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
+                    Classifier(sp, HarmClassifier.ToolTextPromptId),
                     new ScreenCache())
                 : new UnavailableScreen());
 
@@ -70,9 +71,7 @@ public static class InvestigationServiceCollectionExtensions
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
                 ? new ContentSafetyQuestionScreen(
                     new ContentSafetyClient(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
-                    new HarmClassifier(
-                        sp.GetRequiredKeyedService<IChatClient>(HarmClassifier.PromptId),
-                        sp.GetRequiredService<IPromptProvider>().GetPrompt(HarmClassifier.PromptId).Template.Render(new Dictionary<string, string>())),
+                    Classifier(sp, HarmClassifier.PromptId),
                     sp.GetRequiredService<IOptions<InvestigationLimits>>(),
                     sp.GetService<TimeProvider>() ?? TimeProvider.System)
                 : new UnavailableQuestionScreen());
@@ -98,4 +97,9 @@ public static class InvestigationServiceCollectionExtensions
         services.AddScoped<IInvestigationService>(sp => new InFlightGate(ActivatorUtilities.CreateInstance<InvestigationService>(sp)));
         return services;
     }
+
+    // Both classifiers call the screen deployment's client, keyed by the question prompt.
+    private static HarmClassifier Classifier(IServiceProvider sp, string promptId) =>
+        new(sp.GetRequiredKeyedService<IChatClient>(HarmClassifier.PromptId),
+            sp.GetRequiredService<IPromptProvider>().GetPrompt(promptId).Template.Render(new Dictionary<string, string>()));
 }

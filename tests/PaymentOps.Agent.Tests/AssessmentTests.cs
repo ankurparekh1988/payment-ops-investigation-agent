@@ -122,6 +122,15 @@ public sealed class AssessmentTests
         Assert.Equal(AssessmentPolicy.RefusalNotice, result.Summary.Text);
     }
 
+    // An unknown merchant is refused because nothing matched, not because the question is out of scope.
+    [Fact]
+    public void A_refusal_when_every_data_lookup_found_nothing_says_nothing_matched()
+    {
+        var result = AssessmentPolicy.Apply(Refusal(), NothingFoundTurn());
+
+        Assert.Equal((AssessmentOutcome.Refused, AssessmentPolicy.NothingFoundNotice), (result.Outcome, result.Summary.Text));
+    }
+
     // Every lookup came back empty, so the only support left is knowledge, which is never a fact about a merchant.
     private static TurnState NothingFoundTurn()
     {
