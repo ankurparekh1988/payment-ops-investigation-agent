@@ -26,62 +26,6 @@ public sealed class SettlementBatchesToolTests
         Assert.DoesNotContain(ok.Evidence, e => e.Id == "fact:overdue:PO-1042-NW-1109");
     }
 
-    // The result says what to look at next while the agent is choosing, rather than leaving it to a runbook read last.
-    [Fact]
-    public async Task A_missing_file_points_to_the_processors_error_events_for_that_batch()
-    {
-        using var tools = new ToolFixture();
-        var ok = Ok(await Run(tools, "M-1042", "2026-11-09", "2026-11-10"));
-
-        var check = Assert.Single(Json(ok)["next_checks"]!.AsArray())!;
-        Assert.Equal(
-            ("get_error_events", "fabrikam-pay", "2026-11-09", "2026-11-10"),
-            ((string?)check["tool"], (string?)check["processor_id"], (string?)check["start_date"], (string?)check["end_date"]));
-        Assert.Equal("missing_file", (string?)check["because"]);
-    }
-
-    [Fact]
-    public async Task Two_files_for_one_batch_point_to_the_processors_error_events()
-    {
-        using var tools = new ToolFixture();
-        var ok = Ok(await Run(tools, "M-3310", "2026-11-05", "2026-11-05"));
-
-        var check = Assert.Single(Json(ok)["next_checks"]!.AsArray())!;
-        Assert.Equal(
-            ("get_error_events", "fabrikam-pay", "2026-11-05", "payments_in_more_than_one_file"),
-            ((string?)check["tool"], (string?)check["processor_id"], (string?)check["start_date"], (string?)check["because"]));
-    }
-
-    // A split batch lists each payment once across its files, which needs no action.
-    [Fact]
-    public async Task A_split_batch_points_to_no_further_checks()
-    {
-        using var tools = new ToolFixture();
-        var ok = Ok(await Run(tools, "M-3310", "2026-11-02", "2026-11-02"));
-
-        Assert.Empty(Json(ok)["next_checks"]!.AsArray());
-    }
-
-    // A month of repeated file problems is one check per processor and reason, so the result stays within its allowance.
-    [Fact]
-    public async Task Repeated_file_problems_are_one_check_spanning_their_dates()
-    {
-        using var tools = new ToolFixture();
-        var ok = Ok(await Run(tools, "M-3310", "2026-10-12", "2026-11-11"));
-
-        var checks = Json(ok)["next_checks"]!.AsArray();
-        Assert.Equal(checks.Count, checks.Select(c => ((string?)c!["processor_id"], (string?)c["because"])).Distinct().Count());
-    }
-
-    [Fact]
-    public async Task Ordinary_settlement_points_to_no_further_checks()
-    {
-        using var tools = new ToolFixture();
-        var ok = Ok(await Run(tools, "M-6230", "2026-11-05", "2026-11-10"));
-
-        Assert.Empty(Json(ok)["next_checks"]!.AsArray());
-    }
-
     // S2: captured five minutes after Northwind's London cut-off, then a closure day and a weekend.
     [Fact]
     public async Task A_payment_captured_after_the_cut_off_shows_its_expected_batch_and_why()

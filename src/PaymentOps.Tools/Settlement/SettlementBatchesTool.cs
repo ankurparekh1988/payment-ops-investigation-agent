@@ -10,7 +10,7 @@ namespace PaymentOps.Tools.Settlement;
 
 public sealed record SettlementBatchesRequest(string? MerchantId, string? StartDate, string? EndDate);
 
-public sealed record SettlementActivity(string MerchantId, string EvidenceId, IReadOnlyList<ProcessorBatches> Processors, IReadOnlyList<NonSettlementDay> NonSettlementDays, IReadOnlyList<NextCheck> NextChecks);
+public sealed record SettlementActivity(string MerchantId, string EvidenceId, IReadOnlyList<ProcessorBatches> Processors, IReadOnlyList<NonSettlementDay> NonSettlementDays);
 
 public sealed record ProcessorBatches(string Id, string Name, string EvidenceId, ListOf<Batch> Batches);
 
@@ -72,7 +72,7 @@ public sealed class SettlementBatchesTool(
     public override string Description =>
         "A merchant's settlement from start_date to end_date, both included: per processor and batch date, the payments (with capture time " +
         "against the cut-off and the batch they belong in), the settlement files received, the payouts, whether a due file is missing, " +
-        "and how files for the same batch relate by their payments. Also lists non-settlement days in the range, and next_checks: lookups those facts call for.";
+        "and how files for the same batch relate by their payments. Also lists non-settlement days in the range.";
 
     public override string Source => DataSources.Settlement;
 
@@ -124,7 +124,7 @@ public sealed class SettlementBatchesTool(
             .Select(day => new NonSettlementDay(day.Date, day.ClosureReason is { } reason ? UntrustedText.Wrap(reason) : Weekend, call.NonSettlementDay(day.Date)))
             .ToList();
 
-        return call.Evidence.Ok(new SettlementActivity(merchant.Id, call.Evidence.Record(EvidenceIds.Merchant(merchant.Id), merchant.Name), views, nonSettlementDays, NextCheck.ErrorEvents(call.FileProblems)));
+        return call.Evidence.Ok(new SettlementActivity(merchant.Id, call.Evidence.Record(EvidenceIds.Merchant(merchant.Id), merchant.Name), views, nonSettlementDays));
     }
 
     // The port lists weekends with no reason; closure days carry theirs.
@@ -138,8 +138,6 @@ public sealed class SettlementBatchesTool(
     private sealed class Call(IInvestigationClock clock, Merchant merchant, Dictionary<DateOnly, SettlementDay> calendar, EvidenceCollector evidence)
     {
         public EvidenceCollector Evidence => evidence;
-
-        public List<(string ProcessorId, DateOnly Start, DateOnly End, NextCheckReason Because)> FileProblems { get; } = [];
 
         // The calendar was read well past the range; a day outside it is a bug, not a settlement day.
         public bool IsSettlementDay(DateOnly date) =>
@@ -166,34 +164,18 @@ public sealed class SettlementBatchesTool(
             {
                 var batchPayments = paymentsByDate[date].ToList();
                 var batchFiles = filesByDate[date].ToList();
-                var missing = MissingFile(processor, date, batchPayments, batchFiles);
-                var paymentSets = PaymentSets(processor, date, batchFiles);
-
-                // The file problem runbooks start from the processor's error events around the batch and its delivery.
-                // A split batch lists each payment once across its files, and the duplicate runbook says it needs no action.
-                if (missing is not null)
-                {
-                    FileProblems.Add((processor.Id, date, Min(date.AddDays(1), clock.Today), NextCheckReason.MissingFile));
-                }
-                else if (paymentSets is { Relation: not PaymentSetRelation.Disjoint })
-                {
-                    FileProblems.Add((processor.Id, date, Min(date.AddDays(1), clock.Today), NextCheckReason.PaymentsInMoreThanOneFile));
-                }
-
                 return new Batch(
                     date,
                     evidence.Cap(batchPayments.ConvertAll(p => Payment(p, processor, timings[p.Id]!)), $"{processor.Id} payments for {date:yyyy-MM-dd}"),
                     batchFiles.ConvertAll(File),
                     [.. payoutsByDate[date].Select(Payout)],
-                    missing,
-                    paymentSets);
+                    MissingFile(processor, date, batchPayments, batchFiles),
+                    PaymentSets(processor, date, batchFiles));
             }).ToList();
 
             // Truncation notes become gaps, which later turns carry to the model, so they name the processor by id.
             return new ProcessorBatches(processor.Id, UntrustedText.Label(processor.Name), evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name), evidence.Cap(batches, $"{processor.Id} batches"));
         }
-
-        private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 
         public string NonSettlementDay(DateOnly date)
         {

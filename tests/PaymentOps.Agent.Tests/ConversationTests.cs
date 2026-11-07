@@ -87,8 +87,8 @@ public sealed partial class ConversationTests
     {
         var budget = HistoryProjection.HistoryBudgetChars(new ConversationOptions(), new InvestigationLimits(), fixedPromptChars: 12_000);
 
-        // (32,000 − 4,000 − ⌈1,000 / 3⌉ − 10 × 2,400 − 2,000) × 3
-        Assert.Equal(4_998, budget);
+        // (32,000 − 4,000 − ⌈1,000 / 3⌉ − 10 × 2,300 − 2,000) × 3
+        Assert.Equal(7_998, budget);
     }
 
     // Startup and run time budget from this one measurement, so it must be what a request actually carries.

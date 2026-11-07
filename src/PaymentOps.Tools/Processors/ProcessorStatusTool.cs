@@ -8,7 +8,7 @@ namespace PaymentOps.Tools.Processors;
 
 public sealed record ProcessorStatusRequest(string? ProcessorId, string? StartDate, string? EndDate);
 
-public sealed record ProcessorStatus(string Id, string Name, string EvidenceId, ProcessorSettings Configuration, ListOf<IncidentView> Incidents, IReadOnlyList<NextCheck> NextChecks);
+public sealed record ProcessorStatus(string Id, string Name, string EvidenceId, ProcessorSettings Configuration, ListOf<IncidentView> Incidents);
 
 /// <param name="CutOff">Local time in <paramref name="TimeZone"/>, as is <paramref name="ExpectedDelivery"/>.</param>
 public sealed record ProcessorSettings(TimeOnly CutOff, string TimeZone, TimeOnly ExpectedDelivery, TimeSpan LateAfter, int HoldingSettlementDays);
@@ -24,7 +24,7 @@ public sealed class ProcessorStatusTool(IProcessorData processors, IInvestigatio
 
     public override string Description =>
         "A processor's configuration (cut-off and time zone, expected file delivery, holding days) and the incidents it reported " +
-        "that overlap start_date to end_date, both included, with the component each affected, and next_checks: lookups those incidents call for.";
+        "that overlap start_date to end_date, both included, with the component each affected.";
 
     public override string Source => DataSources.Processors;
 
@@ -43,20 +43,12 @@ public sealed class ProcessorStatusTool(IProcessorData processors, IInvestigatio
             i.Id, ToolJson.Word(i.Component), i.StartedAt, i.ResolvedAt, i.ProcessorReference is { } reference ? UntrustedText.Label(reference) : null, UntrustedText.Wrap(i.Summary),
             evidence.Incident(i))).ToList();
 
-        // An incident's effect shows in our own error events with that processor while it lasted; an open one, to the end of the range.
-        var nextChecks = NextCheck.ErrorEvents(incidents.Select(i => (
-            processor.Id,
-            DateOnly.FromDateTime(i.StartedAt.UtcDateTime),
-            i.ResolvedAt is { } resolved ? DateOnly.FromDateTime(resolved.UtcDateTime) : range.End,
-            NextCheckReason.Incident)));
-
         var c = processor.Configuration;
         return evidence.Ok(new ProcessorStatus(
             processor.Id,
             UntrustedText.Label(processor.Name),
             evidence.Record(EvidenceIds.Processor(processor.Id), processor.Name),
             new ProcessorSettings(c.CutOff, c.TimeZoneId, c.ExpectedDelivery, c.LateAfter, c.HoldingSettlementDays),
-            evidence.Cap(views, "Incidents"),
-            nextChecks));
+            evidence.Cap(views, "Incidents")));
     }
 }

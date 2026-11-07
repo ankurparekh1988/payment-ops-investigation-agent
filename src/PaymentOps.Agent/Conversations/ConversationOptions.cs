@@ -12,9 +12,9 @@ public sealed class ConversationOptions
 
     /// <summary>
     /// Reserved for each read-tool result the current turn may receive. The largest result on the shipped data,
-    /// 31 days of settlement batches at the list cap with their next checks, is about 2,360 tokens by the same estimate.
+    /// 31 days of settlement batches at the list cap, is about 2,260 tokens by the same estimate.
     /// </summary>
-    public int ToolResultAllowanceTokens { get; set; } = 2_400;
+    public int ToolResultAllowanceTokens { get; set; } = 2_300;
 
     public int MaxQuestions { get; set; } = 20;
 }
