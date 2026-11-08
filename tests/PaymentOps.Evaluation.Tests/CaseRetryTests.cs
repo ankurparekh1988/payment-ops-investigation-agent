@@ -22,8 +22,8 @@ public sealed class CaseRetryTests
     private static Func<CaseAttempt> Scored(string id, string outcome = "assessed", int tickets = 0) =>
         () => new CaseAttempt(new CaseResult(id, outcome), tickets);
 
-    private static Task<IReadOnlyList<RunOutcome>> Run(ICaseRunner runner, IReadOnlyList<InvestigationCase> cases, int runs = 1, TimeSpan? delay = null) =>
-        RunPlan.RunAsync(runner, cases, runs, delay ?? TimeSpan.Zero, new EvaluationDiagnostics(), CancellationToken.None);
+    private static Task<IReadOnlyList<RunOutcome>> Run(ICaseRunner runner, IReadOnlyList<InvestigationCase> cases, int runs = 1, TimeSpan? delay = null, EvaluationDiagnostics? diagnostics = null) =>
+        RunPlan.RunAsync(runner, cases, runs, delay ?? TimeSpan.Zero, diagnostics ?? new EvaluationDiagnostics(), CancellationToken.None);
 
     [Fact]
     public async Task A_spoiled_attempt_retries_only_that_case_and_earlier_cases_arent_rerun()
@@ -65,7 +65,7 @@ public sealed class CaseRetryTests
     [InlineData("refused")]
     [InlineData("not-assessed:assessment-unverified")]
     [InlineData("not-assessed:limit-reached")]
-    [InlineData("not-assessed:unscreened")]
+    [InlineData("not-assessed:blocked")]
     public async Task An_outcome_of_the_system_is_scored_and_never_retried(string outcome)
     {
         var runner = new ByCaseRunner(new Dictionary<string, Func<CaseAttempt>[]> { ["b"] = [Scored("b", outcome), Scored("b")] });
@@ -237,15 +237,78 @@ public sealed class CaseRetryTests
         Assert.Equal(3, questions.Screened.Count);
     }
 
-    // ADR 0017's rule is unchanged: still unscreened on the second ask counts against the system.
     [Fact]
-    public async Task A_question_still_unscreened_is_scored_not_retried()
+    public async Task A_question_screened_on_its_second_ask_is_scored_once_without_a_case_retry()
+    {
+        var questions = new ScriptedQuestionScreen(QuestionVerdict.Unavailable, QuestionVerdict.Clean);
+        var diagnostics = new EvaluationDiagnostics();
+
+        var result = Assert.Single(Assert.Single(await Run(AgentRunner(() => Model(Trajectory(Submission())), questions: questions), [Case()], diagnostics: diagnostics)).Results);
+
+        Assert.Equal("assessed", result.Outcome);
+        Assert.True(result.Reasked);
+        Assert.Equal(2, questions.Screened.Count);
+        Assert.Empty(diagnostics.Snapshot().CaseRetries);
+    }
+
+    // Still unscreened on the second ask spoils the attempt; the case retry starts over from a first ask of its own.
+    [Fact]
+    public async Task A_question_unscreened_twice_retries_the_case_and_only_the_retry_is_scored()
+    {
+        var questions = new ScriptedQuestionScreen(QuestionVerdict.Unavailable, QuestionVerdict.Unavailable, QuestionVerdict.Clean);
+        var diagnostics = new EvaluationDiagnostics();
+
+        var result = Assert.Single(Assert.Single(await Run(AgentRunner(() => Model(Trajectory(Submission())), questions: questions), [Case()], diagnostics: diagnostics)).Results);
+
+        Assert.Equal("assessed", result.Outcome);
+        Assert.Null(result.InfrastructureFailure);
+        Assert.False(result.Reasked);
+        Assert.Equal(5, result.ModelRequests);
+        Assert.Equal(3, questions.Screened.Count);
+        var retry = Assert.Single(diagnostics.Snapshot().CaseRetries);
+        Assert.Equal(InfrastructureFailures.ScreeningUnavailable, retry.Cause);
+    }
+
+    // A screen down for four asks of one case is an outage: the evaluation stops rather than pass or fail on it.
+    [Fact]
+    public async Task A_retried_case_unscreened_twice_again_could_not_evaluate()
     {
         var questions = new ScriptedQuestionScreen(QuestionVerdict.Unavailable);
 
-        var result = Assert.Single(Assert.Single(await Run(AgentRunner(() => Model(Trajectory(Submission())), questions: questions), [Case()])).Results);
+        var ex = await Assert.ThrowsAsync<CouldNotEvaluateException>(() => Run(AgentRunner(() => Model(Trajectory(Submission())), questions: questions), [Case()]));
 
-        Assert.Equal("not-assessed:unscreened", result.Outcome);
-        Assert.Equal(2, questions.Screened.Count);
+        Assert.Contains(InfrastructureFailures.ScreeningUnavailable, ex.Message, StringComparison.Ordinal);
+        Assert.Equal(4, questions.Screened.Count);
+    }
+
+    [Fact]
+    public async Task Discarded_unscreened_attempts_leave_every_metric_unchanged()
+    {
+        var cases = new LoadedCases([.. Cases], new Dictionary<ExpectedSection, string>(), new Dictionary<string, string>(StringComparer.Ordinal) { ["restricted-section"] = "restricted" });
+        var unscreenedTwice = new ScriptedQuestionScreen(QuestionVerdict.Unavailable, QuestionVerdict.Unavailable, QuestionVerdict.Clean);
+
+        var withRetry = Metrics.Score(cases, Assert.Single(await Run(AgentRunner(() => Model(Trajectory(Submission())), questions: unscreenedTwice), Cases)));
+        var without = Metrics.Score(cases, Assert.Single(await Run(AgentRunner(() => Model(Trajectory(Submission()))), Cases)));
+
+        Assert.Equal(without.Values, withRetry.Values);
+        Assert.Empty(withRetry.Hard.AuthorizationLeaks);
+        Assert.Empty(withRetry.Hard.UnauthorizedStateChanges);
+    }
+
+    [Theory]
+    [InlineData(QuestionVerdict.Harmful)]
+    [InlineData(QuestionVerdict.SelfHarm)]
+    [InlineData(QuestionVerdict.Attack)]
+    public async Task A_question_the_screen_blocks_is_scored_and_never_retried(QuestionVerdict verdict)
+    {
+        var questions = new ScriptedQuestionScreen(verdict);
+        var diagnostics = new EvaluationDiagnostics();
+
+        var result = Assert.Single(Assert.Single(await Run(AgentRunner(() => Model(Trajectory(Submission())), questions: questions), [Case()], diagnostics: diagnostics)).Results);
+
+        Assert.StartsWith("not-assessed:blocked", result.Outcome, StringComparison.Ordinal);
+        Assert.Null(result.InfrastructureFailure);
+        Assert.Single(questions.Screened);
+        Assert.Empty(diagnostics.Snapshot().CaseRetries);
     }
 }

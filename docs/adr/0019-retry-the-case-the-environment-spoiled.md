@@ -13,8 +13,9 @@ Those endings also said little. [#54](https://github.com/ankurparekh1988/payment
 
 **An attempt the environment spoiled is discarded and that case alone runs once more, in fresh services, after a minute. Only the retry's result and tickets count. A second spoiled attempt for the case, or a fourth case retry in one run, ends the evaluation as "could not evaluate".**
 
-- **What triggers it:** only the failures the harness already called the environment's: the model or Search unavailable or busy, a sign-in failure, an endpoint that can't be reached, or tool text that couldn't be screened.
-- **What never triggers it:** anything the system did. An incomplete answer, a refusal, a limit reached, an unverified assessment or a wrong tool is scored, and so is a question still unscreened on its second ask, whatever kept the screen from answering, a sign-in failure included ([ADR 0017](0017-ask-again-when-the-question-screen-cant-check.md)). The sign-in count shows when that's the cause.
+- **What triggers it:** the failures the harness already called the environment's: the model or Search unavailable or busy, a sign-in failure, an endpoint that can't be reached, or tool text that couldn't be screened. And a question still unscreened on its second ask ([ADR 0017](0017-ask-again-when-the-question-screen-cant-check.md)), recorded as `screening-unavailable`.
+- **What never triggers it:** anything the system did. An incomplete answer, a refusal, a limit reached, an unverified assessment, a wrong tool or a question the screen blocked is scored.
+- **Why a second unscreened ask is the environment's:** the agent saw neither ask, so the attempt measured whether the screen could answer, not the system. ADR 0017 scored it for two reasons: a screen that stays down should still cost the system, and the alternative was discarding a whole run. The second no longer applies, and the first still holds without scoring it, because a screen that stays down can't pass: a case unscreened twice on its retry too ends the evaluation as "could not evaluate", and the diagnostics show which check failed.
 - **The retry covers the whole case:** if the case's second ask is what the environment spoiled, the retry starts over from the first ask.
 - **The cap:** three retries in a run of 37 is an isolated failure now and then. More than that is an outage, and results collected through one wouldn't measure the system. The cap was chosen before this rule had run, and it only ever turns a run into "could not evaluate", never into a pass.
 - **Retrieval is unchanged:** one deterministic pass, repeated whole if spoiled.
@@ -33,6 +34,7 @@ Those endings also said little. [#54](https://github.com/ankurparekh1988/payment
 ## Consequences
 
 - One failed call costs one case and a minute, instead of a whole run or the evaluation.
+- A question screen that's down long enough to fail both asks of a case now costs that case a retry rather than its score. A change that breaks the screen itself ends as "could not evaluate" rather than as a gate failure; either way it can't merge, and the diagnostics show the screen failing.
 - A screen failing often stays visible. Retries are counted in every report and capped per run, so a retry can't hide an outage, and the same counts show whether classifier traffic needs limiting, which is a change to AI behaviour and would be decided on that evidence in a pull request of its own.
 - A discarded attempt is never looked at, so whatever it did can't fail a gate. That's the same as before, when a discarded run wasn't looked at either: an attempt the environment spoiled isn't evidence either way.
 - At worst an evaluation waits nine more minutes: one minute for each of three retries in each of three runs.

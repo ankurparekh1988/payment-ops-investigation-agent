@@ -51,11 +51,10 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Set} | {string.Join(" | ", cells)} |");
         }
 
-        // A second ask counts instead of the first, so how often the screen couldn't check a question is shown here.
+        // A second ask counts instead of the first, so how often the screen couldn't check a question is shown here;
+        // one still unscreened was retried as a case and is listed with the diagnostics.
         var caseRuns = report.Runs.SelectMany(r => r.Cases).ToList();
-        var reasked = caseRuns.Where(r => r.Reasked).ToList();
-        var stillUnscreened = reasked.Count(r => r.Outcome == Outcomes.NotAssessed(NotAssessedReason.Unscreened));
-        md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {reasked.Count} of {caseRuns.Count} case runs; {stillUnscreened} still unscreened.");
+        md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {caseRuns.Count(r => r.Reasked)} of {caseRuns.Count} case runs.");
 
         if (report.Diagnostics is { } diagnostics)
         {

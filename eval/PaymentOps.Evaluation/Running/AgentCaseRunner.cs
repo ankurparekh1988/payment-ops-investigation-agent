@@ -18,8 +18,8 @@ namespace PaymentOps.Evaluation.Running;
 /// case gets its own services, so nothing (conversation, proposals, tickets) carries from one case to the next.
 /// A system under evaluation differs only in how it investigates; proposals are settled the same way for both.
 /// A question the screen couldn't check never reached the system, so it's asked once more, as the app tells the person
-/// to; a second unscreened ask counts against the system. A retry for an environment failure is the run plan's, and
-/// starts the whole case over.
+/// to. Still unscreened, the attempt measured the screen's availability rather than the system, so it's the
+/// environment's; the run plan's case retry starts the whole case over.
 /// </summary>
 internal abstract class CaseRunner(
     AiRelease release,
@@ -42,7 +42,15 @@ internal abstract class CaseRunner(
         {
             await Task.Delay(reaskDelay, cancellationToken);
             attempt = await AskAsync(c, cancellationToken);
-            attempt = attempt with { Result = attempt.Result with { Reasked = true } };
+            attempt = attempt with
+            {
+                Result = attempt.Result with
+                {
+                    Reasked = true,
+                    InfrastructureFailure = attempt.Result.InfrastructureFailure
+                        ?? (attempt.Result.Outcome == Unscreened ? InfrastructureFailures.ScreeningUnavailable : null),
+                },
+            };
         }
 
         return attempt;

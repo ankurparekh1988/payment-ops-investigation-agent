@@ -3,6 +3,7 @@ using System.Text.Json;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Safety;
 using PaymentOps.Agent.Tests;
+using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Running;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools;
@@ -46,17 +47,35 @@ public sealed class InvestigationRunTests
         Assert.Equal(5, result.ModelRequests);
     }
 
+    // The agent saw neither ask, so the attempt measured the screen's availability, not the system: the run plan retries it.
     [Fact]
-    public async Task A_question_still_unscreened_when_asked_again_counts_against_the_agent()
+    public async Task A_question_still_unscreened_when_asked_again_is_an_attempt_the_environment_spoiled()
     {
         var questions = new ScriptedQuestionScreen(QuestionVerdict.Unavailable);
 
         var result = Assert.Single((await AgentRunner(() => Model(Trajectory(Submission())), questions: questions).RunAsync([Case()], CancellationToken.None)).Results);
 
-        Assert.Equal("not-assessed:unscreened", result.Outcome);
+        Assert.Equal(InfrastructureFailures.ScreeningUnavailable, result.InfrastructureFailure);
         Assert.True(result.Reasked);
-        Assert.Null(result.InfrastructureFailure);
+        Assert.Equal(0, result.ModelRequests);
         Assert.Equal(2, questions.Screened.Count);
+    }
+
+    // A screen that answered decided something about the question, so its verdict is the system's and is scored.
+    [Theory]
+    [InlineData(QuestionVerdict.Harmful, NotAssessedReason.Blocked)]
+    [InlineData(QuestionVerdict.SelfHarm, NotAssessedReason.BlockedSelfHarm)]
+    [InlineData(QuestionVerdict.Attack, NotAssessedReason.Blocked)]
+    public async Task A_question_the_screen_blocks_is_scored_and_never_asked_again(QuestionVerdict verdict, NotAssessedReason reason)
+    {
+        var questions = new ScriptedQuestionScreen(verdict);
+
+        var result = Assert.Single((await AgentRunner(() => Model(Trajectory(Submission())), questions: questions).RunAsync([Case()], CancellationToken.None)).Results);
+
+        Assert.Equal(Outcomes.NotAssessed(reason), result.Outcome);
+        Assert.Null(result.InfrastructureFailure);
+        Assert.False(result.Reasked);
+        Assert.Single(questions.Screened);
     }
 
     [Fact]
