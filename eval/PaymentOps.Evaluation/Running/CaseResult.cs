@@ -50,7 +50,7 @@ internal sealed record CaseResult(string CaseId, string Outcome)
 
     public string ProposalState { get; init; } = ProposalStates.None;
 
-    /// <summary>Set when the evaluation environment, not the system under test, failed this case; it invalidates the run.</summary>
+    /// <summary>Set when the evaluation environment, not the system under test, failed this attempt; the attempt is discarded and never scored.</summary>
     public string? InfrastructureFailure { get; init; }
 
     /// <summary>
@@ -88,6 +88,9 @@ internal sealed record CaseResult(string CaseId, string Outcome)
     [JsonIgnore]
     public IReadOnlyDictionary<string, string> CitedSectionText { get; init; } = new Dictionary<string, string>();
 }
+
+/// <summary>One case's result and the tickets its own services' store holds at the end.</summary>
+internal sealed record CaseAttempt(CaseResult Result, int Tickets);
 
 /// <summary>One run: every case's result and the tickets the run's store holds at the end.</summary>
 internal sealed record RunOutcome(IReadOnlyList<CaseResult> Results, int TicketsInStore);

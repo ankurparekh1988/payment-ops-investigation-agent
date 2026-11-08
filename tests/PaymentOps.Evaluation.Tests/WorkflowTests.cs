@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 using PaymentOps.Tests.Shared;
@@ -195,6 +196,9 @@ public sealed partial class WorkflowTests
         { "7 publish unavailable", Env(publish: "unavailable", investigation: "", retrieval: "", login: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 evaluate sign-in", Env(login: "failure", investigation: "", retrieval: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 exit 3", Env(retrieval: "3"), "unavailable", "dev environment unavailable", 1 },
+        { "7 exit 3 stopped the evaluations", Env(investigation: "3", retrieval: ""), "unavailable", "dev environment unavailable", 1 },
+        { "6 exit 2 stopped the evaluations", Env(investigation: "2", retrieval: ""), "invalid-input", "invalid evaluation input", 1 },
+        { "8 a crash stopped the evaluations", Env(investigation: "134", retrieval: ""), "error", "the evaluation workflow didn't complete", 1 },
         { "8 exit missing", Env(retrieval: ""), "error", "the evaluation workflow didn't complete", 1 },
         { "9 gate failed", Env(investigation: "1"), "failed", "gate failed", 1 },
         { "10 unexpected exit", Env(investigation: "134"), "error", "the evaluation workflow didn't complete", 1 },
@@ -219,6 +223,36 @@ public sealed partial class WorkflowTests
         Assert.True(status == outputs.GetValueOrDefault("status"), $"{row}: status {outputs.GetValueOrDefault("status")}");
         Assert.Equal(message, outputs.GetValueOrDefault("message"));
         Assert.Equal(exitCode, code);
+    }
+
+    // A gate failure leaves the other evaluation worth running; input that won't load or an environment that's down won't improve.
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(3, false)]
+    [InlineData(134, false)]
+    public void Retrieval_runs_only_after_an_investigation_result(int investigationExit, bool retrievalRuns)
+    {
+        var (outputs, commands, exitCode) = RunEvaluations(investigationExit);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(investigationExit.ToString(CultureInfo.InvariantCulture), outputs["investigation-exit"]);
+        Assert.Equal(retrievalRuns ? ["investigation-eval", "retrieval-eval"] : ["investigation-eval"], commands);
+        Assert.Equal(retrievalRuns ? "0" : null, outputs.GetValueOrDefault("retrieval-exit"));
+    }
+
+    [Theory]
+    [InlineData(2, "invalid-input")]
+    [InlineData(3, "unavailable")]
+    public void The_verdict_names_why_the_evaluations_stopped(int investigationExit, string status)
+    {
+        var (outputs, _, _) = RunEvaluations(investigationExit);
+
+        var (verdict, code) = RunVerdict(Env(investigation: outputs["investigation-exit"], retrieval: outputs.GetValueOrDefault("retrieval-exit", string.Empty), reportsValid: "false"));
+
+        Assert.Equal(status, verdict["status"]);
+        Assert.Equal(1, code);
     }
 
     [Fact]
@@ -271,14 +305,52 @@ public sealed partial class WorkflowTests
             ["RECORD_EXIT"] = recordExit,
         };
 
+    // The workflow's own script, with a stand-in dotnet that records which evaluation was started and exits as told.
+    private static (Dictionary<string, string> Outputs, List<string> Commands, int ExitCode) RunEvaluations(int investigationExit)
+    {
+        var directory = Directory.CreateTempSubdirectory("evaluations-");
+        var log = Path.Combine(directory.FullName, "commands");
+        var dotnet = Path.Combine(directory.FullName, "dotnet");
+        File.WriteAllText(dotnet, """
+            #!/usr/bin/env bash
+            for argument in "$@"; do
+              case "$argument" in
+                investigation-eval) echo investigation-eval >> "$COMMAND_LOG"; exit "$INVESTIGATION_CODE" ;;
+                retrieval-eval) echo retrieval-eval >> "$COMMAND_LOG"; exit 0 ;;
+              esac
+            done
+            exit 99
+            """.ReplaceLineEndings("\n"));
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(dotnet, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var (outputs, exitCode) = RunStep(Step("evaluate", "evaluate"), directory, new(StringComparer.Ordinal)
+        {
+            ["PATH"] = directory.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
+            ["COMMAND_LOG"] = log,
+            ["INVESTIGATION_CODE"] = investigationExit.ToString(CultureInfo.InvariantCulture),
+            ["EVENT_NAME"] = "pull_request",
+            ["INDEX"] = "evaluation",
+            ["RUNNER_TEMP"] = directory.FullName,
+        });
+
+        return (outputs, [.. File.ReadAllLines(log)], exitCode);
+    }
+
     private static (Dictionary<string, string> Outputs, int ExitCode) RunVerdict(Dictionary<string, string> env)
     {
         var step = Step("verdict", "verdict");
         var declared = ((YamlMappingNode)step["env"]).Children.Keys.Select(k => ((YamlScalarNode)k).Value!).Order(StringComparer.Ordinal);
         Assert.Equal(env.Keys.Order(StringComparer.Ordinal), declared);
 
-        var directory = Directory.CreateTempSubdirectory("verdict-");
-        var script = Path.Combine(directory.FullName, "verdict.sh");
+        return RunStep(step, Directory.CreateTempSubdirectory("verdict-"), env);
+    }
+
+    private static (Dictionary<string, string> Outputs, int ExitCode) RunStep(YamlMappingNode step, DirectoryInfo directory, Dictionary<string, string> env)
+    {
+        var script = Path.Combine(directory.FullName, "step.sh");
         File.WriteAllText(script, Scalar(step, "run")!.ReplaceLineEndings("\n"));
         var output = Path.Combine(directory.FullName, "output");
         var start = new ProcessStartInfo(Bash(), ["-e", script]) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

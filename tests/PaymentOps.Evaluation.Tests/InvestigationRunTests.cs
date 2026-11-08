@@ -3,6 +3,7 @@ using System.Text.Json;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Safety;
 using PaymentOps.Agent.Tests;
+using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Running;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools;
@@ -13,9 +14,6 @@ namespace PaymentOps.Evaluation.Tests;
 
 public sealed class InvestigationRunTests
 {
-    private static readonly RunOutcome Valid = new([new CaseResult("c1", "assessed")], 0);
-    private static readonly RunOutcome Invalid = new([new CaseResult("c1", "not-assessed:model-unavailable") { InfrastructureFailure = "model-unavailable" }], 0);
-
     [Fact]
     public async Task A_case_records_calls_citations_retrieved_sections_and_outcome()
     {
@@ -49,17 +47,35 @@ public sealed class InvestigationRunTests
         Assert.Equal(5, result.ModelRequests);
     }
 
+    // The agent saw neither ask, so the attempt measured the screen's availability, not the system: the run plan retries it.
     [Fact]
-    public async Task A_question_still_unscreened_when_asked_again_counts_against_the_agent()
+    public async Task A_question_still_unscreened_when_asked_again_is_an_attempt_the_environment_spoiled()
     {
         var questions = new ScriptedQuestionScreen(QuestionVerdict.Unavailable);
 
         var result = Assert.Single((await AgentRunner(() => Model(Trajectory(Submission())), questions: questions).RunAsync([Case()], CancellationToken.None)).Results);
 
-        Assert.Equal("not-assessed:unscreened", result.Outcome);
+        Assert.Equal(InfrastructureFailures.ScreeningUnavailable, result.InfrastructureFailure);
         Assert.True(result.Reasked);
-        Assert.Null(result.InfrastructureFailure);
+        Assert.Equal(0, result.ModelRequests);
         Assert.Equal(2, questions.Screened.Count);
+    }
+
+    // A screen that answered decided something about the question, so its verdict is the system's and is scored.
+    [Theory]
+    [InlineData(QuestionVerdict.Harmful, NotAssessedReason.Blocked)]
+    [InlineData(QuestionVerdict.SelfHarm, NotAssessedReason.BlockedSelfHarm)]
+    [InlineData(QuestionVerdict.Attack, NotAssessedReason.Blocked)]
+    public async Task A_question_the_screen_blocks_is_scored_and_never_asked_again(QuestionVerdict verdict, NotAssessedReason reason)
+    {
+        var questions = new ScriptedQuestionScreen(verdict);
+
+        var result = Assert.Single((await AgentRunner(() => Model(Trajectory(Submission())), questions: questions).RunAsync([Case()], CancellationToken.None)).Results);
+
+        Assert.Equal(Outcomes.NotAssessed(reason), result.Outcome);
+        Assert.Null(result.InfrastructureFailure);
+        Assert.False(result.Reasked);
+        Assert.Single(questions.Screened);
     }
 
     [Fact]
@@ -111,7 +127,7 @@ public sealed class InvestigationRunTests
     }
 
     [Fact]
-    public async Task A_search_failure_the_app_absorbed_still_invalidates_the_run()
+    public async Task A_search_failure_the_app_absorbed_is_still_infrastructure()
     {
         var knowledge = new FixedKnowledge { Failure = new KnowledgeUnavailableException() };
         var submission = Submission(
@@ -128,17 +144,15 @@ public sealed class InvestigationRunTests
 
         Assert.Equal("assessed", result.Outcome);
         Assert.Equal(InfrastructureFailures.SearchUnavailable, result.InfrastructureFailure);
-        Assert.NotNull(RunPlan.Invalid(new RunOutcome([result], 0)));
     }
 
     [Fact]
-    public async Task A_model_outage_is_infrastructure_and_ends_the_run_early()
+    public async Task A_model_outage_is_infrastructure()
     {
         var down = () => new ScriptedChatClient(_ => throw new HttpRequestException("503"));
 
-        var run = await AgentRunner(down).RunAsync([Case("a"), Case("b")], CancellationToken.None);
+        var result = Assert.Single((await AgentRunner(down).RunAsync([Case()], CancellationToken.None)).Results);
 
-        var result = Assert.Single(run.Results);
         Assert.Equal("not-assessed:model-unavailable", result.Outcome);
         Assert.Equal(InfrastructureFailures.ModelUnavailable, result.InfrastructureFailure);
     }
@@ -154,35 +168,6 @@ public sealed class InvestigationRunTests
         Assert.Equal("incomplete", Assert.Single(incomplete.Results).Outcome);
         Assert.Equal("not-assessed:assessment-unverified", Assert.Single(unverified.Results).Outcome);
         Assert.All(incomplete.Results.Concat(unverified.Results), r => Assert.Null(r.InfrastructureFailure));
-    }
-
-    [Fact]
-    public async Task A_run_invalid_once_is_repeated()
-    {
-        var runner = new ScriptedRunner(Invalid, Valid);
-
-        var runs = await RunPlan.RunAsync(runner, [Case()], 1, TimeSpan.Zero, CancellationToken.None);
-
-        Assert.Equal(Valid, Assert.Single(runs));
-        Assert.Equal(2, runner.Calls);
-    }
-
-    [Fact]
-    public async Task A_run_invalid_twice_could_not_evaluate()
-    {
-        var runner = new ScriptedRunner(Valid, Invalid, Invalid);
-
-        var ex = await Assert.ThrowsAsync<CouldNotEvaluateException>(() => RunPlan.RunAsync(runner, [Case()], 3, TimeSpan.Zero, CancellationToken.None));
-
-        Assert.Contains("model-unavailable", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Three_runs_produce_three_outcomes()
-    {
-        var runs = await RunPlan.RunAsync(new ScriptedRunner(Valid, Valid, Valid), [Case()], 3, TimeSpan.Zero, CancellationToken.None);
-
-        Assert.Equal(3, runs.Count);
     }
 
     [Fact]

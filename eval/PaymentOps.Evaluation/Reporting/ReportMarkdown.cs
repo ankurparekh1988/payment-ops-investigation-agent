@@ -4,6 +4,7 @@ using System.Text;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Judging;
+using PaymentOps.Evaluation.Running;
 using PaymentOps.Evaluation.Scoring;
 
 namespace PaymentOps.Evaluation.Reporting;
@@ -50,11 +51,16 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Set} | {string.Join(" | ", cells)} |");
         }
 
-        // A second ask counts instead of the first, so how often the screen couldn't check a question is shown here.
+        // A second ask counts instead of the first, so how often the screen couldn't check a question is shown here;
+        // one still unscreened was retried as a case and is listed with the diagnostics.
         var caseRuns = report.Runs.SelectMany(r => r.Cases).ToList();
-        var reasked = caseRuns.Where(r => r.Reasked).ToList();
-        var stillUnscreened = reasked.Count(r => r.Outcome == Outcomes.NotAssessed(NotAssessedReason.Unscreened));
-        md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {reasked.Count} of {caseRuns.Count} case runs; {stillUnscreened} still unscreened.");
+        md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {caseRuns.Count(r => r.Reasked)} of {caseRuns.Count} case runs.");
+
+        if (report.Diagnostics is { } diagnostics)
+        {
+            md.AppendLine();
+            Screening(md, diagnostics);
+        }
 
         md.AppendLine().AppendLine("### Judge (recorded, not gating)").AppendLine();
         var scores = report.Runs.SelectMany(r => r.Judge.Values).ToList();
@@ -81,6 +87,52 @@ internal static class ReportMarkdown
         md.AppendLine(CultureInfo.InvariantCulture, $"Chat tokens: {cost.ChatTokens.Input} in ({cost.ChatTokens.CachedInput} cached), {cost.ChatTokens.Output} out.");
         return md.ToString();
     }
+
+    /// <summary>The evaluation stopped with no report, so this is the only record of what failed.</summary>
+    public static string DidNotFinish(string reason, ScreeningDiagnostics diagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostics);
+
+        var md = new StringBuilder();
+        md.AppendLine("## Investigation evaluation: did not finish").AppendLine();
+        md.AppendLine(reason).AppendLine();
+        Screening(md, diagnostics);
+        return md.ToString();
+    }
+
+    private static void Screening(StringBuilder md, ScreeningDiagnostics diagnostics)
+    {
+        md.AppendLine("### Screening diagnostics").AppendLine();
+        md.AppendLine("Each attempt is a request. A classifier's retries belong to the model SDK and show only as more requests. Timed out includes requests cut off by a screen's budget; other failures on a classifier include a call the content filter refused, which is a block.").AppendLine();
+        md.AppendLine("| Check | Requests | Retries | Throttled (429) | Server errors (5xx) | Timed out | Other failures |").AppendLine("|---|---|---|---|---|---|---|");
+        foreach (var (name, c, retries) in new[]
+        {
+            ("Prompt Shields", diagnostics.PromptShields, diagnostics.PromptShields.Retries.ToString(CultureInfo.InvariantCulture)),
+            ("Content Safety harm analysis", diagnostics.HarmAnalysis, diagnostics.HarmAnalysis.Retries.ToString(CultureInfo.InvariantCulture)),
+            ("Question classifier", diagnostics.QuestionClassifier, "-"),
+            ("Tool-text classifier", diagnostics.ToolTextClassifier, "-"),
+        })
+        {
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {c.Requests} | {retries} | {c.Throttled} | {c.ServerErrors} | {c.TimedOut} | {c.OtherFailures} |");
+        }
+
+        md.AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"Question screens: {Screens(diagnostics.QuestionScreen)}");
+        md.AppendLine(CultureInfo.InvariantCulture, $"Tool-text screens: {Screens(diagnostics.ToolTextScreen)}");
+        md.AppendLine(CultureInfo.InvariantCulture, $"Sign-in failures: {diagnostics.SignInFailures}.").AppendLine();
+
+        md.AppendLine(CultureInfo.InvariantCulture, $"Case retries: {diagnostics.CaseRetries.Count}, at most {RunPlan.MaxCaseRetriesPerRun} per run.");
+        foreach (var retry in diagnostics.CaseRetries)
+        {
+            var seen = retry.Seen.Count > 0 ? string.Join("; ", retry.Seen) : "no screening failure seen";
+            md.AppendLine(CultureInfo.InvariantCulture, $"- Run {retry.Run}, case {retry.CaseId}: {retry.Cause} ({seen})");
+        }
+
+        md.AppendLine();
+    }
+
+    private static string Screens(ScreenCounts s) =>
+        string.Create(CultureInfo.InvariantCulture, $"{s.Screens}; {s.Unavailable} couldn't answer ({s.OutOfTime} out of time, {s.Unexplained} with no failed request).");
 
     public static string Retrieval(EvaluationReport report)
     {

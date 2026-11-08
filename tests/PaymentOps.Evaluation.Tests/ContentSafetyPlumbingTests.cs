@@ -48,6 +48,5 @@ public sealed class ContentSafetyPlumbingTests
         var result = Assert.Single((await AgentRunner(model, new FixedKnowledge(withheld)).RunAsync([Case()], CancellationToken.None)).Results);
 
         Assert.Equal(InfrastructureFailures.ScreeningUnavailable, result.InfrastructureFailure);
-        Assert.NotNull(RunPlan.Invalid(new RunOutcome([result], 0)));
     }
 }
