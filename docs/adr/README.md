@@ -20,5 +20,6 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0014](0014-safety-evaluation-from-a-pre-registered-rule.md) | Safety evaluation with its own hard gates and a threshold rule frozen before its baseline | Accepted |
 | [0015](0015-screen-questions-and-tool-text-for-harm.md) | Screen questions before the investigation agent sees them, and tool text for harm | Accepted |
 | [0016](0016-one-recorded-rerun-when-the-agent-is-unchanged.md) | One recorded rerun of a failed evaluation when the agent under test is unchanged | Accepted; amended by 0018 |
-| [0017](0017-ask-again-when-the-question-screen-cant-check.md) | Ask a question again when the question screen couldn't check it | Accepted |
+| [0017](0017-ask-again-when-the-question-screen-cant-check.md) | Ask a question again when the question screen couldn't check it | Accepted; amended by 0019 |
 | [0018](0018-evaluation-thresholds-from-measured-run-to-run-spread.md) | Evaluation thresholds from measured run-to-run spread, and a branch update counts as the rerun | Accepted |
+| [0019](0019-retry-the-case-the-environment-spoiled.md) | Retry the case the environment spoiled, not the whole run | Accepted |

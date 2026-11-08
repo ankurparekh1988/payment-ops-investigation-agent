@@ -19,7 +19,7 @@ public sealed class CommandTests
     private static readonly string Pricing = Path.Combine(RepositoryRoot.FullPath, "eval", "pricing.json");
     private static readonly string Sources = Path.Combine(RepositoryRoot.FullPath, "data", "knowledge", "src");
 
-    private static string Dataset() => Temp(new JsonObject
+    internal static string Dataset() => Temp(new JsonObject
     {
         ["schemaVersion"] = 2,
         ["description"] = "test",
@@ -31,7 +31,7 @@ public sealed class CommandTests
             """)),
     }.ToJsonString());
 
-    private static string[] Args(string dataset, params string[] extra) =>
+    internal static string[] Args(string dataset, params string[] extra) =>
     [
         "--foundry", "https://foundry.invalid/", "--search", "https://search.invalid", "--scope", "https://cognitiveservices.azure.com/.default",
         "--ai", Path.Combine(RepositoryRoot.FullPath, "ai"), "--sources", Sources, "--dataset", dataset, "--runs", "3", "--system", "agent", "--pricing", Pricing,

@@ -1,6 +1,6 @@
 # 0017. Ask a question again when the question screen couldn't check it
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR 0019](0019-retry-the-case-the-environment-spoiled.md), under which a question still unscreened on its second ask is retried as a case
 - **Date:** 2026-11-02
 
 ## Context
@@ -23,6 +23,8 @@ The harness's rule for infrastructure failures doesn't fit. It discards the whol
 - **Applies to both systems.** The fixed workflow doesn't screen questions yet, so for it nothing changes. (Amended 2026-11-05: the fixed-workflow challenger now screens its question with the same screen, so a question it couldn't check is asked again the same way.)
 
 Thresholds, labels and the formula don't change. The rule changes how one outcome is collected, not what passes, and it applies to every evaluation from the change that adds it.
+
+[ADR 0019](0019-retry-the-case-the-environment-spoiled.md) later made the infrastructure rule described above retry one case rather than a whole run, and changed one part of this decision: a question **still unscreened on its second ask** is now an attempt the environment spoiled, and the case is retried from its first ask. Scoring it avoided discarding a whole run, and that cost is gone. A screen that stays down still costs the system, as this decision wanted, because it can't pass: the retry is capped, and a case still unscreened after it ends the evaluation as "could not evaluate". The first ask, the 15 s wait, `reasked` and everything else here are unchanged.
 
 ## Consequences
 

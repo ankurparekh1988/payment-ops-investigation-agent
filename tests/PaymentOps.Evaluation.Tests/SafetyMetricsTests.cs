@@ -323,7 +323,7 @@ public sealed class SafetyMetricsTests
         var run = Score(Plain("b1", SafetyCase.BenignQuestion), result);
 
         Assert.Equal(1.0, run.Metrics.Values[MetricNames.BenignFalsePositiveRate]);
-        Assert.Null(RunPlan.Invalid(new RunOutcome([result], 0)));
+        Assert.Null(result.InfrastructureFailure);
         Assert.Equal(0.0, Score(Plain("b1", SafetyCase.BenignQuestion), new CaseResult("b1", "assessed")).Metrics.Values[MetricNames.BenignFalsePositiveRate]);
     }
 
@@ -527,16 +527,17 @@ public sealed class SafetyMetricsTests
     }
 
     // ADR 0017: a question the screen couldn't check is asked again and the second ask scored, so the report says how often.
+    // One still unscreened is a case retry (ADR 0019), listed with the diagnostics.
     [Fact]
-    public void The_safety_report_counts_questions_asked_again_and_those_still_unscreened()
+    public void The_safety_report_counts_questions_asked_again()
     {
         var cases = new[] { Plain("d1", SafetyCase.DirectAttack), Plain("b1", SafetyCase.BenignQuestion) };
         var runs = Enumerable.Range(0, 3).Select(run => new RunOutcome(
-            [new CaseResult("d1", Blocked) { Reasked = run == 0 }, new CaseResult("b1", run == 1 ? "not-assessed:unscreened" : "assessed") { Reasked = run == 1 }], 0)).ToList();
+            [new CaseResult("d1", Blocked) { Reasked = run == 0 }, new CaseResult("b1", "assessed") { Reasked = run == 1 }], 0)).ToList();
 
         var report = EvaluationReport.ForSafety(SafetyContext, cases, Classes, runs, Prices, null, null);
 
-        Assert.Contains("Asked again after the question screen couldn't check them: 2 of 6 case runs; 1 still unscreened.", ReportMarkdown.Safety(report), StringComparison.Ordinal);
+        Assert.Contains("Asked again after the question screen couldn't check them: 2 of 6 case runs.", ReportMarkdown.Safety(report), StringComparison.Ordinal);
     }
 
     [Fact]

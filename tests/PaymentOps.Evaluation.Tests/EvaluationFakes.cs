@@ -121,11 +121,46 @@ internal static class EvaluationFakes
             Task.FromResult(sections.FirstOrDefault(s => s.Key == sectionKey));
     }
 
-    /// <summary>Returns the scripted runs in order and counts how often it was asked.</summary>
+    /// <summary>Each case once, in order, as one run with no retries: what a runner records, apart from the run plan.</summary>
+    public static async Task<RunOutcome> RunAsync(this ICaseRunner runner, IReadOnlyList<InvestigationCase> cases, CancellationToken cancellationToken)
+    {
+        var attempts = new List<CaseAttempt>();
+        foreach (var c in cases)
+        {
+            attempts.Add(await runner.RunCaseAsync(c, cancellationToken));
+        }
+
+        return new RunOutcome([.. attempts.Select(a => a.Result)], attempts.Sum(a => a.Tickets));
+    }
+
+    /// <summary>Returns the scripted runs' results in order, one per case attempt, and counts how often it was asked.</summary>
     internal sealed class ScriptedRunner(params RunOutcome[] runs) : ICaseRunner
     {
+        private readonly Queue<CaseAttempt> _attempts = new(runs.SelectMany(run => run.Results.Select((r, i) => new CaseAttempt(r, i == run.Results.Count - 1 ? run.TicketsInStore : 0))));
+
         public int Calls { get; private set; }
 
-        public Task<RunOutcome> RunAsync(IReadOnlyList<InvestigationCase> cases, CancellationToken cancellationToken) => Task.FromResult(runs[Calls++]);
+        public Task<CaseAttempt> RunCaseAsync(InvestigationCase c, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(_attempts.Dequeue());
+        }
+    }
+
+    /// <summary>Answers each case from its own script, repeating the last answer, and records the order it was asked in.</summary>
+    internal sealed class ByCaseRunner(IReadOnlyDictionary<string, Func<CaseAttempt>[]> scripts) : ICaseRunner
+    {
+        private readonly Dictionary<string, int> _asked = new(StringComparer.Ordinal);
+
+        public List<string> Asked { get; } = [];
+
+        public Task<CaseAttempt> RunCaseAsync(InvestigationCase c, CancellationToken cancellationToken)
+        {
+            Asked.Add(c.Id);
+            var script = scripts.GetValueOrDefault(c.Id) ?? [() => new CaseAttempt(new CaseResult(c.Id, "assessed"), 0)];
+            var i = _asked.GetValueOrDefault(c.Id);
+            _asked[c.Id] = i + 1;
+            return Task.FromResult(script[Math.Min(i, script.Length - 1)]());
+        }
     }
 }

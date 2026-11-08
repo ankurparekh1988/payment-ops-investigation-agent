@@ -25,8 +25,8 @@ internal static class ChangeClassifier
         "tools/PaymentOps.KnowledgePublish/**", "Directory.Build.props", "Directory.Packages.props", "global.json", "src/**/*.csproj",
     ];
 
-    // The ADRs that decide thresholds, the safety rule, reruns and how an unscreened question is scored are gate policy too.
-    public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*", "docs/adr/0014-*", "docs/adr/0016-*", "docs/adr/0017-*", "docs/adr/0018-*"];
+    // The ADRs that decide thresholds, the safety rule, reruns, retries and how an unscreened question is scored are gate policy too.
+    public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*", "docs/adr/0014-*", "docs/adr/0016-*", "docs/adr/0017-*", "docs/adr/0018-*", "docs/adr/0019-*"];
 
     private static readonly Regex[] Behaviour = Globs(BehaviourPaths);
     private static readonly Regex[] GatePolicy = Globs(GatePolicyPaths);

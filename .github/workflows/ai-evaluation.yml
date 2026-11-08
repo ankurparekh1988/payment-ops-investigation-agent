@@ -230,12 +230,24 @@ jobs:
             --runs 3 --system agent --pricing eval/pricing.json --thresholds eval/thresholds.json --index "$INDEX" "${judge[@]}" \
             --content-safety "$CONTENT_SAFETY_ENDPOINT" \
             --out "$RUNNER_TEMP/eval/investigations.json" --summary "$GITHUB_STEP_SUMMARY"
-          echo "investigation-exit=$?" >> "$GITHUB_OUTPUT"
+          investigation_exit=$?
+          echo "investigation-exit=$investigation_exit" >> "$GITHUB_OUTPUT"
+          # A gate failure leaves retrieval worth running; input that won't load or an environment that's down won't improve.
+          case "$investigation_exit" in
+            0|1) ;;
+            *) exit 0 ;;
+          esac
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- retrieval-eval \
             --endpoint "$SEARCH_ENDPOINT" --ai ai --sources data/knowledge/src \
             --dataset eval/datasets/retrieval-heldout.json --thresholds eval/thresholds.json --index "$INDEX" \
             --out "$RUNNER_TEMP/eval/retrieval.json" --summary "$GITHUB_STEP_SUMMARY"
-          echo "retrieval-exit=$?" >> "$GITHUB_OUTPUT"
+          retrieval_exit=$?
+          echo "retrieval-exit=$retrieval_exit" >> "$GITHUB_OUTPUT"
+          # The same rule before the safety runs, which use the same model, Search and screens.
+          case "$retrieval_exit" in
+            0|1) ;;
+            *) exit 0 ;;
+          esac
           # Report-only until its thresholds are frozen from a baseline of main: only its hard gates can fail it.
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- safety-eval \
             --foundry "$FOUNDRY_ENDPOINT" --content-safety "$CONTENT_SAFETY_ENDPOINT" --search "$SEARCH_ENDPOINT" \

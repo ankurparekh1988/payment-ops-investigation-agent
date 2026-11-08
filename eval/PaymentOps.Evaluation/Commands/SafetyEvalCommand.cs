@@ -39,6 +39,8 @@ internal static class SafetyEvalCommand
         "safety-eval --foundry <url> --content-safety <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> " +
         "--runs <n> --pricing <file> [--thresholds <file>] [--index live|evaluation] --out <file> --summary <file>";
 
+    private const string Title = "Safety evaluation";
+
     private static readonly string[] Valued = ["foundry", "content-safety", "search", "scope", "ai", "sources", "dataset", "runs", "pricing", "thresholds", "index", "out", "summary"];
 
     public static Task<int> RunAsync(string[] args) => RunAsync(args, null, TimeSpan.FromMinutes(1));
@@ -48,7 +50,7 @@ internal static class SafetyEvalCommand
     public static Task<int> RunAsync(
         string[] args,
         Func<AiRelease, SafetyEvalSettings, Func<InvestigationCase, Action<IServiceCollection>?>, ICaseRunner>? runners,
-        TimeSpan retryDelay) => ExitCodes.GuardAsync("Safety evaluation", Usage, async () =>
+        TimeSpan retryDelay) => ExitCodes.GuardAsync(Title, Usage, async () =>
     {
         var settings = Parse(args);
         var release = settings.Release;
@@ -61,9 +63,12 @@ internal static class SafetyEvalCommand
             SafetyGate.Require(thresholds, SafetyMetrics.GatedOpportunities(cases.Cases));
         }
 
+        var diagnostics = new EvaluationDiagnostics();
+        using var listening = diagnostics.Listen();
+
         var byId = cases.Cases.ToDictionary(c => c.Id, StringComparer.Ordinal);
         Func<InvestigationCase, Action<IServiceCollection>?> overlay = c => Poisoning.For(byId[c.Id], cases.PoisonedSections.GetValueOrDefault(c.Id));
-        var runner = runners?.Invoke(release, settings, overlay) ?? Runner(release, settings, overlay);
+        var runner = runners?.Invoke(release, settings, overlay) ?? Runner(release, settings, overlay, diagnostics);
         var context = new ReportContext(
             EvaluationReport.SafetySystem,
             RepositoryCommit.Current(),
@@ -75,15 +80,32 @@ internal static class SafetyEvalCommand
             DateTimeOffset.UtcNow,
             release.KnowledgeIndex);
 
-        var runs = await RunPlan.RunAsync(runner, [.. cases.Cases.Select(c => c.ToInvestigationCase())], settings.Runs, retryDelay, CancellationToken.None);
+        IReadOnlyList<RunOutcome> runs;
+        try
+        {
+            runs = await RunPlan.RunAsync(runner, [.. cases.Cases.Select(c => c.ToInvestigationCase())], settings.Runs, retryDelay, diagnostics, CancellationToken.None);
+        }
+        catch (CouldNotEvaluateException ex)
+        {
+            // No report is written on this path, so what failed goes to the summary and the annotation.
+            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish(Title, ex.Message, diagnostics.Snapshot()));
+            throw new CouldNotEvaluateException($"{ex.Message} Across the evaluation: {diagnostics.Describe()}.");
+        }
+        catch (Exception ex)
+        {
+            // A fault in the harness still crashes the command; the counts outlive it. Its type only: a message can hold anything.
+            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish(Title, $"The evaluation stopped on an unexpected {ex.GetType().Name}.", diagnostics.Snapshot()));
+            throw;
+        }
+
         var classification = corpus.ToDictionary(s => s.Id, s => s.Classification, StringComparer.Ordinal);
-        var report = EvaluationReport.ForSafety(context, cases.Cases, classification, runs, prices, thresholds, settings.Thresholds);
+        var report = EvaluationReport.ForSafety(context, cases.Cases, classification, runs, prices, thresholds, settings.Thresholds) with { Diagnostics = diagnostics.Snapshot() };
         await File.WriteAllTextAsync(settings.Out, report.ToJson());
         await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.Safety(report));
         Console.WriteLine($"safety: gate {report.Gate.Verdict} over {runs.Count} run(s).");
         if (report.Gate.Verdict == GateReport.Failed)
         {
-            GitHubAnnotation.Errors("Safety evaluation", report.Gate.Failures);
+            GitHubAnnotation.Errors(Title, report.Gate.Failures);
             return ExitCodes.Failed;
         }
 
@@ -107,9 +129,10 @@ internal static class SafetyEvalCommand
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
-    private static AgentCaseRunner Runner(AiRelease release, SafetyEvalSettings settings, Func<InvestigationCase, Action<IServiceCollection>?> overlay)
+    private static AgentCaseRunner Runner(AiRelease release, SafetyEvalSettings settings, Func<InvestigationCase, Action<IServiceCollection>?> overlay, EvaluationDiagnostics diagnostics)
     {
-        TokenCredential credential = new CachedTokenCredential(new AzureCliCredential());
-        return new AgentCaseRunner(release, settings.Endpoints, credential, configure: EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint, settings.Endpoints.FoundryTokenScope), overlay: overlay);
+        TokenCredential credential = new CachedTokenCredential(new AzureCliCredential(), diagnostics.SignInFailed);
+        var configure = diagnostics.Observing(EvaluationServices.AppConfiguration(settings.ContentSafetyEndpoint, settings.Endpoints.FoundryTokenScope));
+        return new AgentCaseRunner(release, settings.Endpoints, credential, configure: configure, overlay: overlay);
     }
 }

@@ -51,7 +51,6 @@ public sealed class ContentSafetyPlumbingTests
         var result = Assert.Single((await AgentRunner(SearchThenSubmit, screen: down).RunAsync([Case()], CancellationToken.None)).Results);
 
         Assert.Equal(InfrastructureFailures.ScreeningUnavailable, result.InfrastructureFailure);
-        Assert.NotNull(RunPlan.Invalid(new RunOutcome([result], 0)));
     }
 
     // Tool text that happens to read like the withheld copy is data the screen passed, not an outage.
