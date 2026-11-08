@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using PaymentOps.Knowledge.Corpus;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Tools.ErrorEvents;
@@ -22,6 +24,18 @@ public sealed class ReadToolTests
         Assert.Contains("merchant:M-2087", Ids(ok));
         Assert.Contains(ok.Evidence, e => e.Id.StartsWith("hold:", StringComparison.Ordinal));
         Assert.Contains("processor:northwind-acquiring", Ids(ok));
+    }
+
+    // The server learns which record wasn't found from typed data; the model still reads only the code and message.
+    [Fact]
+    public async Task An_unknown_merchant_or_processor_names_the_record_looked_for_to_the_server_only()
+    {
+        using var tools = new ToolFixture();
+        var merchant = Failed(await tools.Tool<MerchantProfileTool>().RunAsync(new MerchantProfileRequest("M-404"), TestUser.Reader, CancellationToken.None), ToolErrorCode.NotFound);
+        var processor = Failed(await tools.Tool<ProcessorStatusTool>().RunAsync(new ProcessorStatusRequest("acme-pay", "2026-11-09", "2026-11-10"), TestUser.Reader, CancellationToken.None), ToolErrorCode.NotFound);
+
+        Assert.Equal(("merchant:M-404", "processor:acme-pay"), (merchant.MissingEvidenceId, processor.MissingEvidenceId));
+        Assert.Equal(["status", "code", "message"], JsonNode.Parse(ToolJson.Serialize(merchant))!.AsObject().Select(p => p.Key));
     }
 
     [Fact]

@@ -23,7 +23,8 @@ public abstract record ToolResult
 
     /// <param name="Message">Fixed wording the model can act on; never an exception's text.</param>
     /// <param name="Source">The data source concerned, when there is one.</param>
-    public sealed record Failed(ToolErrorCode Code, string Message, string? Source = null) : ToolResult;
+    /// <param name="MissingEvidenceId">For not found, the evidence id the record would have had; for the server, never shown to the model.</param>
+    public sealed record Failed(ToolErrorCode Code, string Message, string? Source = null, string? MissingEvidenceId = null) : ToolResult;
 }
 
 /// <summary>A list cut short to keep the result small; the turn records it as a gap.</summary>

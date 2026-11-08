@@ -69,7 +69,8 @@ public abstract class InvestigationTool<TRequest>(IOptions<ToolOptions> options)
 
     protected EvidenceCollector Collect() => new(Options.MaxListItems);
 
-    protected static ToolResult.Failed NotFound(string what, string id) => new(ToolErrorCode.NotFound, $"No {what} has the id {id}.");
+    protected static ToolResult.Failed NotFound(string what, string id, string evidenceId) =>
+        new(ToolErrorCode.NotFound, $"No {what} has the id {id}.", MissingEvidenceId: evidenceId);
 }
 
 /// <summary>Ends a tool run early with a result, from inside a helper.</summary>

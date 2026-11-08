@@ -32,7 +32,7 @@ public sealed class MerchantProfileTool(IMerchantData merchants, IProcessorData 
         var merchantId = ToolArguments.Id(request.MerchantId, "merchant_id");
         if (await ReadAsync(token => merchants.FindAsync(merchantId, token), DataSources.Merchants, cancellationToken) is not { } merchant)
         {
-            return NotFound("merchant", merchantId);
+            return NotFound("merchant", merchantId, EvidenceIds.Merchant(merchantId));
         }
 
         var evidence = Collect();

@@ -244,6 +244,50 @@ public sealed class ToolGuardTests
         Assert.False(_turn.NothingFound);
     }
 
+    private static ToolResult.Failed NoRecord(string evidenceId) => new(ToolErrorCode.NotFound, "No record has that id.", MissingEvidenceId: evidenceId);
+
+    [Fact]
+    public async Task A_merchant_no_lookup_found_is_missing_and_shown_as_a_gap()
+    {
+        await Guard().Wrap(new StubTool { Result = NoRecord("merchant:M-1") }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
+
+        Assert.True(_turn.AnyMerchantNotFound);
+        Assert.Contains(_turn.Gaps, g => g.Kind == ObservedGapKind.NotFound && g.Wording == "Merchant M-1 wasn't found, so nothing about it could be checked.");
+    }
+
+    // Ids match exactly, so a question written in the wrong case fails once before the model corrects it.
+    [Fact]
+    public async Task A_merchant_found_under_a_different_case_is_not_missing()
+    {
+        var guard = Guard();
+
+        await guard.Wrap(new StubTool { Result = NoRecord("merchant:m-1") }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "m-1" });
+        await guard.Wrap(new StubTool { Result = new ToolResult.Ok(new { ok = true }, [new RecordEvidence("merchant:M-1", "Merchant M-1")], []) }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
+
+        Assert.False(_turn.AnyMerchantNotFound);
+    }
+
+    // A corrected id isn't held against the investigation once any lookup returns the merchant.
+    [Fact]
+    public async Task A_merchant_a_later_lookup_returned_is_not_missing()
+    {
+        var guard = Guard();
+
+        await guard.Wrap(new StubTool { Result = NoRecord("merchant:M-1") }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
+        await guard.Wrap(new StubTool(ToolNames.SettlementBatches) { Result = new ToolResult.Ok(new { ok = true }, [new RecordEvidence("merchant:M-1", "Merchant M-1")], []) }).InvokeAsync(new AIFunctionArguments { ["merchant_id"] = "M-1" });
+
+        Assert.False(_turn.AnyMerchantNotFound);
+        Assert.DoesNotContain(_turn.Gaps, g => g.Kind == ObservedGapKind.NotFound);
+    }
+
+    [Fact]
+    public async Task A_processor_no_lookup_found_is_not_a_missing_merchant()
+    {
+        await Guard().Wrap(new StubTool(ToolNames.ProcessorStatus) { Result = NoRecord("processor:acme-pay") }).InvokeAsync(new AIFunctionArguments { ["processor_id"] = "acme-pay" });
+
+        Assert.False(_turn.AnyMerchantNotFound);
+    }
+
     // Citation ids belong to the turn: the same section keeps its id across searches.
     [Fact]
     public async Task Knowledge_sections_are_numbered_across_searches_in_the_turn()

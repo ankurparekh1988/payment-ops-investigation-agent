@@ -307,6 +307,39 @@ public sealed class AssessmentTests
         Assert.Equal(Confidence.Low, result.Confidence);
     }
 
+    // What the other tools found still stands, but a cause can't be established for a merchant that wasn't found.
+    [Theory]
+    [InlineData("assessed")]
+    [InlineData("escalated")]
+    public void An_answer_about_a_merchant_no_lookup_found_is_incomplete_and_keeps_what_was_found(string outcome)
+    {
+        _turn.NotFound("merchant:M-8812");
+
+        var result = AssessmentPolicy.Apply(Valid() with { Outcome = outcome }, _turn);
+
+        Assert.Equal(AssessmentOutcome.Incomplete, result.Outcome);
+        Assert.Equal(Confidence.Low, result.Confidence);
+        Assert.Equal(RootCauseLabel.Hypothesis, result.RootCause!.Label);
+        Assert.Single(result.Claims);
+        Assert.Equal(["Merchant M-8812 wasn't found, so nothing about it could be checked."], result.Gaps);
+    }
+
+    [Fact]
+    public void No_root_cause_stays_none_when_a_merchant_no_lookup_found()
+    {
+        _turn.NotFound("merchant:M-8812");
+
+        Assert.Null(AssessmentPolicy.Apply(Valid() with { RootCause = Said(string.Empty) }, _turn).RootCause);
+    }
+
+    [Fact]
+    public void A_refusal_about_a_merchant_no_lookup_found_stays_a_refusal()
+    {
+        _turn.NotFound("merchant:M-9999");
+
+        Assert.Equal(AssessmentOutcome.Refused, AssessmentPolicy.Apply(Refusal(), _turn).Outcome);
+    }
+
     [Fact]
     public void When_every_structured_source_failed_the_outcome_is_incomplete_with_no_root_cause()
     {

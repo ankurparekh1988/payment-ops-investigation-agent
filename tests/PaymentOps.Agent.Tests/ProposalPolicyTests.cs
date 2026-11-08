@@ -109,6 +109,18 @@ public sealed class ProposalPolicyTests
         Assert.True(assessed.ProposalWithheld);
     }
 
+    [Fact]
+    public void A_merchant_no_lookup_found_withholds_the_proposal()
+    {
+        var turn = Turn();
+        turn.NotFound("merchant:M-8812");
+
+        var assessed = AssessmentPolicy.Apply(With(Ticket()), turn);
+
+        Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
+        Assert.True(assessed.ProposalWithheld);
+    }
+
     // The reference is copied into the ticket from the server's record; text the model wasn't shown can't be.
     [Fact]
     public void A_withheld_reference_is_never_carried()
