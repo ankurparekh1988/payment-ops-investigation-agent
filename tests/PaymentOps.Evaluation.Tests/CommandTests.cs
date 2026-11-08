@@ -35,8 +35,21 @@ public sealed class CommandTests
     [
         "--foundry", "https://foundry.invalid/", "--search", "https://search.invalid", "--scope", "https://cognitiveservices.azure.com/.default",
         "--ai", Path.Combine(RepositoryRoot.FullPath, "ai"), "--sources", Sources, "--dataset", dataset, "--runs", "3", "--system", "agent", "--pricing", Pricing,
-        "--out", Path.GetTempFileName(), "--summary", Path.GetTempFileName(), .. extra,
+        "--content-safety", "https://cs.invalid/", "--out", Path.GetTempFileName(), "--summary", Path.GetTempFileName(), .. extra,
     ];
+
+    // Without its endpoint the app withholds every untrusted value, so a run would measure an outage, not the system.
+    [Theory]
+    [InlineData("agent")]
+    [InlineData("fixed-workflow")]
+    public async Task Investigation_runs_require_a_content_safety_endpoint(string system)
+    {
+        var args = Args(Dataset()).ToList();
+        args.RemoveRange(args.IndexOf("--content-safety"), 2);
+        args[args.IndexOf("--system") + 1] = system;
+
+        Assert.Equal(2, await Investigations([.. args], Run(), Run(), Run()));
+    }
 
     private static Task<int> Investigations(string[] args, params RunOutcome[] runs) =>
         InvestigationEvalCommand.RunAsync(args, (_, _) => new ScriptedRunner(runs), _ => null, TimeSpan.Zero);
@@ -55,7 +68,7 @@ public sealed class CommandTests
         Assert.Equal(1, await Investigations(Args(dataset), Run(), Run(leak: true), Run()));
         Assert.Equal(2, await Investigations(["--foundry", "http://not-https"]));
         Assert.Equal(2, await Investigations(Args(dataset, "--colour", "blue")));
-        Assert.Equal(2, await Investigations(Args(dataset, "--content-safety", "http://cs.invalid/")));
+        Assert.Equal(2, await Investigations([.. Args(dataset).Select(a => a == "https://cs.invalid/" ? "http://cs.invalid/" : a)]));
         Assert.Equal(3, await Investigations(Args(dataset), Run(), Invalid, Invalid));
     }
 
@@ -278,14 +291,16 @@ public sealed class CommandTests
              "--sources", Sources, "--out", Path.GetTempFileName(), "--summary", Path.GetTempFileName()]));
 
     [Fact]
-    public async Task Kill_test_refuses_reports_from_different_commits_or_fewer_than_three_runs()
+    public async Task Kill_test_refuses_reports_from_different_commits_or_screens_or_fewer_than_three_runs()
     {
         var agent = EvaluationReportTests.Report(EvaluationReportTests.Run(), EvaluationReportTests.Run(), EvaluationReportTests.Run());
         var other = agent with { System = "fixed-workflow", Commit = new string('d', 40) };
+        var otherScreen = agent with { System = "fixed-workflow", Screen = agent.Chat };
         var single = EvaluationReportTests.Report(EvaluationReportTests.Run());
         var output = Path.GetTempFileName();
 
         Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(agent.ToJson()), "--challenger", Temp(other.ToJson()), "--out", output, "--summary", output]));
+        Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(agent.ToJson()), "--challenger", Temp(otherScreen.ToJson()), "--out", output, "--summary", output]));
         Assert.Equal(2, await KillTestCommand.RunAsync(["--agent", Temp(single.ToJson()), "--challenger", Temp((single with { System = "fixed-workflow" }).ToJson()), "--out", output, "--summary", output]));
     }
 

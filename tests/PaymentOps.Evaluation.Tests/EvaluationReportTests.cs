@@ -27,6 +27,7 @@ public sealed class EvaluationReportTests
         new string('c', 40),
         [new PromptInfo("investigation-agent", "1.1.0")],
         new ModelInfo("chat-blue", "gpt-5.4-mini", "2026-03-17", "GlobalStandard"),
+        new ModelInfo("screen", "gpt-5.4-mini", "2026-03-17", "GlobalStandard"),
         new ModelInfo("judge", "gpt-5.4-mini", "2026-03-17", "GlobalStandard"),
         "1.0.0",
         new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero),
@@ -149,5 +150,21 @@ public sealed class EvaluationReportTests
         Assert.Equal(3, loaded.Runs.Count);
         Assert.Equal(report.Summary[MetricNames.ExpectedEvidenceCoverage], loaded.Summary[MetricNames.ExpectedEvidenceCoverage]);
         Assert.Equal(report.Cost.Chat, loaded.Cost.Chat);
+        Assert.Equal(Context.Screen, loaded.Screen);
+    }
+
+    [Fact]
+    public void The_summary_names_the_screen_deployment()
+    {
+        Assert.Contains("screen screen (gpt-5.4-mini 2026-03-17)", ReportMarkdown.Investigations(Report(Run(), Run(), Run())), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_report_from_before_the_screen_was_recorded_is_refused()
+    {
+        var path = Path.GetTempFileName();
+        File.WriteAllText(path, Report(Run()).ToJson().Replace("\"schema_version\": 2", "\"schema_version\": 1", StringComparison.Ordinal));
+
+        Assert.Throws<InvalidDataException>(() => EvaluationReport.Load(path));
     }
 }

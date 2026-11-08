@@ -201,6 +201,12 @@ public sealed partial class WorkflowTests
         { "8 a crash stopped the evaluations", Env(investigation: "134", retrieval: ""), "error", "the evaluation workflow didn't complete", 1 },
         { "8 exit missing", Env(retrieval: ""), "error", "the evaluation workflow didn't complete", 1 },
         { "9 gate failed", Env(investigation: "1"), "failed", "gate failed", 1 },
+        { "9 safety gate failed", Env(safety: "1"), "failed", "gate failed", 1 },
+        { "6 safety exit 2", Env(safety: "2"), "invalid-input", "invalid evaluation input", 1 },
+        { "7 safety exit 3", Env(safety: "3"), "unavailable", "dev environment unavailable", 1 },
+        { "8 safety exit missing", Env(safety: ""), "error", "the evaluation workflow didn't complete", 1 },
+        { "10 unexpected safety exit", Env(safety: "134"), "error", "the evaluation workflow didn't complete", 1 },
+        { "safety unavailable beats an investigation gate failure", Env(investigation: "1", safety: "3"), "unavailable", "dev environment unavailable", 1 },
         { "10 unexpected exit", Env(investigation: "134"), "error", "the evaluation workflow didn't complete", 1 },
         { "11 passed", Env(), "passed", "passed", 0 },
         { "scope violation beats a gate failure", Env(publish: "scope-violation", investigation: "1"), "scope-violation", "the evaluation publisher can write the live index; fix its role before evaluating", 1 },
@@ -238,18 +244,41 @@ public sealed partial class WorkflowTests
 
         Assert.Equal(0, exitCode);
         Assert.Equal(investigationExit.ToString(CultureInfo.InvariantCulture), outputs["investigation-exit"]);
-        Assert.Equal(retrievalRuns ? ["investigation-eval", "retrieval-eval"] : ["investigation-eval"], commands);
+        Assert.Equal(retrievalRuns ? ["investigation-eval", "retrieval-eval", "safety-eval"] : ["investigation-eval"], commands);
         Assert.Equal(retrievalRuns ? "0" : null, outputs.GetValueOrDefault("retrieval-exit"));
     }
 
+    // The safety runs use the same model, Search and screens, so the same rule stops them after retrieval.
     [Theory]
-    [InlineData(2, "invalid-input")]
-    [InlineData(3, "unavailable")]
-    public void The_verdict_names_why_the_evaluations_stopped(int investigationExit, string status)
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(3, false)]
+    [InlineData(134, false)]
+    public void Safety_runs_only_after_a_retrieval_result(int retrievalExit, bool safetyRuns)
     {
-        var (outputs, _, _) = RunEvaluations(investigationExit);
+        var (outputs, commands, exitCode) = RunEvaluations(0, retrievalExit);
 
-        var (verdict, code) = RunVerdict(Env(investigation: outputs["investigation-exit"], retrieval: outputs.GetValueOrDefault("retrieval-exit", string.Empty), reportsValid: "false"));
+        Assert.Equal(0, exitCode);
+        Assert.Equal(retrievalExit.ToString(CultureInfo.InvariantCulture), outputs["retrieval-exit"]);
+        Assert.Equal(safetyRuns ? ["investigation-eval", "retrieval-eval", "safety-eval"] : ["investigation-eval", "retrieval-eval"], commands);
+        Assert.Equal(safetyRuns ? "0" : null, outputs.GetValueOrDefault("safety-exit"));
+    }
+
+    [Theory]
+    [InlineData(2, 0, "invalid-input")]
+    [InlineData(3, 0, "unavailable")]
+    [InlineData(0, 2, "invalid-input")]
+    [InlineData(0, 3, "unavailable")]
+    public void The_verdict_names_why_the_evaluations_stopped(int investigationExit, int retrievalExit, string status)
+    {
+        var (outputs, _, _) = RunEvaluations(investigationExit, retrievalExit);
+
+        var (verdict, code) = RunVerdict(Env(
+            investigation: outputs["investigation-exit"],
+            retrieval: outputs.GetValueOrDefault("retrieval-exit", string.Empty),
+            safety: outputs.GetValueOrDefault("safety-exit", string.Empty),
+            reportsValid: "false"));
 
         Assert.Equal(status, verdict["status"]);
         Assert.Equal(1, code);
@@ -264,8 +293,67 @@ public sealed partial class WorkflowTests
         Assert.Contains("needs.evaluate.outputs.reports-valid == 'true'", recordIf, StringComparison.Ordinal);
         Assert.Contains("github.event_name != 'pull_request'", recordIf, StringComparison.Ordinal);
         Assert.DoesNotContain("exit", recordIf, StringComparison.Ordinal);
-        Assert.Contains("0/0|0/1|1/0|1/1)", reports, StringComparison.Ordinal);
-        Assert.Contains("-f \"$RUNNER_TEMP/eval/investigations.json\"", reports, StringComparison.Ordinal);
+        Assert.Contains("for code in \"$INVESTIGATION_EXIT\" \"$RETRIEVAL_EXIT\" \"$SAFETY_EXIT\"; do", reports, StringComparison.Ordinal);
+        Assert.Contains("[[ \"$code\" == 0 || \"$code\" == 1 ]] || valid=false", reports, StringComparison.Ordinal);
+        Assert.Contains("for report in investigations retrieval safety; do", reports, StringComparison.Ordinal);
+    }
+
+    public static TheoryData<string, string, string, string, bool> Reports() => new()
+    {
+        { "0", "0", "0", "investigations retrieval safety", true },
+        { "1", "0", "1", "investigations retrieval safety", true },
+        { "0", "0", "2", "investigations retrieval safety", false },
+        { "0", "0", "3", "investigations retrieval", false },
+        { "0", "0", "", "investigations retrieval", false },
+        { "0", "0", "0", "investigations retrieval", false },
+    };
+
+    // A report is worth recording only when every command scored it: three exits of 0 or 1, and three files.
+    [Theory]
+    [MemberData(nameof(Reports))]
+    public void Reports_are_valid_only_when_all_three_exist_and_scored(string investigation, string retrieval, string safety, string files, bool valid)
+    {
+        var step = Step("evaluate", "reports");
+        var directory = Directory.CreateTempSubdirectory("reports-");
+        Directory.CreateDirectory(Path.Combine(directory.FullName, "eval"));
+        foreach (var name in files.Split(' '))
+        {
+            File.WriteAllText(Path.Combine(directory.FullName, "eval", $"{name}.json"), "{}");
+        }
+
+        var outputs = RunStep(step, Directory.CreateTempSubdirectory("step-"), new(StringComparer.Ordinal)
+        {
+            ["INVESTIGATION_EXIT"] = investigation,
+            ["RETRIEVAL_EXIT"] = retrieval,
+            ["SAFETY_EXIT"] = safety,
+            ["RUNNER_TEMP"] = directory.FullName.Replace('\\', '/'),
+        }).Outputs;
+
+        Assert.Equal(valid ? "true" : "false", outputs.GetValueOrDefault("reports-valid"));
+    }
+
+    [Fact]
+    public void Safety_eval_runs_without_a_thresholds_file()
+    {
+        var script = Scalar(Step("evaluate", "evaluate"), "run")!;
+        var start = script.IndexOf("-- safety-eval", StringComparison.Ordinal);
+        var safety = script[start..script.IndexOf("echo \"safety-exit=$?\"", start, StringComparison.Ordinal)];
+
+        Assert.DoesNotContain("--thresholds", safety, StringComparison.Ordinal);
+        Assert.Contains("--content-safety \"$CONTENT_SAFETY_ENDPOINT\"", safety, StringComparison.Ordinal);
+        Assert.Contains("--dataset eval/datasets/safety.json --runs 3", safety, StringComparison.Ordinal);
+        Assert.Contains("--index \"$INDEX\"", safety, StringComparison.Ordinal);
+        Assert.Contains("--out \"$RUNNER_TEMP/eval/safety.json\"", safety, StringComparison.Ordinal);
+        Assert.Equal("${{ steps.evaluate.outputs.safety-exit }}", Scalar((YamlMappingNode)Job("evaluate")["outputs"], "safety-exit"));
+    }
+
+    [Fact]
+    public void The_safety_report_is_uploaded_and_recorded()
+    {
+        var upload = Steps(Job("evaluate")).Single(s => (Scalar(s, "uses") ?? string.Empty).StartsWith("actions/upload-artifact@", StringComparison.Ordinal));
+
+        Assert.Contains("${{ runner.temp }}/eval/safety.json", Scalar((YamlMappingNode)upload["with"], "path"), StringComparison.Ordinal);
+        Assert.Contains("--safety \"$RUNNER_TEMP/eval/safety.json\"", Scalar(Step("record", "record"), "run"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -287,6 +375,7 @@ public sealed partial class WorkflowTests
         string login = "success",
         string investigation = "0",
         string retrieval = "0",
+        string safety = "0",
         string reportsValid = "true",
         string recordLogin = "",
         string recordExit = "") => new(StringComparer.Ordinal)
@@ -300,13 +389,14 @@ public sealed partial class WorkflowTests
             ["EVALUATE_LOGIN"] = login,
             ["INVESTIGATION_EXIT"] = investigation,
             ["RETRIEVAL_EXIT"] = retrieval,
+            ["SAFETY_EXIT"] = safety,
             ["REPORTS_VALID"] = reportsValid,
             ["RECORD_LOGIN"] = recordLogin,
             ["RECORD_EXIT"] = recordExit,
         };
 
     // The workflow's own script, with a stand-in dotnet that records which evaluation was started and exits as told.
-    private static (Dictionary<string, string> Outputs, List<string> Commands, int ExitCode) RunEvaluations(int investigationExit)
+    private static (Dictionary<string, string> Outputs, List<string> Commands, int ExitCode) RunEvaluations(int investigationExit, int retrievalExit = 0)
     {
         var directory = Directory.CreateTempSubdirectory("evaluations-");
         var log = Path.Combine(directory.FullName, "commands");
@@ -316,7 +406,8 @@ public sealed partial class WorkflowTests
             for argument in "$@"; do
               case "$argument" in
                 investigation-eval) echo investigation-eval >> "$COMMAND_LOG"; exit "$INVESTIGATION_CODE" ;;
-                retrieval-eval) echo retrieval-eval >> "$COMMAND_LOG"; exit 0 ;;
+                retrieval-eval) echo retrieval-eval >> "$COMMAND_LOG"; exit "$RETRIEVAL_CODE" ;;
+                safety-eval) echo safety-eval >> "$COMMAND_LOG"; exit 0 ;;
               esac
             done
             exit 99
@@ -331,6 +422,7 @@ public sealed partial class WorkflowTests
             ["PATH"] = directory.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
             ["COMMAND_LOG"] = log,
             ["INVESTIGATION_CODE"] = investigationExit.ToString(CultureInfo.InvariantCulture),
+            ["RETRIEVAL_CODE"] = retrievalExit.ToString(CultureInfo.InvariantCulture),
             ["EVENT_NAME"] = "pull_request",
             ["INDEX"] = "evaluation",
             ["RUNNER_TEMP"] = directory.FullName,
@@ -344,7 +436,6 @@ public sealed partial class WorkflowTests
         var step = Step("verdict", "verdict");
         var declared = ((YamlMappingNode)step["env"]).Children.Keys.Select(k => ((YamlScalarNode)k).Value!).Order(StringComparer.Ordinal);
         Assert.Equal(env.Keys.Order(StringComparer.Ordinal), declared);
-
         return RunStep(step, Directory.CreateTempSubdirectory("verdict-"), env);
     }
 

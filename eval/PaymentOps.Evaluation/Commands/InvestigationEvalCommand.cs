@@ -20,7 +20,7 @@ namespace PaymentOps.Evaluation.Commands;
 
 internal sealed record InvestigationEvalSettings(
     InvestigationEndpoints Endpoints,
-    Uri? ContentSafetyEndpoint,
+    Uri ContentSafetyEndpoint,
     string Sources,
     IReadOnlyList<string> Datasets,
     int Runs,
@@ -40,7 +40,7 @@ internal static class InvestigationEvalCommand
 {
     public const string Usage =
         "investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] " +
-        "--runs <n> --system agent|fixed-workflow --pricing <file> [--content-safety <url>] [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
+        "--runs <n> --system agent|fixed-workflow --pricing <file> --content-safety <url> [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
 
     private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "index", "content-safety", "out", "summary"];
     private static readonly string[] Flags = ["no-judge"];
@@ -78,6 +78,7 @@ internal static class InvestigationEvalCommand
             RepositoryCommit.Current(),
             Prompts(release, settings.System),
             ModelInfo.From(release, release.ActiveChatDeployment),
+            ModelInfo.From(release, release.ScreenDeployment),
             judge is null ? null : ModelInfo.From(release, release.JudgeDeployment),
             judge is null ? null : Judge.Prompt.Version,
             DateTimeOffset.UtcNow,
@@ -91,13 +92,13 @@ internal static class InvestigationEvalCommand
         catch (CouldNotEvaluateException ex)
         {
             // No report is written on this path, so what failed goes to the summary and the annotation.
-            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish(ex.Message, diagnostics.Snapshot()));
+            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish("Investigation evaluation", ex.Message, diagnostics.Snapshot()));
             throw new CouldNotEvaluateException($"{ex.Message} Across the evaluation: {diagnostics.Describe()}.");
         }
         catch (Exception ex)
         {
             // A fault in the harness still crashes the command, after a possibly long run; the counts outlive it. Its type only: a message can hold anything.
-            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish($"The evaluation stopped on an unexpected {ex.GetType().Name}.", diagnostics.Snapshot()));
+            await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish("Investigation evaluation", $"The evaluation stopped on an unexpected {ex.GetType().Name}.", diagnostics.Snapshot()));
             throw;
         }
 
@@ -141,7 +142,7 @@ internal static class InvestigationEvalCommand
 
         return new InvestigationEvalSettings(
             new InvestigationEndpoints(options.Https("search"), options.Https("foundry"), options.One("scope")),
-            options.OptionalHttps("content-safety"),
+            options.Https("content-safety"),
             options.One("sources"),
             options.All("dataset"),
             options.Positive("runs"),

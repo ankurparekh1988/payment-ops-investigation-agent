@@ -51,10 +51,7 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Set} | {string.Join(" | ", cells)} |");
         }
 
-        // A second ask counts instead of the first, so how often the screen couldn't check a question is shown here;
-        // one still unscreened was retried as a case and is listed with the diagnostics.
-        var caseRuns = report.Runs.SelectMany(r => r.Cases).ToList();
-        md.AppendLine().AppendLine(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {caseRuns.Count(r => r.Reasked)} of {caseRuns.Count} case runs.");
+        md.AppendLine().AppendLine(Reasked(report));
 
         if (report.Diagnostics is { } diagnostics)
         {
@@ -89,12 +86,12 @@ internal static class ReportMarkdown
     }
 
     /// <summary>The evaluation stopped with no report, so this is the only record of what failed.</summary>
-    public static string DidNotFinish(string reason, ScreeningDiagnostics diagnostics)
+    public static string DidNotFinish(string evaluation, string reason, ScreeningDiagnostics diagnostics)
     {
         ArgumentNullException.ThrowIfNull(diagnostics);
 
         var md = new StringBuilder();
-        md.AppendLine("## Investigation evaluation: did not finish").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"## {evaluation}: did not finish").AppendLine();
         md.AppendLine(reason).AppendLine();
         Screening(md, diagnostics);
         return md.ToString();
@@ -151,13 +148,85 @@ internal static class ReportMarkdown
         return md.ToString();
     }
 
+    public static string Safety(EvaluationReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        var md = new StringBuilder();
+        md.AppendLine("## Safety evaluation").AppendLine();
+        Header(md, report);
+        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.InjectionFollowed}: {report.Runs.Sum(r => r.SafetyHardGates?.InjectionFollowed.Count ?? 0)} across every run");
+        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.UnsafeHandling}: {report.Runs.Sum(r => r.SafetyHardGates?.UnsafeHandling.Count ?? 0)} across every run");
+        md.AppendLine(CultureInfo.InvariantCulture, $"- {MetricNames.HarmfulTextRepeated}: {report.Runs.Sum(r => r.SafetyHardGates?.HarmfulTextRepeated.Count ?? 0)} across every run").AppendLine();
+
+        md.AppendLine("### Metrics: held-out cases, which gate").AppendLine();
+        md.AppendLine("Regression cases are shown apart below and never gate a rate; the hard gates above count every case.").AppendLine();
+        md.AppendLine("Blocked means the question screen or the content filter stopped the question; a refusal is safe handling, not detection. Withheld is the screen's verdict on the value holding the planted text itself: flagged as an instruction, or found harmful.").AppendLine();
+        md.AppendLine("| Metric | Median | Min | Max | Threshold | N |").AppendLine("|---|---|---|---|---|---|");
+        foreach (var metric in MetricNames.Safety)
+        {
+            var s = report.Summary.GetValueOrDefault(metric) ?? new MetricSummary(null, null, null, 0);
+            var threshold = report.Gate.Thresholds.TryGetValue(metric, out var t) ? $"{t:F2} ({SafetyThresholdRule.Direction(metric)})" : "none";
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {metric} | {Value(s.Median)} | {Value(s.Min)} | {Value(s.Max)} | {threshold} | {s.N} |");
+        }
+
+        md.AppendLine().AppendLine("### Regression and held-out (median)").AppendLine();
+        md.AppendLine("| Metric | Regression | Held-out |").AppendLine("|---|---|---|");
+        foreach (var metric in MetricNames.Safety)
+        {
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {metric} | {Set(report, EvaluationReport.RegressionSet, metric)} | {Set(report, EvaluationReport.HeldOutSet, metric)} |");
+        }
+
+        md.AppendLine().AppendLine("### Planted text by surface (median)").AppendLine();
+        md.AppendLine("| Surface | attack_withheld_rate | harmful_text_withheld_rate | benign_withheld_rate |").AppendLine("|---|---|---|---|");
+        foreach (var (surface, summary) in report.Breakdown.Where(b => b.Key.StartsWith("surface:", StringComparison.Ordinal)))
+        {
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {surface["surface:".Length..]} | {Value(summary.GetValueOrDefault(MetricNames.AttackWithheldRate)?.Median)} | {Value(summary.GetValueOrDefault(MetricNames.HarmfulTextWithheldRate)?.Median)} | {Value(summary.GetValueOrDefault(MetricNames.BenignWithheldRate)?.Median)} |");
+        }
+
+        md.AppendLine().AppendLine("### Cases").AppendLine();
+        md.AppendLine("Each run's outcome, what the case missed in that run, and whether the planted text reached the screen.").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"| Case | Kind | {string.Join(" | ", report.Runs.Select(r => $"Run {r.Run}"))} |");
+        md.AppendLine(CultureInfo.InvariantCulture, $"|---|---|{string.Concat(report.Runs.Select(_ => "---|"))}");
+        foreach (var c in report.Stability)
+        {
+            var cells = c.Outcomes.Select((outcome, run) =>
+            {
+                var missed = c.Metrics.Where(m => !m.Value[run]).Select(m => m.Key).ToList();
+                var cell = missed.Count == 0 ? outcome : $"{outcome}; missed {string.Join(", ", missed)}";
+                return c.PoisonReachable is { } reachable && !reachable[run] ? $"{cell}; planted text not read" : cell;
+            });
+            md.AppendLine(CultureInfo.InvariantCulture, $"| {c.CaseId} | {c.Group} | {string.Join(" | ", cells)} |");
+        }
+
+        md.AppendLine().AppendLine(Reasked(report));
+
+        if (report.Diagnostics is { } diagnostics)
+        {
+            md.AppendLine();
+            Screening(md, diagnostics);
+        }
+
+        md.AppendLine().AppendLine("### Latency and cost").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"Latency p50 {Seconds(report.Latency.P50)}, p95 {Seconds(report.Latency.P95)}. Estimated chat cost {Money(report.Cost.Chat, report.Cost.Currency)}; informational.");
+        return md.ToString();
+    }
+
+    // A second ask counts instead of the first (ADR 0017), so how often the screen couldn't check a question is shown;
+    // one still unscreened was retried as a case (ADR 0019) and is listed with the diagnostics.
+    private static string Reasked(EvaluationReport report)
+    {
+        var caseRuns = report.Runs.SelectMany(r => r.Cases).ToList();
+        return string.Create(CultureInfo.InvariantCulture, $"Asked again after the question screen couldn't check them: {caseRuns.Count(r => r.Reasked)} of {caseRuns.Count} case runs.");
+    }
+
     private static void Header(StringBuilder md, EvaluationReport report)
     {
         var gate = report.Gate;
         md.AppendLine(gate.Verdict switch
         {
             GateReport.Passed => "Gate: **passed**.",
-            GateReport.ReportOnly => "Gate: **report-only** (no thresholds); hard gates and viability passed.",
+            GateReport.ReportOnly => report.System == EvaluationReport.SafetySystem ? "Gate: **report-only** (no thresholds); hard gates passed." : "Gate: **report-only** (no thresholds); hard gates and viability passed.",
             _ => "Gate: **FAILED**.",
         }).AppendLine();
         foreach (var failure in gate.Failures)
@@ -165,7 +234,7 @@ internal static class ReportMarkdown
             md.AppendLine(CultureInfo.InvariantCulture, $"- {failure}");
         }
 
-        md.AppendLine(CultureInfo.InvariantCulture, $"Commit `{report.Commit}`; prompts {string.Join(", ", report.Prompts.Select(p => $"{p.Id} {p.Version}"))}; chat {report.Chat?.Deployment ?? "none"} ({report.Chat?.Model} {report.Chat?.Version}); index {report.KnowledgeIndex}; started {report.StartedAt:yyyy-MM-dd HH:mm} UTC; {report.Runs.Count} run(s).").AppendLine();
+        md.AppendLine(CultureInfo.InvariantCulture, $"Commit `{report.Commit}`; prompts {string.Join(", ", report.Prompts.Select(p => $"{p.Id} {p.Version}"))}; chat {report.Chat?.Deployment ?? "none"} ({report.Chat?.Model} {report.Chat?.Version}); screen {report.Screen?.Deployment ?? "none"} ({report.Screen?.Model} {report.Screen?.Version}); index {report.KnowledgeIndex}; started {report.StartedAt:yyyy-MM-dd HH:mm} UTC; {report.Runs.Count} run(s).").AppendLine();
 
         md.AppendLine("### Hard gates").AppendLine();
         var leaks = report.Runs.Sum(r => r.HardGates.AuthorizationLeaks.Count);

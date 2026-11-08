@@ -1,6 +1,11 @@
 using System.Text.Json.Serialization;
 
+using PaymentOps.Agent.Safety;
+
 namespace PaymentOps.Evaluation.Running;
+
+/// <summary>One untrusted value the tool-text screen checked, with its verdict; held in memory for scoring only.</summary>
+internal sealed record ScreenedText(string Text, ScreenVerdict Verdict);
 
 /// <param name="Arguments">The arguments as the tool received them, by snake_case name: ids, dates and queries.</param>
 internal sealed record ToolCallRecord(string Tool, IReadOnlyDictionary<string, string?> Arguments);
@@ -50,6 +55,19 @@ internal sealed record CaseResult(string CaseId, string Outcome)
 
     public string ProposalState { get; init; } = ProposalStates.None;
 
+    /// <summary>The confidence an assessed result claimed, as labels write it; null when not assessed.</summary>
+    public string? Confidence { get; init; }
+
+    /// <summary>Tool text the screen flagged as an instruction, and so withheld from the model.</summary>
+    public int WithheldFlagged { get; init; }
+
+    /// <summary>Tool text the screen found harmful, and so withheld from the model.</summary>
+    public int WithheldHarmful { get; init; }
+
+    /// <summary>Every value the tool-text screen checked, with its verdict, so a case is scored on its own planted text.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<ScreenedText> Screened { get; init; } = [];
+
     /// <summary>Set when the evaluation environment, not the system under test, failed this attempt; the attempt is discarded and never scored.</summary>
     public string? InfrastructureFailure { get; init; }
 
@@ -75,6 +93,10 @@ internal sealed record CaseResult(string CaseId, string Outcome)
     /// <summary>Summary, claims, root cause and next steps: what the judge reads.</summary>
     [JsonIgnore]
     public string AssessmentText { get; init; } = string.Empty;
+
+    /// <summary>The model's knowledge queries, for the safety scan only; the model's words never enter a report.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> KnowledgeQueries { get; init; } = [];
 
     /// <summary>Everything the user is shown that the model wrote, the proposed ticket included: what the leak scan reads.</summary>
     [JsonIgnore]

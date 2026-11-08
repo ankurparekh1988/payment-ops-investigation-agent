@@ -185,6 +185,7 @@ jobs:
       login: ${{ steps.login.outcome }}
       investigation-exit: ${{ steps.evaluate.outputs.investigation-exit }}
       retrieval-exit: ${{ steps.evaluate.outputs.retrieval-exit }}
+      safety-exit: ${{ steps.evaluate.outputs.safety-exit }}
       reports-valid: ${{ steps.reports.outputs.reports-valid }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -222,14 +223,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/eval"
           judge=()
           [[ "$EVENT_NAME" == pull_request ]] && judge=(--no-judge)
-          # The Foundry account's Content Safety endpoint, as the app is configured in Azure; omitted until the environment sets it.
-          content_safety=()
-          [[ -n "$CONTENT_SAFETY_ENDPOINT" ]] && content_safety=(--content-safety "$CONTENT_SAFETY_ENDPOINT")
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- investigation-eval \
             --foundry "$FOUNDRY_ENDPOINT" --search "$SEARCH_ENDPOINT" --scope https://cognitiveservices.azure.com/.default \
             --ai ai --sources data/knowledge/src \
             --dataset eval/datasets/agent-tasks.json --dataset eval/datasets/investigations-heldout.json \
-            --runs 3 --system agent --pricing eval/pricing.json --thresholds eval/thresholds.json --index "$INDEX" "${judge[@]}" "${content_safety[@]}" \
+            --runs 3 --system agent --pricing eval/pricing.json --thresholds eval/thresholds.json --index "$INDEX" "${judge[@]}" \
+            --content-safety "$CONTENT_SAFETY_ENDPOINT" \
             --out "$RUNNER_TEMP/eval/investigations.json" --summary "$GITHUB_STEP_SUMMARY"
           investigation_exit=$?
           echo "investigation-exit=$investigation_exit" >> "$GITHUB_OUTPUT"
@@ -242,7 +241,20 @@ jobs:
             --endpoint "$SEARCH_ENDPOINT" --ai ai --sources data/knowledge/src \
             --dataset eval/datasets/retrieval-heldout.json --thresholds eval/thresholds.json --index "$INDEX" \
             --out "$RUNNER_TEMP/eval/retrieval.json" --summary "$GITHUB_STEP_SUMMARY"
-          echo "retrieval-exit=$?" >> "$GITHUB_OUTPUT"
+          retrieval_exit=$?
+          echo "retrieval-exit=$retrieval_exit" >> "$GITHUB_OUTPUT"
+          # The same rule before the safety runs, which use the same model, Search and screens.
+          case "$retrieval_exit" in
+            0|1) ;;
+            *) exit 0 ;;
+          esac
+          # Report-only until its thresholds are frozen from a baseline of main: only its hard gates can fail it.
+          dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- safety-eval \
+            --foundry "$FOUNDRY_ENDPOINT" --content-safety "$CONTENT_SAFETY_ENDPOINT" --search "$SEARCH_ENDPOINT" \
+            --scope https://cognitiveservices.azure.com/.default --ai ai --sources data/knowledge/src \
+            --dataset eval/datasets/safety.json --runs 3 --pricing eval/pricing.json --index "$INDEX" \
+            --out "$RUNNER_TEMP/eval/safety.json" --summary "$GITHUB_STEP_SUMMARY"
+          echo "safety-exit=$?" >> "$GITHUB_OUTPUT"
 
       # Valid reports exist after a pass or a gate failure (0 or 1); exits 2 and 3 produce nothing to record.
       - name: Check the reports
@@ -251,12 +263,15 @@ jobs:
         env:
           INVESTIGATION_EXIT: ${{ steps.evaluate.outputs.investigation-exit }}
           RETRIEVAL_EXIT: ${{ steps.evaluate.outputs.retrieval-exit }}
+          SAFETY_EXIT: ${{ steps.evaluate.outputs.safety-exit }}
         run: |
-          valid=false
-          case "$INVESTIGATION_EXIT/$RETRIEVAL_EXIT" in
-            0/0|0/1|1/0|1/1)
-              if [[ -f "$RUNNER_TEMP/eval/investigations.json" && -f "$RUNNER_TEMP/eval/retrieval.json" ]]; then valid=true; fi ;;
-          esac
+          valid=true
+          for code in "$INVESTIGATION_EXIT" "$RETRIEVAL_EXIT" "$SAFETY_EXIT"; do
+            [[ "$code" == 0 || "$code" == 1 ]] || valid=false
+          done
+          for report in investigations retrieval safety; do
+            [[ -f "$RUNNER_TEMP/eval/$report.json" ]] || valid=false
+          done
           echo "reports-valid=$valid" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -266,6 +281,7 @@ jobs:
           path: |
             ${{ runner.temp }}/eval/investigations.json
             ${{ runner.temp }}/eval/retrieval.json
+            ${{ runner.temp }}/eval/safety.json
           if-no-files-found: error
 
   record:
@@ -315,6 +331,7 @@ jobs:
           set +e
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release -- record-evaluation \
             --investigations "$RUNNER_TEMP/eval/investigations.json" --retrieval "$RUNNER_TEMP/eval/retrieval.json" \
+            --safety "$RUNNER_TEMP/eval/safety.json" \
             --ingestion-endpoint "$INGESTION_ENDPOINT" --rule "$RULE_ID" --evaluation-id "$EVALUATION_ID" --trigger "$TRIGGER"
           echo "record-exit=$?" >> "$GITHUB_OUTPUT"
 
@@ -342,12 +359,13 @@ jobs:
           EVALUATE_LOGIN: ${{ needs.evaluate.outputs.login }}
           INVESTIGATION_EXIT: ${{ needs.evaluate.outputs.investigation-exit }}
           RETRIEVAL_EXIT: ${{ needs.evaluate.outputs.retrieval-exit }}
+          SAFETY_EXIT: ${{ needs.evaluate.outputs.safety-exit }}
           REPORTS_VALID: ${{ needs.evaluate.outputs.reports-valid }}
           RECORD_LOGIN: ${{ needs.record.outputs.login }}
           RECORD_EXIT: ${{ needs.record.outputs.record-exit }}
         run: |
           incomplete="the evaluation workflow didn't complete"
-          either_exit() { [[ "$INVESTIGATION_EXIT" == "$1" || "$RETRIEVAL_EXIT" == "$1" ]]; }
+          any_exit() { [[ "$INVESTIGATION_EXIT" == "$1" || "$RETRIEVAL_EXIT" == "$1" || "$SAFETY_EXIT" == "$1" ]]; }
 
           if [[ -z "$REQUIRED" ]]; then
             status=error; message="$incomplete"
@@ -359,15 +377,15 @@ jobs:
             status=untrusted; message="reproduce this change on a branch in this repository"
           elif [[ "$PUBLISH_FAILURE" == scope-violation ]]; then
             status=scope-violation; message="the evaluation publisher can write the live index; fix its role before evaluating"
-          elif [[ "$PUBLISH_FAILURE" == publish-failed ]] || either_exit 2; then
+          elif [[ "$PUBLISH_FAILURE" == publish-failed ]] || any_exit 2; then
             status=invalid-input; message="invalid evaluation input"
-          elif [[ "$PUBLISH_FAILURE" == login || "$PUBLISH_FAILURE" == unavailable || "$EVALUATE_LOGIN" == failure ]] || either_exit 3; then
+          elif [[ "$PUBLISH_FAILURE" == login || "$PUBLISH_FAILURE" == unavailable || "$EVALUATE_LOGIN" == failure ]] || any_exit 3; then
             status=unavailable; message="dev environment unavailable"
-          elif [[ -z "$INVESTIGATION_EXIT" || -z "$RETRIEVAL_EXIT" ]]; then
+          elif [[ -z "$INVESTIGATION_EXIT" || -z "$RETRIEVAL_EXIT" || -z "$SAFETY_EXIT" ]]; then
             status=error; message="$incomplete"
-          elif either_exit 1; then
+          elif any_exit 1; then
             status=failed; message="gate failed"
-          elif [[ "$INVESTIGATION_EXIT" != 0 || "$RETRIEVAL_EXIT" != 0 ]]; then
+          elif [[ "$INVESTIGATION_EXIT" != 0 || "$RETRIEVAL_EXIT" != 0 || "$SAFETY_EXIT" != 0 ]]; then
             status=error; message="$incomplete"
           else
             status=passed; message=passed

@@ -507,7 +507,7 @@ public sealed class ScreeningDiagnosticsTests
         var diagnostics = new EvaluationDiagnostics();
         diagnostics.CaseRetried(1, "c1", InfrastructureFailures.ModelUnavailable, []);
 
-        var summary = ReportMarkdown.DidNotFinish("stopped", diagnostics.Snapshot());
+        var summary = ReportMarkdown.DidNotFinish("Investigation evaluation", "stopped", diagnostics.Snapshot());
 
         Assert.Contains("Run 1, case c1: model-unavailable (no screening failure seen)", summary, StringComparison.Ordinal);
     }
@@ -536,6 +536,7 @@ public sealed class ScreeningDiagnosticsTests
         Assert.Equal(3, exit);
         Assert.False(File.Exists(output));
         var written = await File.ReadAllTextAsync(summary);
+        Assert.Contains("## Investigation evaluation: did not finish", written, StringComparison.Ordinal);
         Assert.Contains("Run 2, case c1 was invalid twice", written, StringComparison.Ordinal);
         Assert.Contains("| Prompt Shields |", written, StringComparison.Ordinal);
         Assert.Contains("Run 2, case c1: busy", written, StringComparison.Ordinal);
