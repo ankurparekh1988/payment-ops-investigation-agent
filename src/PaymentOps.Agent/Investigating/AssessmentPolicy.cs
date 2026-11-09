@@ -46,7 +46,10 @@ internal static class AssessmentPolicy
         if (ForcesIncomplete(turn))
         {
             outcome = AssessmentOutcome.Incomplete;
-            rootCause = turn.EveryStructuredSourceFailed ? null : rootCause;
+            rootCause = turn.EveryStructuredSourceFailed ? null
+                // The records cited may be real, but they can't establish a cause for a merchant that wasn't found.
+                : rootCause is { } cause && gaps.Any(g => g.Kind == ObservedGapKind.NotFound) ? cause with { Label = RootCauseLabel.Hypothesis }
+                : rootCause;
         }
 
         if (outcome == AssessmentOutcome.Incomplete)
@@ -71,8 +74,12 @@ internal static class AssessmentPolicy
         };
     }
 
-    /// <summary>The turn stopped or no structured source answered: the outcome is incomplete whatever was submitted.</summary>
-    public static bool ForcesIncomplete(TurnState turn) => turn.Stopped || turn.EveryStructuredSourceFailed;
+    /// <summary>
+    /// The turn stopped, no structured source answered, or a merchant it looked up was never found: the outcome is
+    /// incomplete whatever was submitted. Only the second drops the root cause; the others keep what was found, and a
+    /// merchant not found makes the root cause a hypothesis.
+    /// </summary>
+    public static bool ForcesIncomplete(TurnState turn) => turn.Stopped || turn.EveryStructuredSourceFailed || turn.AnyMerchantNotFound;
 
     /// <summary>
     /// The processor's reference from the incidents the ticket cites for its processor, when they agree on one.

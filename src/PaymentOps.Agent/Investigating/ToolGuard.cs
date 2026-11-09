@@ -171,6 +171,11 @@ internal sealed class ToolGuard(
             turn.AddGap(gap);
         }
 
+        if (result is ToolResult.Failed { Code: ToolErrorCode.NotFound, MissingEvidenceId: { } missing })
+        {
+            turn.NotFound(missing);
+        }
+
         if (result is ToolResult.Ok ok)
         {
             turn.Register(ok.Evidence);

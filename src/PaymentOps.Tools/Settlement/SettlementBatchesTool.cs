@@ -82,7 +82,7 @@ public sealed class SettlementBatchesTool(
         var range = ToolArguments.Range(request.StartDate, request.EndDate, clock.Today);
         if (await ReadAsync(token => merchants.FindAsync(merchantId, token), DataSources.Merchants, cancellationToken) is not { } merchant)
         {
-            return NotFound("merchant", merchantId);
+            return NotFound("merchant", merchantId, EvidenceIds.Merchant(merchantId));
         }
 
         var calendar = (await ReadAsync(token => settlement.GetCalendarAsync(range.Start.AddDays(-CalendarLookbehindDays), range.EndExclusive.AddDays(CalendarLookaheadDays), token), DataSources.Settlement, cancellationToken))

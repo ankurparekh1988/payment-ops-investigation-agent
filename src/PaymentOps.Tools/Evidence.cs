@@ -22,6 +22,7 @@ public static class EvidenceIds
 {
     public const string FactPrefix = "fact:";
 
+    public const string MerchantPrefix = "merchant:";
     public const string ProcessorPrefix = "processor:";
     public const string MissingFilePrefix = FactPrefix + "missing-file:";
 
@@ -30,9 +31,9 @@ public static class EvidenceIds
 
     /// <summary>Every prefix an evidence id can start with, so text can be checked for ids without repeating the list.</summary>
     public static IReadOnlyList<string> Prefixes { get; } =
-        ["merchant:", "hold:", ProcessorPrefix, "payment:", "file:", "payout:", "incident:", EventPrefix, "calendar:", FactPrefix];
+        [MerchantPrefix, "hold:", ProcessorPrefix, "payment:", "file:", "payout:", "incident:", EventPrefix, "calendar:", FactPrefix];
 
-    public static string Merchant(string id) => $"merchant:{id}";
+    public static string Merchant(string id) => MerchantPrefix + id;
 
     public static string Hold(string id) => $"hold:{id}";
 
@@ -66,6 +67,8 @@ public static class EvidenceIds
         Fact("event-group", processorId, merchantId ?? "*", category, Digest(code), Iso(range.Start), Iso(range.End));
 
     public static bool IsDerived(string id) => id.StartsWith(FactPrefix, StringComparison.Ordinal);
+
+    public static bool IsMerchant(string id) => id.StartsWith(MerchantPrefix, StringComparison.Ordinal);
 
     public static bool IsEvent(string id) => id.StartsWith(EventPrefix, StringComparison.Ordinal);
 

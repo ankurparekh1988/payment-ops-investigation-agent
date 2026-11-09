@@ -93,7 +93,8 @@ public sealed class SettlementBatchesToolTests
     {
         using var tools = new ToolFixture();
 
-        Failed(await Run(tools, merchant, "2026-11-09", "2026-11-10"), ToolErrorCode.NotFound);
+        var failed = Failed(await Run(tools, merchant, "2026-11-09", "2026-11-10"), ToolErrorCode.NotFound);
+        Assert.Equal($"merchant:{merchant}", failed.MissingEvidenceId);
     }
 
     [Fact]

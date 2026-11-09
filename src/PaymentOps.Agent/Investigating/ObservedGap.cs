@@ -12,6 +12,9 @@ internal enum ObservedGapKind
 
     /// <summary>Untrusted text was kept from the model: flagged as an instruction, or not checkable.</summary>
     Withheld,
+
+    /// <summary>A merchant the investigation looked up wasn't found by any lookup.</summary>
+    NotFound,
 }
 
 /// <summary>
@@ -38,6 +41,9 @@ internal sealed record ObservedGap(ObservedGapKind Kind, string Wording)
             Safety.ScreenVerdict.Harmful => $"{source}: some text was withheld because it contained harmful content.",
             _ => $"{source}: some text was withheld because it couldn't be checked.",
         });
+
+    // The id passed the tools' id format check, so it's safe to show.
+    public static ObservedGap MerchantNotFound(string merchantId) => new(ObservedGapKind.NotFound, $"Merchant {merchantId} wasn't found, so nothing about it could be checked.");
 
     public static ObservedGap LimitReached { get; } = new(ObservedGapKind.LimitReached, "The investigation stopped at its step limit.");
 }

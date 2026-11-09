@@ -34,7 +34,7 @@ public sealed class ProcessorStatusTool(IProcessorData processors, IInvestigatio
         var range = ToolArguments.Range(request.StartDate, request.EndDate, clock.Today);
         if (await ReadAsync(token => processors.FindAsync(processorId, token), DataSources.Processors, cancellationToken) is not { } processor)
         {
-            return NotFound("processor", processorId);
+            return NotFound("processor", processorId, EvidenceIds.Processor(processorId));
         }
 
         var incidents = await ReadAsync(token => processors.GetIncidentsAsync(processorId, range.FromUtc, range.ToUtcExclusive, token), DataSources.Processors, cancellationToken);

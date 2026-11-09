@@ -19,6 +19,7 @@ internal sealed class TurnState
     private readonly HashSet<string> _withheldText = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EvidenceItem> _evidence = new(StringComparer.Ordinal);
     private readonly List<ObservedGap> _gaps = [];
+    private readonly HashSet<string> _merchantsNotFound = new(StringComparer.Ordinal);
     private bool _structuredAnswered;
     private bool _structuredFailed;
     private bool _structuredFound;
@@ -34,10 +35,30 @@ internal sealed class TurnState
         {
             lock (_lock)
             {
-                return [.. _gaps];
+                return [.. _gaps, .. UnfoundMerchants().Select(ObservedGap.MerchantNotFound)];
             }
         }
     }
+
+    /// <summary>A merchant a lookup didn't find and no lookup returned: the server then forces an incomplete outcome.</summary>
+    public bool AnyMerchantNotFound
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return UnfoundMerchants().Count > 0;
+            }
+        }
+    }
+
+    // Read when asked, not when the lookup failed, so a merchant a later call returned doesn't count. The tools match
+    // ids exactly, so this match ignores case: an id tried in the wrong case before the right one was found doesn't count.
+    private List<string> UnfoundMerchants() =>
+        [.. _merchantsNotFound
+            .Where(id => !_evidence.Keys.Any(found => string.Equals(found, id, StringComparison.OrdinalIgnoreCase)))
+            .Select(id => id[EvidenceIds.MerchantPrefix.Length..])
+            .Order(StringComparer.Ordinal)];
 
     /// <summary>A structured data tool was tried and none answered: the server then forces an incomplete outcome.</summary>
     public bool EveryStructuredSourceFailed
@@ -177,6 +198,20 @@ internal sealed class TurnState
         {
             var section = _sectionsById[id];
             return new Citation(id, section.Key, section.Title, section.SectionPath);
+        }
+    }
+
+    /// <summary>A lookup answered that the record with this evidence id doesn't exist; only merchants are kept.</summary>
+    public void NotFound(string evidenceId)
+    {
+        if (!EvidenceIds.IsMerchant(evidenceId))
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            _merchantsNotFound.Add(evidenceId);
         }
     }
 
