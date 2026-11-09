@@ -105,6 +105,7 @@ jobs:
       contents: read
       id-token: write
     outputs:
+      attempt: ${{ github.run_attempt }}
       failure-class: ${{ steps.outcome.outputs.failure-class }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -169,8 +170,8 @@ jobs:
           fi
           echo "failure-class=$class" >> "$GITHUB_OUTPUT"
 
-  # The investigation and safety evaluations run as parallel jobs: each takes 20 to 40 minutes, almost all of it
-  # model calls. One at a time, neither peaked above 70K tokens a minute on chat or 35K on screen, of 250K each.
+  # The investigation and safety evaluations run as parallel jobs, well within the deployments' rate limits
+  # (docs/Deployment.md has the measured peaks).
   evaluate:
     name: Evaluate investigations and retrieval
     needs: [classify, publish-eval-index]
@@ -348,13 +349,14 @@ jobs:
 
   record:
     name: Record the evaluation
-    needs: [evaluate, evaluate-safety]
-    # A gate failure is recorded too, so the history isn't pass-only. The history takes all three reports, from one
-    # attempt, or none: "re-run failed jobs" can leave the two evaluate jobs' reports from different attempts.
+    needs: [publish-eval-index, evaluate, evaluate-safety]
+    # A gate failure is recorded too, so the history isn't pass-only. It takes all three reports, from this attempt's
+    # publish and evaluations, or none: "re-run failed jobs" keeps the results of jobs it doesn't rerun.
     if: >-
       always() && github.event_name != 'pull_request'
       && needs.evaluate.outputs.reports-valid == 'true' && needs.evaluate-safety.outputs.reports-valid == 'true'
-      && needs.evaluate.outputs.attempt == needs.evaluate-safety.outputs.attempt
+      && needs.publish-eval-index.outputs.attempt == github.run_attempt
+      && needs.evaluate.outputs.attempt == github.run_attempt && needs.evaluate-safety.outputs.attempt == github.run_attempt
     runs-on: ubuntu-latest
     environment: ${{ format('{0}-eval-publish-scheduled', fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment) }}
     permissions:
@@ -374,12 +376,8 @@ jobs:
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ai-evaluation-reports
-          path: ${{ runner.temp }}/eval
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ai-evaluation-safety-report
+          pattern: ai-evaluation-*
+          merge-multiple: true
           path: ${{ runner.temp }}/eval
 
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
@@ -429,6 +427,8 @@ jobs:
           PUBLISH_FAILURE: ${{ needs.publish-eval-index.outputs.failure-class }}
           EVALUATE_LOGIN: ${{ needs.evaluate.outputs.login }}
           SAFETY_LOGIN: ${{ needs.evaluate-safety.outputs.login }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PUBLISH_ATTEMPT: ${{ needs.publish-eval-index.outputs.attempt }}
           EVALUATE_ATTEMPT: ${{ needs.evaluate.outputs.attempt }}
           SAFETY_ATTEMPT: ${{ needs.evaluate-safety.outputs.attempt }}
           INVESTIGATION_EXIT: ${{ needs.evaluate.outputs.investigation-exit }}
@@ -439,6 +439,14 @@ jobs:
           RECORD_EXIT: ${{ needs.record.outputs.record-exit }}
         run: |
           incomplete="the evaluation workflow didn't complete"
+          # A job that didn't run this attempt has no attempt; one that ran in an earlier attempt is a stale result.
+          stale_attempt() {
+            local attempt
+            for attempt in "$PUBLISH_ATTEMPT" "$EVALUATE_ATTEMPT" "$SAFETY_ATTEMPT"; do
+              [[ -n "$attempt" && "$attempt" != "$RUN_ATTEMPT" ]] && return 0
+            done
+            return 1
+          }
           any_exit() { [[ "$INVESTIGATION_EXIT" == "$1" || "$RETRIEVAL_EXIT" == "$1" || "$SAFETY_EXIT" == "$1" ]]; }
 
           if [[ -z "$REQUIRED" ]]; then
@@ -449,9 +457,9 @@ jobs:
             status=not-required; message="$REASON"
           elif [[ "$TRUSTED" != true ]]; then
             status=untrusted; message="reproduce this change on a branch in this repository"
-          elif [[ -n "$EVALUATE_ATTEMPT" && -n "$SAFETY_ATTEMPT" && "$EVALUATE_ATTEMPT" != "$SAFETY_ATTEMPT" ]]; then
+          elif stale_attempt; then
             # Results from two attempts aren't one evaluation, whatever each says.
-            status=error; message="the evaluations ran in different attempts; re-run all jobs"
+            status=error; message="the evaluation jobs ran in different attempts; re-run all jobs"
           elif [[ "$PUBLISH_FAILURE" == scope-violation ]]; then
             status=scope-violation; message="the evaluation publisher can write the live index; fix its role before evaluating"
           elif [[ "$PUBLISH_FAILURE" == publish-failed ]] || any_exit 2; then

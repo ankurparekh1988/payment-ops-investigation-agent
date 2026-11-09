@@ -19,6 +19,9 @@ public sealed partial class WorkflowTests
 
     private static readonly string[] ReportNames = ["investigations", "retrieval", "safety"];
 
+    // The jobs whose results one evaluation combines, so all must come from the same attempt.
+    private static readonly string[] AttemptJobs = ["publish-eval-index", "evaluate", "evaluate-safety"];
+
     private static YamlMappingNode Jobs => (YamlMappingNode)Workflow["jobs"];
 
     private static YamlMappingNode Load()
@@ -40,6 +43,9 @@ public sealed partial class WorkflowTests
     private static IEnumerable<YamlMappingNode> Steps(YamlMappingNode job) => ((YamlSequenceNode)job["steps"]).Children.Cast<YamlMappingNode>();
 
     private static YamlMappingNode Step(string job, string id) => Steps(Job(job)).Single(s => Scalar(s, "id") == id);
+
+    private static bool Uses(YamlMappingNode step, string action) =>
+        (Scalar(step, "uses") ?? string.Empty).StartsWith(action + "@", StringComparison.Ordinal);
 
     private static Dictionary<string, string> Permissions(YamlMappingNode job) =>
         job.Children.TryGetValue(new YamlScalarNode("permissions"), out var p) && p is YamlMappingNode map
@@ -91,7 +97,6 @@ public sealed partial class WorkflowTests
         Assert.Contains("-eval-publish", Scalar(Job("publish-eval-index"), "environment"), StringComparison.Ordinal);
         Assert.DoesNotContain("-eval-publish", Scalar(Job("evaluate"), "environment"), StringComparison.Ordinal);
         Assert.Contains("-eval", Scalar(Job("evaluate"), "environment"), StringComparison.Ordinal);
-        Assert.Equal(Scalar(Job("evaluate"), "environment"), Scalar(Job("evaluate-safety"), "environment"));
         Assert.Contains("-eval-publish-scheduled", Scalar(Job("record"), "environment"), StringComparison.Ordinal);
         foreach (var (id, job) in AllJobs())
         {
@@ -101,10 +106,10 @@ public sealed partial class WorkflowTests
 
         Assert.Contains("AZURE_EVAL_PUBLISH_CLIENT_ID", Serialize(Job("publish-eval-index")), StringComparison.Ordinal);
         Assert.Contains("AZURE_EVAL_CLIENT_ID", Serialize(Job("evaluate")), StringComparison.Ordinal);
-        Assert.Contains("AZURE_EVAL_CLIENT_ID", Serialize(Job("evaluate-safety")), StringComparison.Ordinal);
     }
 
-    // Neither waits for the other, and both run exactly when an evaluation is due, so one approval starts both.
+    // Neither waits for the other, and both wait on the same jobs in the same environment, so one approval starts
+    // both; they read the same index as the same identity.
     [Fact]
     public void The_safety_evaluation_runs_alongside_the_investigations_under_the_same_condition()
     {
@@ -113,7 +118,10 @@ public sealed partial class WorkflowTests
 
         Assert.Equal(Serialize(investigations["needs"]), Serialize(safety["needs"]));
         Assert.Equal(Scalar(investigations, "if"), Scalar(safety, "if"));
-        Assert.Equal(Serialize(investigations["permissions"]), Serialize(safety["permissions"]));
+        Assert.Equal(Scalar(investigations, "environment"), Scalar(safety, "environment"));
+        Assert.Equal(Permissions(investigations), Permissions(safety));
+        Assert.Equal(Scalar((YamlMappingNode)Step("evaluate", "evaluate")["env"], "INDEX"), Scalar((YamlMappingNode)Step("evaluate-safety", "evaluate")["env"], "INDEX"));
+        Assert.Contains("AZURE_EVAL_CLIENT_ID", Serialize(safety), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -156,7 +164,7 @@ public sealed partial class WorkflowTests
     public void The_classifier_uses_the_base_toolchain()
     {
         var setups = AllJobs().SelectMany(j => Steps(j.Job).Select(s => (j.Id, Step: s)))
-            .Where(s => (Scalar(s.Step, "uses") ?? string.Empty).StartsWith("actions/setup-dotnet@", StringComparison.Ordinal))
+            .Where(s => Uses(s.Step, "actions/setup-dotnet"))
             .ToList();
 
         // The base is checked out outside the workspace, so no file from the pull request reaches its build.
@@ -216,10 +224,12 @@ public sealed partial class WorkflowTests
         { "7 publish unavailable", Env(publish: "unavailable", investigation: "", retrieval: "", safety: "", login: "", safetyLogin: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 evaluate sign-in", Env(login: "failure", investigation: "", retrieval: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 safety sign-in", Env(safetyLogin: "failure", safety: ""), "unavailable", "dev environment unavailable", 1 },
-        { "jobs from different attempts", Env(evaluateAttempt: "1", safetyAttempt: "2"), "error", "the evaluations ran in different attempts; re-run all jobs", 1 },
-        { "different attempts beat a gate failure", Env(investigation: "1", evaluateAttempt: "1", safetyAttempt: "2"), "error", "the evaluations ran in different attempts; re-run all jobs", 1 },
+        { "an evaluation from an earlier attempt beats a gate failure", Env(runAttempt: "2", investigation: "1", evaluateAttempt: "1"), "error", "the evaluation jobs ran in different attempts; re-run all jobs", 1 },
+        { "safety from an earlier attempt", Env(runAttempt: "2", safetyAttempt: "1"), "error", "the evaluation jobs ran in different attempts; re-run all jobs", 1 },
+        { "a publish from an earlier attempt", Env(runAttempt: "2", publishAttempt: "1"), "error", "the evaluation jobs ran in different attempts; re-run all jobs", 1 },
         { "a job that never ran isn't another attempt", Env(safetyAttempt: "", safety: "", safetyLogin: ""), "error", "the evaluation workflow didn't complete", 1 },
-        { "a second attempt of both jobs", Env(evaluateAttempt: "2", safetyAttempt: "2"), "passed", "passed", 0 },
+        { "index switch: no publish attempt", Env(publish: "", publishAttempt: ""), "passed", "passed", 0 },
+        { "every job re-run", Env(runAttempt: "2", publishAttempt: "2", evaluateAttempt: "2", safetyAttempt: "2"), "passed", "passed", 0 },
         { "safety sign-in beats an investigation gate failure", Env(investigation: "1", safetyLogin: "failure", safety: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 exit 3", Env(retrieval: "3"), "unavailable", "dev environment unavailable", 1 },
         { "7 exit 3 stopped the evaluations", Env(investigation: "3", retrieval: ""), "unavailable", "dev environment unavailable", 1 },
@@ -300,12 +310,12 @@ public sealed partial class WorkflowTests
     public void The_verdict_names_why_the_evaluations_stopped(int investigationExit, int retrievalExit, int safetyExit, string status)
     {
         var (outputs, _, _) = RunEvaluations("evaluate", investigationExit, retrievalExit);
-        var (safety, _, _) = RunEvaluations("evaluate-safety", safetyExit: safetyExit);
 
+        // The safety job passes its exit on unchanged, as its own test shows.
         var (verdict, code) = RunVerdict(Env(
             investigation: outputs["investigation-exit"],
             retrieval: outputs.GetValueOrDefault("retrieval-exit", string.Empty),
-            safety: safety["safety-exit"],
+            safety: safetyExit.ToString(CultureInfo.InvariantCulture),
             reportsValid: "false"));
 
         Assert.Equal(status, verdict["status"]);
@@ -319,8 +329,13 @@ public sealed partial class WorkflowTests
 
         Assert.Contains("needs.evaluate.outputs.reports-valid == 'true'", recordIf, StringComparison.Ordinal);
         Assert.Contains("needs.evaluate-safety.outputs.reports-valid == 'true'", recordIf, StringComparison.Ordinal);
-        Assert.Contains("needs.evaluate.outputs.attempt == needs.evaluate-safety.outputs.attempt", recordIf, StringComparison.Ordinal);
-        Assert.All(EvaluateJobs, job => Assert.Equal("${{ github.run_attempt }}", Scalar((YamlMappingNode)Job(job)["outputs"], "attempt")));
+        foreach (var job in AttemptJobs)
+        {
+            Assert.Equal("${{ github.run_attempt }}", Scalar((YamlMappingNode)Job(job)["outputs"], "attempt"));
+            Assert.Contains($"needs.{job}.outputs.attempt == github.run_attempt", recordIf, StringComparison.Ordinal);
+            Assert.Contains($"needs.{job}.outputs.attempt }}}}", Serialize(Step("verdict", "verdict")["env"]), StringComparison.Ordinal);
+        }
+
         Assert.Contains("github.event_name != 'pull_request'", recordIf, StringComparison.Ordinal);
         Assert.DoesNotContain("exit", recordIf, StringComparison.Ordinal);
         Assert.Equal(
@@ -374,24 +389,22 @@ public sealed partial class WorkflowTests
         Assert.Contains("--index \"$INDEX\"", safety, StringComparison.Ordinal);
         Assert.Contains("--out \"$RUNNER_TEMP/eval/safety.json\"", safety, StringComparison.Ordinal);
         Assert.Equal("${{ steps.evaluate.outputs.safety-exit }}", Scalar((YamlMappingNode)Job("evaluate-safety")["outputs"], "safety-exit"));
-        Assert.Equal(Scalar((YamlMappingNode)Step("evaluate", "evaluate")["env"], "INDEX"), Scalar((YamlMappingNode)Step("evaluate-safety", "evaluate")["env"], "INDEX"));
     }
 
-    // Each evaluate job uploads its own artifact, and the record job downloads every one into the same folder.
+    // Each evaluate job uploads its own artifact, and the record job downloads them all into one folder.
     [Fact]
     public void Every_report_is_uploaded_and_recorded()
     {
         var uploads = EvaluateJobs
-            .Select(job => (YamlMappingNode)Steps(Job(job)).Single(s => (Scalar(s, "uses") ?? string.Empty).StartsWith("actions/upload-artifact@", StringComparison.Ordinal))["with"])
+            .Select(job => (YamlMappingNode)Steps(Job(job)).Single(s => Uses(s, "actions/upload-artifact"))["with"])
             .ToList();
-        var downloads = Steps(Job("record"))
-            .Where(s => (Scalar(s, "uses") ?? string.Empty).StartsWith("actions/download-artifact@", StringComparison.Ordinal))
-            .Select(s => (YamlMappingNode)s["with"])
-            .ToList();
+        var download = (YamlMappingNode)Steps(Job("record")).Single(s => Uses(s, "actions/download-artifact"))["with"];
         var record = Scalar(Step("record", "record"), "run")!;
 
-        Assert.Equal(uploads.Select(u => Scalar(u, "name")).Order(StringComparer.Ordinal), downloads.Select(d => Scalar(d, "name")).Order(StringComparer.Ordinal));
-        Assert.All(downloads, d => Assert.Equal("${{ runner.temp }}/eval", Scalar(d, "path")));
+        Assert.Equal("ai-evaluation-*", Scalar(download, "pattern"));
+        Assert.Equal("true", Scalar(download, "merge-multiple"));
+        Assert.Equal("${{ runner.temp }}/eval", Scalar(download, "path"));
+        Assert.All(uploads, u => Assert.StartsWith("ai-evaluation-", Scalar(u, "name"), StringComparison.Ordinal));
         foreach (var report in ReportNames)
         {
             Assert.Single(uploads, u => Scalar(u, "path")!.Contains($"${{{{ runner.temp }}}}/eval/{report}.json", StringComparison.Ordinal));
@@ -417,6 +430,8 @@ public sealed partial class WorkflowTests
         string publish = "none",
         string login = "success",
         string safetyLogin = "success",
+        string runAttempt = "1",
+        string publishAttempt = "1",
         string evaluateAttempt = "1",
         string safetyAttempt = "1",
         string investigation = "0",
@@ -434,6 +449,8 @@ public sealed partial class WorkflowTests
             ["PUBLISH_FAILURE"] = publish,
             ["EVALUATE_LOGIN"] = login,
             ["SAFETY_LOGIN"] = safetyLogin,
+            ["RUN_ATTEMPT"] = runAttempt,
+            ["PUBLISH_ATTEMPT"] = publishAttempt,
             ["EVALUATE_ATTEMPT"] = evaluateAttempt,
             ["SAFETY_ATTEMPT"] = safetyAttempt,
             ["INVESTIGATION_EXIT"] = investigation,
@@ -493,7 +510,7 @@ public sealed partial class WorkflowTests
         }
 
         env["RUNNER_TEMP"] = directory.FullName.Replace('\\', '/');
-        return RunStep(Step(job, "reports"), Directory.CreateTempSubdirectory("step-"), env).Outputs;
+        return RunStep(Step(job, "reports"), directory, env).Outputs;
     }
 
     private static (Dictionary<string, string> Outputs, int ExitCode) RunVerdict(Dictionary<string, string> env)
