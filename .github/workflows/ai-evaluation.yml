@@ -170,7 +170,7 @@ jobs:
           echo "failure-class=$class" >> "$GITHUB_OUTPUT"
 
   # The investigation and safety evaluations run as parallel jobs: each takes 20 to 40 minutes, almost all of it
-  # model calls, and together they use under half the chat deployment's tokens per minute.
+  # model calls. One at a time, neither peaked above 70K tokens a minute on chat or 35K on screen, of 250K each.
   evaluate:
     name: Evaluate investigations and retrieval
     needs: [classify, publish-eval-index]
@@ -185,6 +185,7 @@ jobs:
       id-token: write
     outputs:
       login: ${{ steps.login.outcome }}
+      attempt: ${{ github.run_attempt }}
       investigation-exit: ${{ steps.evaluate.outputs.investigation-exit }}
       retrieval-exit: ${{ steps.evaluate.outputs.retrieval-exit }}
       reports-valid: ${{ steps.reports.outputs.reports-valid }}
@@ -284,6 +285,7 @@ jobs:
       id-token: write
     outputs:
       login: ${{ steps.login.outcome }}
+      attempt: ${{ github.run_attempt }}
       safety-exit: ${{ steps.evaluate.outputs.safety-exit }}
       reports-valid: ${{ steps.reports.outputs.reports-valid }}
     steps:
@@ -347,10 +349,12 @@ jobs:
   record:
     name: Record the evaluation
     needs: [evaluate, evaluate-safety]
-    # A gate failure is recorded too, so the history isn't pass-only. The history takes all three reports or none.
+    # A gate failure is recorded too, so the history isn't pass-only. The history takes all three reports, from one
+    # attempt, or none: "re-run failed jobs" can leave the two evaluate jobs' reports from different attempts.
     if: >-
       always() && github.event_name != 'pull_request'
       && needs.evaluate.outputs.reports-valid == 'true' && needs.evaluate-safety.outputs.reports-valid == 'true'
+      && needs.evaluate.outputs.attempt == needs.evaluate-safety.outputs.attempt
     runs-on: ubuntu-latest
     environment: ${{ format('{0}-eval-publish-scheduled', fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment) }}
     permissions:
@@ -425,6 +429,8 @@ jobs:
           PUBLISH_FAILURE: ${{ needs.publish-eval-index.outputs.failure-class }}
           EVALUATE_LOGIN: ${{ needs.evaluate.outputs.login }}
           SAFETY_LOGIN: ${{ needs.evaluate-safety.outputs.login }}
+          EVALUATE_ATTEMPT: ${{ needs.evaluate.outputs.attempt }}
+          SAFETY_ATTEMPT: ${{ needs.evaluate-safety.outputs.attempt }}
           INVESTIGATION_EXIT: ${{ needs.evaluate.outputs.investigation-exit }}
           RETRIEVAL_EXIT: ${{ needs.evaluate.outputs.retrieval-exit }}
           SAFETY_EXIT: ${{ needs.evaluate-safety.outputs.safety-exit }}
@@ -443,6 +449,9 @@ jobs:
             status=not-required; message="$REASON"
           elif [[ "$TRUSTED" != true ]]; then
             status=untrusted; message="reproduce this change on a branch in this repository"
+          elif [[ -n "$EVALUATE_ATTEMPT" && -n "$SAFETY_ATTEMPT" && "$EVALUATE_ATTEMPT" != "$SAFETY_ATTEMPT" ]]; then
+            # Results from two attempts aren't one evaluation, whatever each says.
+            status=error; message="the evaluations ran in different attempts; re-run all jobs"
           elif [[ "$PUBLISH_FAILURE" == scope-violation ]]; then
             status=scope-violation; message="the evaluation publisher can write the live index; fix its role before evaluating"
           elif [[ "$PUBLISH_FAILURE" == publish-failed ]] || any_exit 2; then

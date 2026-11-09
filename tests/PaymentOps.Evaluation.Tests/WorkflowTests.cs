@@ -216,6 +216,10 @@ public sealed partial class WorkflowTests
         { "7 publish unavailable", Env(publish: "unavailable", investigation: "", retrieval: "", safety: "", login: "", safetyLogin: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 evaluate sign-in", Env(login: "failure", investigation: "", retrieval: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 safety sign-in", Env(safetyLogin: "failure", safety: ""), "unavailable", "dev environment unavailable", 1 },
+        { "jobs from different attempts", Env(evaluateAttempt: "1", safetyAttempt: "2"), "error", "the evaluations ran in different attempts; re-run all jobs", 1 },
+        { "different attempts beat a gate failure", Env(investigation: "1", evaluateAttempt: "1", safetyAttempt: "2"), "error", "the evaluations ran in different attempts; re-run all jobs", 1 },
+        { "a job that never ran isn't another attempt", Env(safetyAttempt: "", safety: "", safetyLogin: ""), "error", "the evaluation workflow didn't complete", 1 },
+        { "a second attempt of both jobs", Env(evaluateAttempt: "2", safetyAttempt: "2"), "passed", "passed", 0 },
         { "safety sign-in beats an investigation gate failure", Env(investigation: "1", safetyLogin: "failure", safety: ""), "unavailable", "dev environment unavailable", 1 },
         { "7 exit 3", Env(retrieval: "3"), "unavailable", "dev environment unavailable", 1 },
         { "7 exit 3 stopped the evaluations", Env(investigation: "3", retrieval: ""), "unavailable", "dev environment unavailable", 1 },
@@ -315,6 +319,8 @@ public sealed partial class WorkflowTests
 
         Assert.Contains("needs.evaluate.outputs.reports-valid == 'true'", recordIf, StringComparison.Ordinal);
         Assert.Contains("needs.evaluate-safety.outputs.reports-valid == 'true'", recordIf, StringComparison.Ordinal);
+        Assert.Contains("needs.evaluate.outputs.attempt == needs.evaluate-safety.outputs.attempt", recordIf, StringComparison.Ordinal);
+        Assert.All(EvaluateJobs, job => Assert.Equal("${{ github.run_attempt }}", Scalar((YamlMappingNode)Job(job)["outputs"], "attempt")));
         Assert.Contains("github.event_name != 'pull_request'", recordIf, StringComparison.Ordinal);
         Assert.DoesNotContain("exit", recordIf, StringComparison.Ordinal);
         Assert.Equal(
@@ -411,6 +417,8 @@ public sealed partial class WorkflowTests
         string publish = "none",
         string login = "success",
         string safetyLogin = "success",
+        string evaluateAttempt = "1",
+        string safetyAttempt = "1",
         string investigation = "0",
         string retrieval = "0",
         string safety = "0",
@@ -426,6 +434,8 @@ public sealed partial class WorkflowTests
             ["PUBLISH_FAILURE"] = publish,
             ["EVALUATE_LOGIN"] = login,
             ["SAFETY_LOGIN"] = safetyLogin,
+            ["EVALUATE_ATTEMPT"] = evaluateAttempt,
+            ["SAFETY_ATTEMPT"] = safetyAttempt,
             ["INVESTIGATION_EXIT"] = investigation,
             ["RETRIEVAL_EXIT"] = retrieval,
             ["SAFETY_EXIT"] = safety,

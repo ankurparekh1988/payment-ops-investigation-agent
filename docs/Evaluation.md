@@ -247,7 +247,7 @@ A change to either is evaluated in full against the pull request's own code; any
 | `failed` | The gate failed: a hard gate, viability or a threshold (exit 1) | Fails, as "gate failed" |
 | `passed` | Every gate passed | Passes |
 
-A run that ends in none of these, such as a job that never finished, fails as "the evaluation workflow didn't complete". A failure is recorded as a finding below before anything else happens. It may be rerun once, and only when the agent under test is unchanged ([ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md)); a second failure stands, and a change to AI behaviour is never rerun.
+A run that ends in none of these, such as a job that never finished, fails as "the evaluation workflow didn't complete". A run whose two evaluation jobs come from different attempts, which "re-run failed jobs" can leave, fails as "the evaluations ran in different attempts; re-run all jobs" and records nothing. A failure is recorded as a finding below before anything else happens. It may be rerun once, and only when the agent under test is unchanged ([ADR 0016](adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md)); a second failure stands, and a change to AI behaviour is never rerun.
 
 **Weekly, on `main`.** Every Monday at 06:00 UTC, and on demand from `main`, the same evaluation runs with the judge, without approvals, and is recorded in Log Analytics. A run that fails, can't complete or can't record its results opens or updates one `ai-evaluation` issue; the next pass closes it. GitHub disables scheduled workflows in a public repository after 60 days without activity, which stops the weekly run without an issue; that's a limit of the host, and the run can still be started by hand.
 
