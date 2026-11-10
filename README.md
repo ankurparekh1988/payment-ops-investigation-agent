@@ -13,7 +13,7 @@ The interesting problems are less about the model and more about everything arou
 
 - **Not everyone should see everything.** Restricted documents are filtered out before the model ever sees them, based on who is asking.
 - **Answers need to be checkable.** Every statement in an assessment lists the records, computed facts and knowledge sections behind it, and the server rejects an assessment that cites anything this investigation's tools didn't return. The evaluation suite measures how often the right records and sections are cited, against human-written labels.
-- **Data can carry instructions.** An incident note or a runbook can say "ignore your rules". Every such string is screened before the model sees it, and withheld text can't support anything the agent says.
+- **Data can carry instructions.** An incident note or a runbook can say "ignore your rules". Every such string is screened before the model sees it, and withheld text can't support anything the agent says. The screen misses some, so the agent is told that such text never decides a tool call or what it submits, and code refuses a lookup for a merchant the user never named.
 - **The agent suggests; people decide.** It can propose an incident ticket, but only the engineer who ran the investigation can approve it, and the server re-checks who they are when they click.
 - **Changes need proof.** A prompt or model change only ships if it passes an evaluation run.
 
