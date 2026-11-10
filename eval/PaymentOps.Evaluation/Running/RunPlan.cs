@@ -11,6 +11,11 @@ namespace PaymentOps.Evaluation.Running;
 internal interface ICaseRunner
 {
     Task<CaseAttempt> RunCaseAsync(InvestigationCase c, CancellationToken cancellationToken);
+
+    /// <summary>Called before each run's first case, so what a run shares can't carry into the next.</summary>
+    void BeginRun()
+    {
+    }
 }
 
 /// <summary>The evaluation environment couldn't give a fair result, even after the one retry.</summary>
@@ -55,6 +60,7 @@ internal static class RunPlan
         var outcomes = new List<RunOutcome>();
         for (var i = 1; i <= runs; i++)
         {
+            runner.BeginRun();
             outcomes.Add(await RunOnceAsync(runner, cases, i, retryDelay, diagnostics, cancellationToken));
         }
 
