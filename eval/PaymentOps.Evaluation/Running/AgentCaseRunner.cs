@@ -22,7 +22,7 @@ namespace PaymentOps.Evaluation.Running;
 /// A question the screen couldn't check never reached the system, so it's asked once more, as the app tells the person
 /// to. Still unscreened, the attempt measured the screen's availability rather than the system, so it's the
 /// environment's; the run plan's case retry starts the whole case over.
-/// Screening verdicts are the exception: the app keeps them for its process, so a run's cases share one cache.
+/// The app's registered screening cache is the exception: the app keeps it for its process, so a run's cases share one.
 /// </summary>
 internal abstract class CaseRunner(
     AiRelease release,
