@@ -52,13 +52,21 @@ public sealed class ChangeClassifierTests
         Assert.Equal("required: gate policy changed", result.Reason);
     }
 
+    // Every evaluation costs money, so one pull request may carry both and be evaluated once (ADR 0020).
     [Fact]
-    public void Behaviour_and_policy_together_is_a_violation()
+    public void Behaviour_and_policy_together_are_evaluated_once()
     {
         var result = Classify("data/knowledge/src/general/x.md", "eval/datasets/agent-tasks.json", "docs/adr/0013-x.md");
 
-        Assert.Equal("change gate policy and AI behaviour in separate pull requests", result.Violation);
-        Assert.Equal(result.Violation, result.Reason);
+        Assert.True(result.Required);
+        Assert.Null(result.Violation);
+        Assert.Equal("required: AI behaviour and gate policy changed", result.Reason);
+    }
+
+    [Fact]
+    public void Behaviour_and_policy_together_still_need_an_ADR_for_a_dataset()
+    {
+        Assert.Equal(ChangeClassifier.MissingAdr, Classify("ai/manifest.yaml", "eval/datasets/safety.json").Violation);
     }
 
     [Theory]

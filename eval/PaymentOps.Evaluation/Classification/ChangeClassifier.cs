@@ -9,12 +9,11 @@ namespace PaymentOps.Evaluation.Classification;
 internal sealed record ChangeClassification(bool Required, bool Trusted, string? Violation, bool IndexSwitch, string Reason);
 
 /// <summary>
-/// Decides what a pull request needs from the evaluation gate, from its changed paths. Behaviour and gate policy
-/// change in separate pull requests, so a change can't move the agent and the bar it's judged by together.
+/// Decides what a pull request needs from the evaluation gate, from its changed paths. Behaviour and gate policy may
+/// change together, so the work is evaluated once (ADR 0020); a change to the bar itself still needs an ADR.
 /// </summary>
 internal static class ChangeClassifier
 {
-    public const string MixedChange = "change gate policy and AI behaviour in separate pull requests";
     public const string MissingAdr = "a change to the thresholds or the evaluation datasets needs an ADR under docs/adr/ in the same pull request";
     public const string IndexSwitchWithKnowledge = "switch the knowledge index and change the knowledge corpus or how it's built in separate pull requests";
 
@@ -26,7 +25,7 @@ internal static class ChangeClassifier
     ];
 
     // The ADRs that decide thresholds, the safety rule, reruns, retries and how an unscreened question is scored are gate policy too.
-    public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*", "docs/adr/0014-*", "docs/adr/0016-*", "docs/adr/0017-*", "docs/adr/0018-*", "docs/adr/0019-*"];
+    public static readonly string[] GatePolicyPaths = ["eval/**", ".github/workflows/ai-evaluation.yml", "docs/adr/0012-*", "docs/adr/0014-*", "docs/adr/0016-*", "docs/adr/0017-*", "docs/adr/0018-*", "docs/adr/0019-*", "docs/adr/0020-*"];
 
     private static readonly Regex[] Behaviour = Globs(BehaviourPaths);
     private static readonly Regex[] GatePolicy = Globs(GatePolicyPaths);
@@ -46,13 +45,13 @@ internal static class ChangeClassifier
         var policy = changedPaths.Any(IsGatePolicy);
 
         var violation =
-            behaviour && policy ? MixedChange
-            : changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(p => Matches(Adr, p)) ? MissingAdr
+            changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(p => Matches(Adr, p)) ? MissingAdr
             : indexSwitch && changedPaths.Any(p => Matches(Corpus, p)) ? IndexSwitchWithKnowledge
             : null;
 
         var reason = violation
-            ?? (behaviour ? "required: AI behaviour changed"
+            ?? (behaviour && policy ? "required: AI behaviour and gate policy changed"
+            : behaviour ? "required: AI behaviour changed"
             : policy ? "required: gate policy changed"
             : "not required: no AI behaviour or gate policy changed");
         return new ChangeClassification(behaviour || policy, trusted, violation, indexSwitch, reason);
