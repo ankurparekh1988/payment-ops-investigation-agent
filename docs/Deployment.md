@@ -270,7 +270,7 @@ The pipeline maps stage for stage onto Azure DevOps:
 
 ## AI evaluation
 
-`.github/workflows/ai-evaluation.yml` runs on every pull request to `main`, every Monday at 06:00 UTC on `main`, and on demand from `main`. It has no paths filter, so the `AI evaluation` check reports on every pull request; the classifier decides what each one needs. What it measures and the thresholds it applies are in [Evaluation](Evaluation.md#running-in-ci).
+`.github/workflows/ai-evaluation.yml` runs on every pull request to `main`, on the first of each month at 06:00 UTC on `main`, and on demand from `main`. It has no paths filter, so the `AI evaluation` check reports on every pull request; the classifier decides what each one needs, and a pull request that needs evaluating is evaluated once it carries the `evaluate` label. The label must exist in the repository: `gh label create evaluate --description "Run the AI evaluation"`. What it measures and the thresholds it applies are in [Evaluation](Evaluation.md#running-in-ci).
 
 | Job | What it does |
 |---|---|
@@ -307,7 +307,7 @@ A pull request that needs evaluating therefore waits for two approvals, one per 
 
 **Changing the index schema.** The evaluation publisher writes documents only and never changes an index definition, so any schema change, even one Search could apply in place, gets new names for both `retrieval.index` and `retrieval.evaluationIndex`; the AI release check refuses a renamed live index with an unchanged evaluation index. The pull request that switches `retrieval.index` is evaluated against the new live index rather than through the evaluation index, and may not also change the corpus or how it's built. CD creates that index only after the merge, so such a pull request reports "dev environment unavailable", and once `AI evaluation` is a required check it can't merge: the `main` ruleset has no bypass actors. Before the next live-index migration, either the release must gain a candidate index that CD builds ahead of the switch, or the owner must deliberately take the ruleset through a separate maintenance change for that one merge. While the old and new indexes both exist, the free tier's third index slot is taken, so the knowledge self-test can't run until the old index is removed.
 
-**When the weekly run stops.** GitHub disables scheduled workflows in a public repository after 60 days without repository activity. The weekly evaluation then stops without failing or opening an issue. That's a limit of the host, not of the evaluation: re-enable the workflow from the Actions tab, or run it by hand.
+**When the monthly run stops.** GitHub disables scheduled workflows in a public repository after 60 days without repository activity. The monthly evaluation then stops without failing or opening an issue. That's a limit of the host, not of the evaluation: re-enable the workflow from the Actions tab, or run it by hand.
 
 ## Pipeline identities
 
