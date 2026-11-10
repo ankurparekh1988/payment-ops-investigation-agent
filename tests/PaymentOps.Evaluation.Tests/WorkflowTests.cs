@@ -76,7 +76,32 @@ public sealed partial class WorkflowTests
         Assert.True(on.Children.ContainsKey(new YamlScalarNode("workflow_dispatch")));
         Assert.DoesNotContain("pull_request_target", text, StringComparison.Ordinal);
         Assert.DoesNotMatch(new Regex(@"^\s*paths(-ignore)?:", RegexOptions.Multiline), text);
-        Assert.Equal("0 6 * * 1", Scalar((YamlMappingNode)((YamlSequenceNode)on["schedule"]).Children[0], "cron"));
+        Assert.Equal("0 6 1 * *", Scalar((YamlMappingNode)((YamlSequenceNode)on["schedule"]).Children[0], "cron"));
+    }
+
+    // Adding the label is the request, so the label event must start the workflow, as must every push after it.
+    [Fact]
+    public void A_pull_request_runs_on_the_label_as_well_as_each_push()
+    {
+        var types = ((YamlSequenceNode)((YamlMappingNode)((YamlMappingNode)Workflow["on"])["pull_request"])["types"]).Children
+            .Select(t => ((YamlScalarNode)t).Value).ToList();
+
+        Assert.Equal(["opened", "synchronize", "reopened", "labeled"], types);
+    }
+
+    // Each evaluation costs money, so a pull request is evaluated only once it carries the label; the schedule always is.
+    [Fact]
+    public void Evaluation_runs_only_when_requested()
+    {
+        Assert.Equal(
+            "${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'evaluate') }}",
+            Scalar((YamlMappingNode)Job("classify")["outputs"], "requested"));
+        foreach (var job in AttemptJobs)
+        {
+            Assert.Contains("needs.classify.outputs.requested == 'true'", Scalar(Job(job), "if"), StringComparison.Ordinal);
+        }
+
+        Assert.Equal("${{ needs.classify.outputs.requested }}", Scalar((YamlMappingNode)Step("verdict", "verdict")["env"], "REQUESTED"));
     }
 
     [Fact]
@@ -213,8 +238,11 @@ public sealed partial class WorkflowTests
     public static TheoryData<string, Dictionary<string, string>, string, string, int> Verdicts() => new()
     {
         { "1 classify incomplete", Env(required: ""), "error", "the evaluation workflow didn't complete", 1 },
-        { "2 violation", Env(violation: "change gate policy and AI behaviour in separate pull requests"), "policy-violation", "change gate policy and AI behaviour in separate pull requests", 1 },
+        { "2 violation", Env(violation: "a change to the thresholds or the evaluation datasets needs an ADR under docs/adr/ in the same pull request"), "policy-violation", "a change to the thresholds or the evaluation datasets needs an ADR under docs/adr/ in the same pull request", 1 },
+        { "2 violation beats not requested", Env(violation: "x", requested: "false", publish: "", investigation: "", retrieval: "", safety: "", login: "", safetyLogin: ""), "policy-violation", "x", 1 },
         { "3 untrusted", Env(trusted: "false"), "untrusted", "reproduce this change on a branch in this repository", 1 },
+        { "3 not requested", Env(requested: "false", publish: "", publishAttempt: "", evaluateAttempt: "", safetyAttempt: "", investigation: "", retrieval: "", safety: "", login: "", safetyLogin: "", reportsValid: "false"), "not-requested", "add the evaluate label to run the AI evaluation", 1 },
+        { "4 not required needs no label", Env(required: "false", requested: "false", reason: "not required: no AI behaviour or gate policy changed"), "not-required", "not required: no AI behaviour or gate policy changed", 0 },
         { "4 not required", Env(required: "false", reason: "not required: the gate is introduced by this change"), "not-required", "not required: the gate is introduced by this change", 0 },
         { "4 untrusted but not required", Env(required: "false", trusted: "false", reason: "not required: no AI behaviour or gate policy changed"), "not-required", "not required: no AI behaviour or gate policy changed", 0 },
         { "5 scope violation", Env(publish: "scope-violation", investigation: "", retrieval: "", safety: "", login: "", safetyLogin: ""), "scope-violation", "the evaluation publisher can write the live index; fix its role before evaluating", 1 },
@@ -276,7 +304,7 @@ public sealed partial class WorkflowTests
     [InlineData(134, false)]
     public void Retrieval_runs_only_after_an_investigation_result(int investigationExit, bool retrievalRuns)
     {
-        var (outputs, commands, exitCode) = RunEvaluations("evaluate", investigationExit);
+        var (outputs, commands, exitCode, _) = RunEvaluations("evaluate", investigationExit);
 
         Assert.Equal(0, exitCode);
         Assert.Equal(investigationExit.ToString(CultureInfo.InvariantCulture), outputs["investigation-exit"]);
@@ -293,11 +321,23 @@ public sealed partial class WorkflowTests
     [InlineData(134)]
     public void The_safety_job_runs_only_the_safety_evaluation_and_reports_its_exit(int safetyExit)
     {
-        var (outputs, commands, exitCode) = RunEvaluations("evaluate-safety", safetyExit: safetyExit);
+        var (outputs, commands, exitCode, _) = RunEvaluations("evaluate-safety", safetyExit: safetyExit);
 
         Assert.Equal(0, exitCode);
         Assert.Equal(["safety-eval"], commands);
         Assert.Equal(safetyExit.ToString(CultureInfo.InvariantCulture), outputs["safety-exit"]);
+    }
+
+    // Its hard gates fail on any one run, so a pull request runs it once; the scheduled run keeps three for the history.
+    // The investigations keep three on every trigger: their thresholds gate the median of three.
+    [Theory]
+    [InlineData("pull_request", "1", "3")]
+    [InlineData("schedule", "3", "3")]
+    [InlineData("workflow_dispatch", "3", "3")]
+    public void A_pull_request_runs_the_safety_evaluation_once(string eventName, string safetyRuns, string investigationRuns)
+    {
+        Assert.Equal([safetyRuns], RunEvaluations("evaluate-safety", eventName: eventName).Runs);
+        Assert.Equal([investigationRuns], RunEvaluations("evaluate", eventName: eventName).Runs);
     }
 
     [Theory]
@@ -309,7 +349,7 @@ public sealed partial class WorkflowTests
     [InlineData(0, 0, 2, "invalid-input")]
     public void The_verdict_names_why_the_evaluations_stopped(int investigationExit, int retrievalExit, int safetyExit, string status)
     {
-        var (outputs, _, _) = RunEvaluations("evaluate", investigationExit, retrievalExit);
+        var (outputs, _, _, _) = RunEvaluations("evaluate", investigationExit, retrievalExit);
 
         // The safety job passes its exit on unchanged, as its own test shows.
         var (verdict, code) = RunVerdict(Env(
@@ -385,7 +425,7 @@ public sealed partial class WorkflowTests
 
         Assert.Contains("-- safety-eval", safety, StringComparison.Ordinal);
         Assert.DoesNotContain("--thresholds", safety, StringComparison.Ordinal);
-        Assert.Contains("--dataset eval/datasets/safety.json --runs 3", safety, StringComparison.Ordinal);
+        Assert.Contains("--dataset eval/datasets/safety.json --runs \"$runs\"", safety, StringComparison.Ordinal);
         Assert.Contains("--index \"$INDEX\"", safety, StringComparison.Ordinal);
         Assert.Contains("--out \"$RUNNER_TEMP/eval/safety.json\"", safety, StringComparison.Ordinal);
         Assert.Equal("${{ steps.evaluate.outputs.safety-exit }}", Scalar((YamlMappingNode)Job("evaluate-safety")["outputs"], "safety-exit"));
@@ -424,6 +464,7 @@ public sealed partial class WorkflowTests
     private static Dictionary<string, string> Env(
         string eventName = "pull_request",
         string required = "true",
+        string requested = "true",
         string trusted = "true",
         string violation = "",
         string reason = "required: AI behaviour changed",
@@ -443,6 +484,7 @@ public sealed partial class WorkflowTests
         {
             ["EVENT_NAME"] = eventName,
             ["REQUIRED"] = required,
+            ["REQUESTED"] = requested,
             ["TRUSTED"] = trusted,
             ["VIOLATION"] = violation,
             ["REASON"] = reason,
@@ -461,15 +503,21 @@ public sealed partial class WorkflowTests
             ["RECORD_EXIT"] = recordExit,
         };
 
-    // The job's own script, with a stand-in dotnet that records which evaluation was started and exits as told.
-    private static (Dictionary<string, string> Outputs, List<string> Commands, int ExitCode) RunEvaluations(
-        string job, int investigationExit = 0, int retrievalExit = 0, int safetyExit = 0)
+    // The job's own script, with a stand-in dotnet that records which evaluation was started, with how many runs, and exits as told.
+    private static (Dictionary<string, string> Outputs, List<string> Commands, int ExitCode, List<string> Runs) RunEvaluations(
+        string job, int investigationExit = 0, int retrievalExit = 0, int safetyExit = 0, string eventName = "pull_request")
     {
         var directory = Directory.CreateTempSubdirectory("evaluations-");
         var log = Path.Combine(directory.FullName, "commands");
+        var runsLog = Path.Combine(directory.FullName, "runs");
         var dotnet = Path.Combine(directory.FullName, "dotnet");
         File.WriteAllText(dotnet, """
             #!/usr/bin/env bash
+            previous=
+            for argument in "$@"; do
+              [[ "$previous" == --runs ]] && echo "$argument" >> "$RUNS_LOG"
+              previous="$argument"
+            done
             for argument in "$@"; do
               case "$argument" in
                 investigation-eval) echo investigation-eval >> "$COMMAND_LOG"; exit "$INVESTIGATION_CODE" ;;
@@ -488,15 +536,16 @@ public sealed partial class WorkflowTests
         {
             ["PATH"] = directory.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
             ["COMMAND_LOG"] = log,
+            ["RUNS_LOG"] = runsLog,
             ["INVESTIGATION_CODE"] = investigationExit.ToString(CultureInfo.InvariantCulture),
             ["RETRIEVAL_CODE"] = retrievalExit.ToString(CultureInfo.InvariantCulture),
             ["SAFETY_CODE"] = safetyExit.ToString(CultureInfo.InvariantCulture),
-            ["EVENT_NAME"] = "pull_request",
+            ["EVENT_NAME"] = eventName,
             ["INDEX"] = "evaluation",
             ["RUNNER_TEMP"] = directory.FullName,
         });
 
-        return (outputs, [.. File.ReadAllLines(log)], exitCode);
+        return (outputs, [.. File.ReadAllLines(log)], exitCode, File.Exists(runsLog) ? [.. File.ReadAllLines(runsLog)] : []);
     }
 
     // The job's report check, run over a folder holding the named report files.
