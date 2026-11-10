@@ -83,7 +83,8 @@ internal sealed class InvestigationAgentRunner(
         }
 
         var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);
-        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId);
+        var named = new MerchantSources([question, .. history.Where(m => m.Role == ChatRole.User).Select(m => m.Text)]);
+        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId, named);
         List<AITool> readTools = [.. tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).Select(guard.Wrap)];
 
         // No default tools: tools passed per run are added to an agent's defaults, and the correction run must offer only submit_assessment.

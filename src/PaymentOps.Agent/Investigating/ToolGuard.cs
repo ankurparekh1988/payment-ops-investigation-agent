@@ -27,7 +27,8 @@ internal sealed class ToolGuard(
     IProgress<InvestigationProgress>? progress,
     IUntrustedTextScreen? screen = null,
     ILogger? logger = null,
-    Guid investigationId = default)
+    Guid investigationId = default,
+    MerchantSources? merchants = null)
 {
     // A guard built without a screen can check nothing, so it withholds every untrusted value: fail closed.
     private readonly IUntrustedTextScreen _screen = screen ?? new UnavailableScreen();
@@ -37,6 +38,7 @@ internal sealed class ToolGuard(
     private const string Unscreenable = "[withheld: this text couldn't be checked]";
     private const string HarmfulCopy = "[withheld: this text contains harmful content]";
     private static readonly string CitationIdProperty = ToolJson.Options.PropertyNamingPolicy!.ConvertName("CitationId");
+    private static readonly string MerchantIdProperty = ToolJson.Options.PropertyNamingPolicy!.ConvertName("MerchantId");
 
     private static readonly string LimitReached = ToolJson.Serialize(new ToolResult.Failed(
         ToolErrorCode.LimitReached, "The investigation has reached its step limit. Call submit_assessment with what you have."));
@@ -74,9 +76,10 @@ internal sealed class ToolGuard(
 
         // One budget from here covers the tool and the screening of what it returned; the tool keeps its own timeout.
         var started = time.GetTimestamp();
-        var result = request is not null
-            ? await RunAsync(tool, request, cancellationToken)
-            : new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.");
+        var result = request is null
+            ? new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.")
+            : Unnamed(tool, request) is { } refused ? refused
+            : await RunAsync(tool, request, cancellationToken);
         var (json, gap) = Record(tool, result);
         (json, var withheld) = await ScreenAsync(tool, json, limits.ToolResultBudget - time.GetElapsedTime(started), cancellationToken);
         progress?.Report(new InvestigationProgress.ToolFinished(tool.Name, label, result is ToolResult.Ok, Records(result), (gap ?? withheld)?.Wording));
@@ -136,6 +139,22 @@ internal sealed class ToolGuard(
         {
             return null;
         }
+    }
+
+    // A merchant the user never named came from text the model read, so the tool doesn't run for it.
+    private ToolResult.Failed? Unnamed(IInvestigationTool tool, object request)
+    {
+        if (merchants is null
+            || !JsonSerializer.SerializeToElement(request, tool.RequestType, ToolJson.Options).TryGetProperty(MerchantIdProperty, out var id)
+            || id.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(id.GetString())
+            || merchants.Named(id.GetString()!))
+        {
+            return null;
+        }
+
+        InvestigationLog.MerchantNotNamed(_logger, investigationId, tool.Name);
+        return new ToolResult.Failed(ToolErrorCode.InvalidArgument, "merchant_id must be a merchant named in the user's questions.");
     }
 
     private async Task<ToolResult> RunAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)

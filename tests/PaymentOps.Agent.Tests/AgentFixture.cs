@@ -85,6 +85,12 @@ internal sealed class AgentFixture : IDisposable
 
 internal static class RunnerExtensions
 {
+    /// <summary>Names M-1042, the merchant most scripted calls look up: only merchants the user named are looked up.</summary>
+    public const string Question = "Why was M-1042's payout late yesterday?";
+
+    /// <summary>A question naming each merchant, for a script that looks up several.</summary>
+    public static string Naming(IEnumerable<string> merchantIds) => $"Compare {string.Join(", ", merchantIds)}.";
+
     /// <summary>A first question: no history, nobody watching.</summary>
     public static Task<AssessmentResult> InvestigateAsync(this InvestigationAgentRunner runner, string question, CancellationToken cancellationToken) =>
         runner.InvestigateAsync(question, [], null, Guid.NewGuid(), cancellationToken);

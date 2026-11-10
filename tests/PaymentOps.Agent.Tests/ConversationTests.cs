@@ -98,7 +98,7 @@ public sealed partial class ConversationTests
         using var fixture = new AgentFixture();
         var model = new ScriptedChatClient(Respond(Call(Submit, Submission())));
 
-        await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         var sent = model.Requests[0].Options!;
         Assert.Equal(sent.Instructions!.Length + sent.Tools!.OfType<AIFunction>().Sum(PromptSize.DefinitionChars), fixture.FixedPrompt.Chars);
@@ -173,12 +173,12 @@ public sealed partial class ConversationTests
         var model = new ScriptedChatClient(Respond(Call(ToolNames.MerchantProfile, new { merchant_id = "M-1042" })), Respond(Call(Submit, Submission())), Respond(Text("No.")), Respond(Text("No.")));
         var (service, _) = Service(fixture, model);
 
-        Assert.IsType<AssessmentResult.Assessed>(await service.InvestigateAsync(EarlierQuestion, null, CancellationToken.None));
+        Assert.IsType<AssessmentResult.Assessed>(await service.InvestigateAsync(RunnerExtensions.Question, null, CancellationToken.None));
         var next = model.Requests.Count;
         await service.InvestigateAsync("Why was M-1042 late?", null, CancellationToken.None);
 
         var sent = model.Requests[next].Messages;
-        Assert.Equal(EarlierQuestion, sent[0].Text);
+        Assert.Equal(RunnerExtensions.Question, sent[0].Text);
         Assert.Equal(ChatRole.Assistant, sent[1].Role);
         Assert.StartsWith("Earlier context", sent[1].Text, StringComparison.Ordinal);
     }

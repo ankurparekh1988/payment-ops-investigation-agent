@@ -49,6 +49,10 @@ internal static partial class InvestigationLog
     [LoggerMessage(EventId = 3005, Level = LogLevel.Information, Message = "Investigation {InvestigationId} {Tool}: {Screened} untrusted values screened, {Flagged} flagged, {Harmful} harmful and {Unscreenable} unscreenable, withheld from the model")]
     public static partial void TextWithheld(ILogger logger, Guid investigationId, string tool, int screened, int flagged, int harmful, int unscreenable);
 
+    // The id isn't logged: it came from text the model read, not from this system.
+    [LoggerMessage(EventId = 3008, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} {Tool}: refused a merchant the user never named")]
+    public static partial void MerchantNotNamed(ILogger logger, Guid investigationId, string tool);
+
     [LoggerMessage(EventId = 3004, Level = LogLevel.Error, Message = "Investigation {InvestigationId} aborted by an unexpected failure: {ExceptionType}, after {ElapsedMs} ms")]
     private static partial void Aborted(ILogger logger, Guid investigationId, string exceptionType, long elapsedMs);
 }
