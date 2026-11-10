@@ -45,7 +45,7 @@ internal static class ChangeClassifier
         var policy = changedPaths.Any(IsGatePolicy);
 
         var violation =
-            changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(p => Matches(Adr, p)) ? MissingAdr
+            changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(IsAdr) ? MissingAdr
             : indexSwitch && changedPaths.Any(p => Matches(Corpus, p)) ? IndexSwitchWithKnowledge
             : null;
 
@@ -60,6 +60,9 @@ internal static class ChangeClassifier
     public static bool IsBehaviour(string path) => Matches(Behaviour, path);
 
     public static bool IsGatePolicy(string path) => Matches(GatePolicy, path);
+
+    // The index lists ADRs and decides nothing, so editing it isn't writing one.
+    private static bool IsAdr(string path) => Matches(Adr, path) && !string.Equals(path, "docs/adr/README.md", StringComparison.Ordinal);
 
     private static bool Matches(Regex[] globs, string path) => globs.Any(g => g.IsMatch(path));
 

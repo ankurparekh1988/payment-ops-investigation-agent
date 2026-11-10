@@ -63,6 +63,13 @@ public sealed class ChangeClassifierTests
         Assert.Equal("required: AI behaviour and gate policy changed", result.Reason);
     }
 
+    // The index lists ADRs; editing it decides nothing, so it can't stand in for one.
+    [Fact]
+    public void The_ADR_index_isnt_an_ADR()
+    {
+        Assert.Equal(ChangeClassifier.MissingAdr, Classify("eval/thresholds.json", "docs/adr/README.md").Violation);
+    }
+
     [Fact]
     public void Behaviour_and_policy_together_still_need_an_ADR_for_a_dataset()
     {
