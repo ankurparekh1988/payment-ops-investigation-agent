@@ -5,9 +5,9 @@
 
 ## Context
 
-Every evaluation is paid for by the call: the agent's and the classifier's model tokens, and Content Safety by the text record. In the first ten days of November 2026 the subscription spent C$126, nearly all of it on those calls, against a monthly budget of C$10. The infrastructure itself is on free tiers or costs cents.
+Every evaluation is paid for by the call: the agent's and the classifier's model tokens, and Content Safety by the text record. The infrastructure itself is on free tiers or costs cents, so evaluations are what the system's running cost is made of.
 
-One evaluation, investigations and safety together, made about 6,600 Content Safety calls and 4,600 calls to the tool-text classifier, besides the agent's own requests. Several things multiplied that:
+One evaluation, investigations and safety together, made about 6,600 Content Safety calls and 4,600 calls to the tool-text classifier, besides the agent's own requests, most of them repeating work already done. Several things multiplied that:
 
 - **Every push to an evaluated pull request started a new evaluation,** including pushes made only to answer a review.
 - **Behaviour and gate policy had to change in separate pull requests,** so a piece of work that needed both was evaluated twice.
@@ -15,7 +15,7 @@ One evaluation, investigations and safety together, made about 6,600 Content Saf
 - **The safety evaluation ran three times** on every evaluated pull request, though its rates gate nothing ([ADR 0014](0014-safety-evaluation-from-a-pre-registered-rule.md)) and its hard gates fail on any one run.
 - **`main` was evaluated weekly,** though it changes only through evaluated pull requests and the model version is pinned.
 
-The money spent has to stay in proportion to what the system is worth. That's as true of an evaluation budget as of anything else.
+An evaluation that repeats work measures nothing new, so its cost buys nothing.
 
 ## Decision
 
