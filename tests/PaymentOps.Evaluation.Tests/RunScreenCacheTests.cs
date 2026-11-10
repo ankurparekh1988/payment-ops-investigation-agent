@@ -21,18 +21,14 @@ public sealed class RunScreenCacheTests
     public async Task Cases_in_a_run_share_the_screen_cache_and_each_run_starts_with_its_own()
     {
         var caches = new List<object>();
-        void Configure(IServiceCollection services)
-        {
-            // A blocked question ends the case before the model; resolving its screen shows the cache that case used.
-            Screening(questions: new ScriptedQuestionScreen(QuestionVerdict.Harmful))(services);
+
+        // A blocked question ends the case before the model; resolving its screen shows the cache that case used.
+        var runner = AgentRunner(() => Model(), questions: new ScriptedQuestionScreen(QuestionVerdict.Harmful), configure: services =>
             EvaluationServices.Wrap<IQuestionScreen>(services, (sp, screen) =>
             {
                 caches.Add(sp.GetRequiredService(ScreenCacheType));
                 return screen;
-            });
-        }
-
-        var runner = new AgentCaseRunner(Release, Endpoints, new UnusedCredential(), _ => Model(), _ => new FixedKnowledge(GeneralSection), Configure, TimeSpan.Zero);
+            }));
 
         await RunPlan.RunAsync(runner, [Case("a"), Case("b")], runs: 2, TimeSpan.Zero, new EvaluationDiagnostics(), CancellationToken.None);
 

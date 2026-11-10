@@ -32,7 +32,8 @@ internal static class ChangeClassifier
 
     // Labels live in the datasets, so a label change is a dataset change.
     private static readonly Regex[] AdrRequired = Globs(["eval/thresholds.json", "eval/safety-thresholds.json", "eval/datasets/**"]);
-    private static readonly Regex[] Adr = Globs(["docs/adr/*.md"]);
+    // Numbered decisions only; the index and anything else in the folder decide nothing.
+    private static readonly Regex[] Adr = Globs(["docs/adr/*-*.md"]);
     // What decides the published corpus; a switched index is evaluated as CD built it, so neither may change with the switch.
     private static readonly Regex[] Corpus = Globs(["data/knowledge/**", "tools/PaymentOps.CorpusBuild/**"]);
 
@@ -45,7 +46,7 @@ internal static class ChangeClassifier
         var policy = changedPaths.Any(IsGatePolicy);
 
         var violation =
-            changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(IsAdr) ? MissingAdr
+            changedPaths.Any(p => Matches(AdrRequired, p)) && !changedPaths.Any(p => Matches(Adr, p)) ? MissingAdr
             : indexSwitch && changedPaths.Any(p => Matches(Corpus, p)) ? IndexSwitchWithKnowledge
             : null;
 
@@ -60,9 +61,6 @@ internal static class ChangeClassifier
     public static bool IsBehaviour(string path) => Matches(Behaviour, path);
 
     public static bool IsGatePolicy(string path) => Matches(GatePolicy, path);
-
-    // The index lists ADRs and decides nothing, so editing it isn't writing one.
-    private static bool IsAdr(string path) => Matches(Adr, path) && !string.Equals(path, "docs/adr/README.md", StringComparison.Ordinal);
 
     private static bool Matches(Regex[] globs, string path) => globs.Any(g => g.IsMatch(path));
 

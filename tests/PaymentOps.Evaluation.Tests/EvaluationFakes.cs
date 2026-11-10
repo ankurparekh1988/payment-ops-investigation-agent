@@ -50,8 +50,13 @@ internal static class EvaluationFakes
         ScoreEvidence: false, EvidenceOutcomes: null, ExpectedEvidence: [], RequiredSections: [], AcceptableSections: [],
         Proposal: InvestigationCase.ProposalEither, RestrictedMarkers: [], ExpectedRootCause: null);
 
-    public static AgentCaseRunner AgentRunner(Func<ScriptedChatClient> model, IKnowledgeLookup? knowledge = null, IUntrustedTextScreen? screen = null, IQuestionScreen? questions = null) =>
-        new(Release, Endpoints, new UnusedCredential(), _ => model(), _ => knowledge ?? new FixedKnowledge(GeneralSection), Screening(screen, questions), reaskDelay: TimeSpan.Zero);
+    /// <param name="configure">Runs after the scripted screens are registered, so it can wrap them.</param>
+    public static AgentCaseRunner AgentRunner(Func<ScriptedChatClient> model, IKnowledgeLookup? knowledge = null, IUntrustedTextScreen? screen = null, IQuestionScreen? questions = null, Action<IServiceCollection>? configure = null) =>
+        new(Release, Endpoints, new UnusedCredential(), _ => model(), _ => knowledge ?? new FixedKnowledge(GeneralSection), services =>
+        {
+            Screening(screen, questions)(services);
+            configure?.Invoke(services);
+        }, reaskDelay: TimeSpan.Zero);
 
     /// <summary>The app's services with scripted screens for tool text and questions, clean unless a test says otherwise.</summary>
     public static Action<IServiceCollection> Screening(IUntrustedTextScreen? screen = null, IQuestionScreen? questions = null) =>
