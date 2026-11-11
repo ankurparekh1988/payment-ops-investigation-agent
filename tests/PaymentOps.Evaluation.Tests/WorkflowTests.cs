@@ -76,7 +76,117 @@ public sealed partial class WorkflowTests
         Assert.True(on.Children.ContainsKey(new YamlScalarNode("workflow_dispatch")));
         Assert.DoesNotContain("pull_request_target", text, StringComparison.Ordinal);
         Assert.DoesNotMatch(new Regex(@"^\s*paths(-ignore)?:", RegexOptions.Multiline), text);
-        Assert.Equal("0 6 * * 1", Scalar((YamlMappingNode)((YamlSequenceNode)on["schedule"]).Children[0], "cron"));
+        Assert.Equal("0 6 1 * *", Scalar((YamlMappingNode)((YamlSequenceNode)on["schedule"]).Children[0], "cron"));
+    }
+
+    // Adding the label is the request, so the label event must start the workflow, as must every push after it; removing
+    // it must too, or the pass measured under the label stays on the pull request.
+    [Fact]
+    public void A_pull_request_runs_on_the_label_as_well_as_each_push()
+    {
+        var types = ((YamlSequenceNode)((YamlMappingNode)((YamlMappingNode)Workflow["on"])["pull_request"])["types"]).Children
+            .Select(t => ((YamlScalarNode)t).Value).ToList();
+
+        Assert.Equal(["opened", "synchronize", "reopened", "labeled", "unlabeled"], types);
+    }
+
+    // The labels in a label event's payload are the pull request's labels after the change.
+    public static TheoryData<string, string, string, string[], bool> Requests() => new()
+    {
+        { "opened with the label waits for its labeled event", "pull_request", "opened", ["evaluate"], false },
+        { "opened without the label", "pull_request", "opened", [], false },
+        { "push with the label", "pull_request", "synchronize", ["evaluate"], true },
+        { "push without the label", "pull_request", "synchronize", [], false },
+        { "reopened with the label", "pull_request", "reopened", ["evaluate"], true },
+        { "reopened without the label", "pull_request", "reopened", [], false },
+        { "label added", "pull_request", "labeled", ["evaluate"], true },
+        { "another label added beside it", "pull_request", "labeled", ["evaluate", "docs"], true },
+        { "another label added without it", "pull_request", "labeled", ["docs"], false },
+        { "label removed", "pull_request", "unlabeled", [], false },
+        { "label removed, another kept", "pull_request", "unlabeled", ["docs"], false },
+        { "another label removed beside it", "pull_request", "unlabeled", ["evaluate"], true },
+        { "monthly run", "schedule", "", [], true },
+        { "manual run", "workflow_dispatch", "", [], true },
+    };
+
+    [Theory]
+    [MemberData(nameof(Requests))]
+    public void An_evaluation_is_requested_only_while_the_label_is_there(string row, string eventName, string action, string[] labels, bool requested)
+    {
+        Assert.True(requested == IsRequested(eventName, action, labels), row);
+    }
+
+    // Removing the label from a pull request that needs evaluating fails the check and spends nothing: no paid job runs.
+    [Fact]
+    public void Removing_the_label_fails_the_check_without_evaluating()
+    {
+        var requested = IsRequested("pull_request", "unlabeled", []) ? "true" : "false";
+
+        foreach (var job in AttemptJobs)
+        {
+            Assert.False(JobRuns(job, requested), job);
+            Assert.True(JobRuns(job, "true"), job);
+        }
+
+        Assert.True(WorkflowExpression.IsTrue(Scalar(Job("verdict"), "if")!, Needs("true")));
+        var (outputs, code) = RunVerdict(Env(requested: requested));
+        Assert.Equal("not-requested", outputs.GetValueOrDefault("status"));
+        Assert.Equal("add the evaluate label to run the AI evaluation", outputs.GetValueOrDefault("message"));
+        Assert.Equal(1, code);
+    }
+
+    // A pull request that changes no behaviour or gate policy passes without the label, before or after it's removed.
+    [Fact]
+    public void A_change_that_needs_no_evaluation_passes_without_the_label()
+    {
+        var requested = IsRequested("pull_request", "unlabeled", []) ? "true" : "false";
+
+        foreach (var job in AttemptJobs)
+        {
+            Assert.False(JobRuns(job, requested, required: "false"), job);
+        }
+
+        var (outputs, code) = RunVerdict(Env(required: "false", requested: requested, reason: "not required: no AI behaviour or gate policy changed"));
+        Assert.Equal("not-required", outputs.GetValueOrDefault("status"));
+        Assert.Equal(0, code);
+    }
+
+    private static bool IsRequested(string eventName, string action, string[] labels) =>
+        WorkflowExpression.IsTrue(Scalar((YamlMappingNode)Job("classify")["outputs"], "requested")!, new Dictionary<string, object>
+        {
+            ["github.event_name"] = eventName,
+            ["github.event.action"] = action,
+            ["github.event.pull_request.labels.*.name"] = labels,
+        });
+
+    // A trusted, required change with a published index, so only the label decides.
+    private static Dictionary<string, object> Needs(string requested, string required = "true") => new()
+    {
+        ["github.event_name"] = "pull_request",
+        ["needs.classify.outputs.required"] = required,
+        ["needs.classify.outputs.requested"] = requested,
+        ["needs.classify.outputs.trusted"] = "true",
+        ["needs.classify.outputs.violation"] = string.Empty,
+        ["needs.classify.outputs.index-switch"] = "false",
+        ["needs.publish-eval-index.outputs.failure-class"] = "none",
+    };
+
+    private static bool JobRuns(string job, string requested, string required = "true") =>
+        WorkflowExpression.IsTrue(Scalar(Job(job), "if")!, Needs(requested, required));
+
+    // Each evaluation costs money, so a pull request is evaluated only once it carries the label; the schedule always is.
+    [Fact]
+    public void Evaluation_runs_only_when_requested()
+    {
+        Assert.Equal(
+            "${{ github.event_name != 'pull_request' || (github.event.action != 'opened' && contains(github.event.pull_request.labels.*.name, 'evaluate')) }}",
+            Scalar((YamlMappingNode)Job("classify")["outputs"], "requested"));
+        foreach (var job in AttemptJobs)
+        {
+            Assert.Contains("needs.classify.outputs.requested == 'true'", Scalar(Job(job), "if"), StringComparison.Ordinal);
+        }
+
+        Assert.Equal("${{ needs.classify.outputs.requested }}", Scalar((YamlMappingNode)Step("verdict", "verdict")["env"], "REQUESTED"));
     }
 
     [Fact]
@@ -213,8 +323,11 @@ public sealed partial class WorkflowTests
     public static TheoryData<string, Dictionary<string, string>, string, string, int> Verdicts() => new()
     {
         { "1 classify incomplete", Env(required: ""), "error", "the evaluation workflow didn't complete", 1 },
-        { "2 violation", Env(violation: "change gate policy and AI behaviour in separate pull requests"), "policy-violation", "change gate policy and AI behaviour in separate pull requests", 1 },
+        { "2 violation", Env(violation: "x"), "policy-violation", "x", 1 },
+        { "2 violation beats not requested", Env(violation: "x", requested: "false"), "policy-violation", "x", 1 },
         { "3 untrusted", Env(trusted: "false"), "untrusted", "reproduce this change on a branch in this repository", 1 },
+        { "3 not requested", Env(requested: "false"), "not-requested", "add the evaluate label to run the AI evaluation", 1 },
+        { "4 not required needs no label", Env(required: "false", requested: "false", reason: "not required: no AI behaviour or gate policy changed"), "not-required", "not required: no AI behaviour or gate policy changed", 0 },
         { "4 not required", Env(required: "false", reason: "not required: the gate is introduced by this change"), "not-required", "not required: the gate is introduced by this change", 0 },
         { "4 untrusted but not required", Env(required: "false", trusted: "false", reason: "not required: no AI behaviour or gate policy changed"), "not-required", "not required: no AI behaviour or gate policy changed", 0 },
         { "5 scope violation", Env(publish: "scope-violation", investigation: "", retrieval: "", safety: "", login: "", safetyLogin: ""), "scope-violation", "the evaluation publisher can write the live index; fix its role before evaluating", 1 },
@@ -298,6 +411,15 @@ public sealed partial class WorkflowTests
         Assert.Equal(0, exitCode);
         Assert.Equal(["safety-eval"], commands);
         Assert.Equal(safetyExit.ToString(CultureInfo.InvariantCulture), outputs["safety-exit"]);
+    }
+
+    // Its hard gates fail on any one run, so a pull request runs it once; the scheduled run keeps three for the history.
+    // The investigations keep three on every trigger: their thresholds gate the median of three.
+    [Fact]
+    public void A_pull_request_runs_the_safety_evaluation_once()
+    {
+        Assert.Equal("${{ github.event_name == 'pull_request' && '1' || '3' }}", Scalar((YamlMappingNode)Step("evaluate-safety", "evaluate")["env"], "RUNS"));
+        Assert.Contains("--runs 3 --system agent", Scalar(Step("evaluate", "evaluate"), "run"), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -385,7 +507,7 @@ public sealed partial class WorkflowTests
 
         Assert.Contains("-- safety-eval", safety, StringComparison.Ordinal);
         Assert.DoesNotContain("--thresholds", safety, StringComparison.Ordinal);
-        Assert.Contains("--dataset eval/datasets/safety.json --runs 3", safety, StringComparison.Ordinal);
+        Assert.Contains("--dataset eval/datasets/safety.json --runs \"$RUNS\"", safety, StringComparison.Ordinal);
         Assert.Contains("--index \"$INDEX\"", safety, StringComparison.Ordinal);
         Assert.Contains("--out \"$RUNNER_TEMP/eval/safety.json\"", safety, StringComparison.Ordinal);
         Assert.Equal("${{ steps.evaluate.outputs.safety-exit }}", Scalar((YamlMappingNode)Job("evaluate-safety")["outputs"], "safety-exit"));
@@ -424,6 +546,7 @@ public sealed partial class WorkflowTests
     private static Dictionary<string, string> Env(
         string eventName = "pull_request",
         string required = "true",
+        string requested = "true",
         string trusted = "true",
         string violation = "",
         string reason = "required: AI behaviour changed",
@@ -443,6 +566,7 @@ public sealed partial class WorkflowTests
         {
             ["EVENT_NAME"] = eventName,
             ["REQUIRED"] = required,
+            ["REQUESTED"] = requested,
             ["TRUSTED"] = trusted,
             ["VIOLATION"] = violation,
             ["REASON"] = reason,

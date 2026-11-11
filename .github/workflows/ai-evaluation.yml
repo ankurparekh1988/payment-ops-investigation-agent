@@ -1,14 +1,18 @@
 name: AI evaluation
 
 # The release gate for AI behaviour: every pull request is classified, and one that changes behaviour or gate
-# policy is evaluated against the frozen thresholds in eval/thresholds.json. Weekly and on demand, main is
+# policy is evaluated against the frozen thresholds in eval/thresholds.json. Monthly and on demand, main is
 # evaluated the same way and the result is recorded in Log Analytics. No paths filter: the required check
 # must report on every pull request, so the classifier decides what's needed.
+# An evaluation costs money, so a pull request is evaluated only once it carries the "evaluate" label, and again
+# on each push while it does; until then the check fails and asks for it (ADR 0020). Removing the label runs the
+# check again, so a pass measured while it was there doesn't stay on the pull request.
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 1 * *"
   workflow_dispatch:
 
 permissions:
@@ -37,6 +41,8 @@ jobs:
       violation: ${{ steps.classify.outputs.violation }}
       index-switch: ${{ steps.classify.outputs.index-switch }}
       reason: ${{ steps.classify.outputs.reason }}
+      # A pull request opened with the label also gets a labeled event, which queues after this run and evaluates.
+      requested: ${{ github.event_name != 'pull_request' || (github.event.action != 'opened' && contains(github.event.pull_request.labels.*.name, 'evaluate')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -97,7 +103,7 @@ jobs:
     name: Publish the evaluation index
     needs: classify
     if: >-
-      needs.classify.outputs.required == 'true' && needs.classify.outputs.trusted == 'true'
+      needs.classify.outputs.required == 'true' && needs.classify.outputs.requested == 'true' && needs.classify.outputs.trusted == 'true'
       && needs.classify.outputs.violation == '' && needs.classify.outputs.index-switch != 'true'
     runs-on: ubuntu-latest
     environment: ${{ format(github.event_name == 'pull_request' && '{0}-eval-publish' || '{0}-eval-publish-scheduled', fromJSON(vars.TERRAFORM_SETTINGS).TF_VAR_environment) }}
@@ -176,7 +182,7 @@ jobs:
     name: Evaluate investigations and retrieval
     needs: [classify, publish-eval-index]
     if: >-
-      always() && needs.classify.outputs.required == 'true' && needs.classify.outputs.trusted == 'true'
+      always() && needs.classify.outputs.required == 'true' && needs.classify.outputs.requested == 'true' && needs.classify.outputs.trusted == 'true'
       && needs.classify.outputs.violation == ''
       && (needs.publish-eval-index.outputs.failure-class == 'none' || needs.classify.outputs.index-switch == 'true')
     runs-on: ubuntu-latest
@@ -211,7 +217,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Judge scores don't gate, so pull requests skip the judge; the weekly run keeps it for the history.
+      # Judge scores don't gate, so pull requests skip the judge; the scheduled run keeps it for the history.
       - name: Run the evaluations
         id: evaluate
         if: steps.login.outcome == 'success'
@@ -276,7 +282,7 @@ jobs:
     name: Evaluate safety
     needs: [classify, publish-eval-index]
     if: >-
-      always() && needs.classify.outputs.required == 'true' && needs.classify.outputs.trusted == 'true'
+      always() && needs.classify.outputs.required == 'true' && needs.classify.outputs.requested == 'true' && needs.classify.outputs.trusted == 'true'
       && needs.classify.outputs.violation == ''
       && (needs.publish-eval-index.outputs.failure-class == 'none' || needs.classify.outputs.index-switch == 'true')
     runs-on: ubuntu-latest
@@ -310,11 +316,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Report-only until its thresholds are frozen from a baseline of main: only its hard gates can fail it.
+      # Its rates are reported, not gated: only its hard gates can fail it, and they fail on any one run, so a pull
+      # request runs it once; the scheduled run keeps three for the history (ADR 0014, ADR 0020).
       - name: Run the safety evaluation
         id: evaluate
         if: steps.login.outcome == 'success'
         env:
+          RUNS: ${{ github.event_name == 'pull_request' && '1' || '3' }}
           INDEX: ${{ needs.classify.outputs.index-switch == 'true' && 'live' || 'evaluation' }}
           FOUNDRY_ENDPOINT: ${{ vars.EVAL_FOUNDRY_ENDPOINT }}
           SEARCH_ENDPOINT: ${{ vars.EVAL_SEARCH_ENDPOINT }}
@@ -325,7 +333,7 @@ jobs:
           dotnet run --project eval/PaymentOps.Evaluation --configuration Release --no-build -- safety-eval \
             --foundry "$FOUNDRY_ENDPOINT" --content-safety "$CONTENT_SAFETY_ENDPOINT" --search "$SEARCH_ENDPOINT" \
             --scope https://cognitiveservices.azure.com/.default --ai ai --sources data/knowledge/src \
-            --dataset eval/datasets/safety.json --runs 3 --pricing eval/pricing.json --index "$INDEX" \
+            --dataset eval/datasets/safety.json --runs "$RUNS" --pricing eval/pricing.json --index "$INDEX" \
             --out "$RUNNER_TEMP/eval/safety.json" --summary "$GITHUB_STEP_SUMMARY"
           echo "safety-exit=$?" >> "$GITHUB_OUTPUT"
 
@@ -421,6 +429,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REQUIRED: ${{ needs.classify.outputs.required }}
+          REQUESTED: ${{ needs.classify.outputs.requested }}
           TRUSTED: ${{ needs.classify.outputs.trusted }}
           VIOLATION: ${{ needs.classify.outputs.violation }}
           REASON: ${{ needs.classify.outputs.reason }}
@@ -457,6 +466,8 @@ jobs:
             status=not-required; message="$REASON"
           elif [[ "$TRUSTED" != true ]]; then
             status=untrusted; message="reproduce this change on a branch in this repository"
+          elif [[ "$REQUESTED" != true ]]; then
+            status=not-requested; message="add the evaluate label to run the AI evaluation"
           elif stale_attempt; then
             # Results from two attempts aren't one evaluation, whatever each says.
             status=error; message="the evaluation jobs ran in different attempts; re-run all jobs"

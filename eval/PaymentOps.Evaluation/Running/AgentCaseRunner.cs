@@ -4,9 +4,11 @@ using Azure.Core;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using PaymentOps.Agent;
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Safety;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Tools.Knowledge;
@@ -20,6 +22,7 @@ namespace PaymentOps.Evaluation.Running;
 /// A question the screen couldn't check never reached the system, so it's asked once more, as the app tells the person
 /// to. Still unscreened, the attempt measured the screen's availability rather than the system, so it's the
 /// environment's; the run plan's case retry starts the whole case over.
+/// The app's registered screening cache is the exception: the app keeps it for its process, so a run's cases share one.
 /// </summary>
 internal abstract class CaseRunner(
     AiRelease release,
@@ -35,6 +38,10 @@ internal abstract class CaseRunner(
     protected static readonly TimeSpan DefaultReaskDelay = TimeSpan.FromSeconds(15);
 
     private static readonly string Unscreened = Outcomes.NotAssessed(NotAssessedReason.Unscreened);
+
+    private ScreenCache _runScreenCache = new();
+
+    public void BeginRun() => _runScreenCache = new ScreenCache();
 
     public async Task<CaseAttempt> RunCaseAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
@@ -64,7 +71,14 @@ internal abstract class CaseRunner(
     private async Task<CaseAttempt> AskAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
         var recorder = new CaseRecorder();
-        using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge, configure, overlay?.Invoke(c));
+        var runCache = _runScreenCache;
+        void Configure(IServiceCollection services)
+        {
+            configure?.Invoke(services);
+            services.Replace(ServiceDescriptor.Singleton(runCache));
+        }
+
+        using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge, Configure, overlay?.Invoke(c));
         using var scope = provider.CreateScope();
 
         var timer = Stopwatch.StartNew();
