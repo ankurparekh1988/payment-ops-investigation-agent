@@ -5,11 +5,12 @@ name: AI evaluation
 # evaluated the same way and the result is recorded in Log Analytics. No paths filter: the required check
 # must report on every pull request, so the classifier decides what's needed.
 # An evaluation costs money, so a pull request is evaluated only once it carries the "evaluate" label, and again
-# on each push while it does; until then the check fails and asks for it (ADR 0020).
+# on each push while it does; until then the check fails and asks for it (ADR 0020). Removing the label runs the
+# check again, so a pass measured while it was there doesn't stay on the pull request.
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   schedule:
     - cron: "0 6 1 * *"
   workflow_dispatch:

@@ -79,15 +79,100 @@ public sealed partial class WorkflowTests
         Assert.Equal("0 6 1 * *", Scalar((YamlMappingNode)((YamlSequenceNode)on["schedule"]).Children[0], "cron"));
     }
 
-    // Adding the label is the request, so the label event must start the workflow, as must every push after it.
+    // Adding the label is the request, so the label event must start the workflow, as must every push after it; removing
+    // it must too, or the pass measured under the label stays on the pull request.
     [Fact]
     public void A_pull_request_runs_on_the_label_as_well_as_each_push()
     {
         var types = ((YamlSequenceNode)((YamlMappingNode)((YamlMappingNode)Workflow["on"])["pull_request"])["types"]).Children
             .Select(t => ((YamlScalarNode)t).Value).ToList();
 
-        Assert.Equal(["opened", "synchronize", "reopened", "labeled"], types);
+        Assert.Equal(["opened", "synchronize", "reopened", "labeled", "unlabeled"], types);
     }
+
+    // The labels in a label event's payload are the pull request's labels after the change.
+    public static TheoryData<string, string, string, string[], bool> Requests() => new()
+    {
+        { "opened with the label waits for its labeled event", "pull_request", "opened", ["evaluate"], false },
+        { "opened without the label", "pull_request", "opened", [], false },
+        { "push with the label", "pull_request", "synchronize", ["evaluate"], true },
+        { "push without the label", "pull_request", "synchronize", [], false },
+        { "reopened with the label", "pull_request", "reopened", ["evaluate"], true },
+        { "reopened without the label", "pull_request", "reopened", [], false },
+        { "label added", "pull_request", "labeled", ["evaluate"], true },
+        { "another label added beside it", "pull_request", "labeled", ["evaluate", "docs"], true },
+        { "another label added without it", "pull_request", "labeled", ["docs"], false },
+        { "label removed", "pull_request", "unlabeled", [], false },
+        { "label removed, another kept", "pull_request", "unlabeled", ["docs"], false },
+        { "another label removed beside it", "pull_request", "unlabeled", ["evaluate"], true },
+        { "monthly run", "schedule", "", [], true },
+        { "manual run", "workflow_dispatch", "", [], true },
+    };
+
+    [Theory]
+    [MemberData(nameof(Requests))]
+    public void An_evaluation_is_requested_only_while_the_label_is_there(string row, string eventName, string action, string[] labels, bool requested)
+    {
+        Assert.True(requested == IsRequested(eventName, action, labels), row);
+    }
+
+    // Removing the label from a pull request that needs evaluating fails the check and spends nothing: no paid job runs.
+    [Fact]
+    public void Removing_the_label_fails_the_check_without_evaluating()
+    {
+        var requested = IsRequested("pull_request", "unlabeled", []) ? "true" : "false";
+
+        foreach (var job in AttemptJobs)
+        {
+            Assert.False(JobRuns(job, requested), job);
+            Assert.True(JobRuns(job, "true"), job);
+        }
+
+        Assert.True(WorkflowExpression.IsTrue(Scalar(Job("verdict"), "if")!, Needs("true")));
+        var (outputs, code) = RunVerdict(Env(requested: requested));
+        Assert.Equal("not-requested", outputs.GetValueOrDefault("status"));
+        Assert.Equal("add the evaluate label to run the AI evaluation", outputs.GetValueOrDefault("message"));
+        Assert.Equal(1, code);
+    }
+
+    // A pull request that changes no behaviour or gate policy passes without the label, before or after it's removed.
+    [Fact]
+    public void A_change_that_needs_no_evaluation_passes_without_the_label()
+    {
+        var requested = IsRequested("pull_request", "unlabeled", []) ? "true" : "false";
+
+        foreach (var job in AttemptJobs)
+        {
+            Assert.False(JobRuns(job, requested, required: "false"), job);
+        }
+
+        var (outputs, code) = RunVerdict(Env(required: "false", requested: requested, reason: "not required: no AI behaviour or gate policy changed"));
+        Assert.Equal("not-required", outputs.GetValueOrDefault("status"));
+        Assert.Equal(0, code);
+    }
+
+    private static bool IsRequested(string eventName, string action, string[] labels) =>
+        WorkflowExpression.IsTrue(Scalar((YamlMappingNode)Job("classify")["outputs"], "requested")!, new Dictionary<string, object>
+        {
+            ["github.event_name"] = eventName,
+            ["github.event.action"] = action,
+            ["github.event.pull_request.labels.*.name"] = labels,
+        });
+
+    // A trusted, required change with a published index, so only the label decides.
+    private static Dictionary<string, object> Needs(string requested, string required = "true") => new()
+    {
+        ["github.event_name"] = "pull_request",
+        ["needs.classify.outputs.required"] = required,
+        ["needs.classify.outputs.requested"] = requested,
+        ["needs.classify.outputs.trusted"] = "true",
+        ["needs.classify.outputs.violation"] = string.Empty,
+        ["needs.classify.outputs.index-switch"] = "false",
+        ["needs.publish-eval-index.outputs.failure-class"] = "none",
+    };
+
+    private static bool JobRuns(string job, string requested, string required = "true") =>
+        WorkflowExpression.IsTrue(Scalar(Job(job), "if")!, Needs(requested, required));
 
     // Each evaluation costs money, so a pull request is evaluated only once it carries the label; the schedule always is.
     [Fact]
