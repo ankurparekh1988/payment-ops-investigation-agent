@@ -13,6 +13,7 @@ using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
 using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
 using PaymentOps.Tools;
@@ -28,7 +29,7 @@ public static class InvestigationServiceCollectionExtensions
 {
     // Shared for the process, with pooled connections renewed so DNS changes are seen; each call's own deadline
     // comes from the guard's screening budget.
-    private static readonly HttpClient ScreenHttp = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient ScreenHttp = new(new RequestCountingHandler { InnerHandler = new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) } }) { Timeout = TimeSpan.FromSeconds(30) };
 
     // Registered as an instance, so a container that's disposed (one per evaluation case) never disposes it.
     internal const string ScreenHttpKey = "content-safety";
@@ -50,7 +51,7 @@ public static class InvestigationServiceCollectionExtensions
         services.AddSingleton(sp =>
         {
             var model = ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment);
-            return ContentFilter.Checked(observeModel is null ? model : observeModel(model));
+            return Traced(ContentFilter.Checked(observeModel is null ? model : observeModel(model)));
         });
         services.AddInvestigationTools();
 
@@ -71,7 +72,7 @@ public static class InvestigationServiceCollectionExtensions
         // Every question is screened before the investigation agent sees it; without the endpoint nothing can be, so nothing is investigated.
         // The classifier calls its own deployment, so investigations can't throttle it and it never appears among the agent's requests.
         services.AddKeyedSingleton<IChatClient>(HarmClassifier.PromptId, (sp, _) =>
-            ContentFilter.Checked(ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ScreenDeployment)));
+            Traced(ContentFilter.Checked(ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ScreenDeployment))));
         services.AddSingleton<IQuestionScreen>(sp =>
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
                 ? new ContentSafetyQuestionScreen(
@@ -81,6 +82,7 @@ public static class InvestigationServiceCollectionExtensions
                     sp.GetService<TimeProvider>() ?? TimeProvider.System)
                 : new UnavailableQuestionScreen());
         services.AddOptions<InvestigationLimits>();
+        services.AddOptions<CostEstimateOptions>();
         services.AddSingleton<FixedPrompt>();
 
         // The current turn's reservations must leave room for history, or every conversation would end after one
@@ -102,6 +104,10 @@ public static class InvestigationServiceCollectionExtensions
         services.AddScoped<IInvestigationService>(sp => new InFlightGate(ActivatorUtilities.CreateInstance<InvestigationService>(sp)));
         return services;
     }
+
+    // Model calls become gen_ai spans: model, tokens and finish reason, never the messages.
+    private static IChatClient Traced(IChatClient model) =>
+        model.AsBuilder().UseOpenTelemetry(sourceName: AgentTelemetry.Name, configure: c => c.EnableSensitiveData = false).Build();
 
     // Both classifiers call the screen deployment's client, keyed by the question prompt.
     private static HarmClassifier Classifier(IServiceProvider sp, string promptId) =>

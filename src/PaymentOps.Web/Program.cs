@@ -12,6 +12,7 @@ using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
@@ -44,6 +45,8 @@ builder.Services.AddOptions<InvestigationLimits>()
             && o.TurnTimeout > TimeSpan.Zero && o.TurnTimeout <= TimeSpan.FromMinutes(5),
         $"{InvestigationLimits.SectionName} needs positive limits and timeouts of at most 5 minutes.")
     .ValidateOnStart();
+// Prices are deployment settings; without them usage is still measured, but no cost is estimated.
+builder.Services.AddOptions<CostEstimateOptions>().Bind(builder.Configuration.GetSection(CostEstimateOptions.SectionName));
 builder.Services.AddOptions<ConversationOptions>()
     .Bind(builder.Configuration.GetSection(ConversationOptions.SectionName))
     .Validate(

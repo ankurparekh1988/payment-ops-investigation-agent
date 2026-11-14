@@ -38,7 +38,7 @@ public sealed class ContentSafetyClientTests
     private static async Task<bool> PostAnswered(ScriptedStatusHandler handler)
     {
         var time = new FakeTimeProvider();
-        var post = Client(handler, time).PostAsync("contentsafety/text:analyze", new { text = "t" }, CancellationToken.None);
+        var post = Client(handler, time).PostAsync("contentsafety/text:analyze", new { text = "t" }, records: 1, CancellationToken.None);
         await handler.FirstCall.Task;
         while (!post.IsCompleted)
         {
