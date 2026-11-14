@@ -20,6 +20,9 @@ internal static class InvestigationTelemetry
     private static readonly Dictionary<NotAssessedReason, string> RejectionReasons = new()
     {
         [NotAssessedReason.Busy] = "busy",
+        [NotAssessedReason.Paused] = "paused",
+        [NotAssessedReason.DailyLimitReached] = "daily_limit",
+        [NotAssessedReason.UsageUnavailable] = "usage_unavailable",
     };
 
     public static Activity? Start(Guid investigationId, int turn)

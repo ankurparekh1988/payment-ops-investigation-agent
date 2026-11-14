@@ -6,6 +6,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\TestUser.cs" Link="Shared\TestUser.cs" />
+    <Using Include="PaymentOps.Tests.Shared" />
   </ItemGroup>
 
 </Project>

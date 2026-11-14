@@ -41,7 +41,15 @@ public static class InvestigationServiceCollectionExtensions
     /// for the tools, and an <see cref="Domain.Incidents.IIncidentStore"/>.
     /// </summary>
     /// <param name="observeModel">Wraps the model client, for an evaluation run that records every request.</param>
-    public static IServiceCollection AddInvestigation(this IServiceCollection services, InvestigationEndpoints endpoints, Func<IChatClient, IChatClient>? observeModel = null)
+    /// <param name="guard">
+    /// Wraps each investigation inside the one-at-a-time gate, so a busy click never reaches it: the host's usage
+    /// guard. The evaluation passes none, so it's never paused or capped.
+    /// </param>
+    public static IServiceCollection AddInvestigation(
+        this IServiceCollection services,
+        InvestigationEndpoints endpoints,
+        Func<IChatClient, IChatClient>? observeModel = null,
+        Func<IServiceProvider, IInvestigationService, IInvestigationService>? guard = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
@@ -101,7 +109,11 @@ public static class InvestigationServiceCollectionExtensions
         // Proposals outlive a circuit only until they expire; the approval service is per circuit, like its user.
         services.AddSingleton<ProposalStore>();
         services.AddScoped<IApprovalService, ApprovalService>();
-        services.AddScoped<IInvestigationService>(sp => new InFlightGate(ActivatorUtilities.CreateInstance<InvestigationService>(sp)));
+        services.AddScoped<IInvestigationService>(sp =>
+        {
+            var investigations = ActivatorUtilities.CreateInstance<InvestigationService>(sp);
+            return new InFlightGate(guard is null ? investigations : guard(sp, investigations));
+        });
         return services;
     }
 

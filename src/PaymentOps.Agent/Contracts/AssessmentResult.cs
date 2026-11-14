@@ -47,6 +47,15 @@ public enum NotAssessedReason
 
     /// <summary>The conversation is full; a new investigation starts a fresh one.</summary>
     ConversationLimit,
+
+    /// <summary>Investigations are switched off for now; nothing was run or counted.</summary>
+    Paused,
+
+    /// <summary>The person, or everyone together, reached today's limit; it resets at 00:00 UTC.</summary>
+    DailyLimitReached,
+
+    /// <summary>Today's usage couldn't be checked, so the investigation didn't start.</summary>
+    UsageUnavailable,
 }
 
 /// <summary>A record or computed fact the server registered this turn, described from its own data.</summary>

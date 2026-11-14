@@ -24,6 +24,7 @@ using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
 using PaymentOps.Web.Security;
+using PaymentOps.Web.Usage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,7 +101,8 @@ if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answering
         throw new InvalidOperationException($"{ContentSafetyOptions.EndpointKey} must be an https address outside Development.");
     }
 
-    builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));
+    builder.Services.AddUsageGuard(builder.Configuration, builder.Environment);
+    builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope), guard: UsageServiceCollectionExtensions.Guard);
     healthChecks.Add(new HealthCheckRegistration(
         "search",
         services => new SearchReadinessCheck(services.GetRequiredService<KnowledgeRetriever>().CheckReachableAsync),

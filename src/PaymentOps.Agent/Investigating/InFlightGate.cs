@@ -5,7 +5,7 @@ namespace PaymentOps.Agent.Investigating;
 
 /// <summary>
 /// One investigation at a time per instance. Registered scoped, so in Blazor Server that's one per
-/// circuit; the disabled button is only the visible half. Per-user quotas are a later concern.
+/// circuit; the disabled button is only the visible half. Daily limits are the host's usage guard, inside this gate.
 /// </summary>
 internal sealed class InFlightGate(IInvestigationService inner) : IInvestigationService
 {

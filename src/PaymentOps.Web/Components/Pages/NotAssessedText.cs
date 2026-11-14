@@ -20,6 +20,9 @@ internal static class NotAssessedText
         NotAssessedReason.Unscreened => "This question couldn't be checked for safety, so it wasn't investigated. Please try again shortly.",
         NotAssessedReason.Cancelled => "Investigation cancelled. Nothing from it was kept.",
         NotAssessedReason.ConversationLimit => "This conversation is full. Start a new investigation to continue.",
+        NotAssessedReason.Paused => "Investigations are paused.",
+        NotAssessedReason.DailyLimitReached => "You've reached today's investigation limit. It resets at 00:00 UTC.",
+        NotAssessedReason.UsageUnavailable => "Investigations can't start right now. Please try again shortly.",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null),
     };
 }
