@@ -9,6 +9,9 @@ namespace PaymentOps.Agent.Safety;
 /// </summary>
 internal sealed class ScreenCache(int capacity = 2000)
 {
+    /// <summary>The key of the registered cache for harm verdicts; the unkeyed registration holds Prompt Shields verdicts.</summary>
+    public const string HarmKey = "harm";
+
     private readonly Lock _lock = new();
     private readonly Dictionary<string, LinkedListNode<(string Key, ScreenVerdict Verdict)>> _entries = new(StringComparer.Ordinal);
     private readonly LinkedList<(string Key, ScreenVerdict Verdict)> _recency = new();

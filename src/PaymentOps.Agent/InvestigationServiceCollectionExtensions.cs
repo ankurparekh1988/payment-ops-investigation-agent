@@ -30,6 +30,9 @@ public static class InvestigationServiceCollectionExtensions
     // comes from the guard's screening budget.
     private static readonly HttpClient ScreenHttp = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) { Timeout = TimeSpan.FromSeconds(30) };
 
+    // Registered as an instance, so a container that's disposed (one per evaluation case) never disposes it.
+    internal const string ScreenHttpKey = "content-safety";
+
     /// <summary>
     /// Registers the investigation behind <see cref="IInvestigationService"/> and ticket decisions behind <see cref="IApprovalService"/>.
     /// Needs <see cref="AiRelease"/>, <see cref="IPromptProvider"/>, <see cref="TokenCredential"/>, a scoped
@@ -53,14 +56,16 @@ public static class InvestigationServiceCollectionExtensions
 
         // Prompt Shields lives on the Foundry account's generic endpoint, configured separately from the model's. Without
         // one (only Development allows that) nothing can be checked, so untrusted tool text is withheld.
+        services.TryAddKeyedSingleton(ScreenHttpKey, ScreenHttp);
         services.AddSingleton<ScreenCache>();
+        services.AddKeyedSingleton<ScreenCache>(ScreenCache.HarmKey);
         services.AddSingleton<IUntrustedTextScreen>(sp =>
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
                 ? new HarmAwareScreen(
-                    new PromptShieldsScreen(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>()),
-                    new ContentSafetyClient(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
+                    new PromptShieldsScreen(sp.GetRequiredKeyedService<HttpClient>(ScreenHttpKey), contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<ScreenCache>()),
+                    new ContentSafetyClient(sp.GetRequiredKeyedService<HttpClient>(ScreenHttpKey), contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
                     Classifier(sp, HarmClassifier.ToolTextPromptId),
-                    new ScreenCache())
+                    sp.GetRequiredKeyedService<ScreenCache>(ScreenCache.HarmKey))
                 : new UnavailableScreen());
 
         // Every question is screened before the investigation agent sees it; without the endpoint nothing can be, so nothing is investigated.
@@ -70,7 +75,7 @@ public static class InvestigationServiceCollectionExtensions
         services.AddSingleton<IQuestionScreen>(sp =>
             sp.GetService<IConfiguration>() is { } configuration && ContentSafetyOptions.Endpoint(configuration) is { } contentSafety
                 ? new ContentSafetyQuestionScreen(
-                    new ContentSafetyClient(ScreenHttp, contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
+                    new ContentSafetyClient(sp.GetRequiredKeyedService<HttpClient>(ScreenHttpKey), contentSafety, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>()),
                     Classifier(sp, HarmClassifier.PromptId),
                     sp.GetRequiredService<IOptions<InvestigationLimits>>(),
                     sp.GetService<TimeProvider>() ?? TimeProvider.System)
