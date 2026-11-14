@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+
 using PaymentOps.Agent;
 using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
@@ -76,7 +79,11 @@ builder.Services.AddPaymentOpsSecurity(builder.Configuration);
 // disabled, so the exporter signs in with the app's identity.
 if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
 {
-    builder.Services.AddOpenTelemetry().UseAzureMonitor(options => options.Credential = azureCredential);
+    // The agent's own spans and metrics go with the request telemetry; model spans never carry message content.
+    builder.Services.AddOpenTelemetry()
+        .UseAzureMonitor(options => options.Credential = azureCredential)
+        .WithTracing(tracing => tracing.AddSource(AgentTelemetry.Name))
+        .WithMetrics(metrics => metrics.AddMeter(AgentTelemetry.Name));
 }
 
 var healthChecks = builder.Services.AddHealthChecks();

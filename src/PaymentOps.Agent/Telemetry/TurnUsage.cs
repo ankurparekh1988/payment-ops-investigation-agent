@@ -16,6 +16,8 @@ internal sealed class TurnUsage : IDisposable
     private readonly Dictionary<string, (long Input, long Output)> _tokens = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _cacheHits = new(StringComparer.Ordinal);
     private readonly List<string> _incomplete = [];
+    private readonly List<(string Name, string Outcome)> _tools = [];
+    private readonly Dictionary<string, int> _screens = new(StringComparer.Ordinal);
     private TurnUsage? _previous;
 
     public static TurnUsage? Current => Ambient.Value;
@@ -50,6 +52,40 @@ internal sealed class TurnUsage : IDisposable
     }
 
     public bool Complete => IncompleteReasons.Count == 0;
+
+    /// <summary>The read tools the turn called, in order, with how each ended.</summary>
+    public IReadOnlyList<(string Name, string Outcome)> Tools
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _tools];
+            }
+        }
+    }
+
+    /// <summary>Screen verdicts by kind, such as <c>question:clean</c> or <c>tool_text:attack</c>.</summary>
+    public IReadOnlyDictionary<string, int> Screens => Snapshot(_screens);
+
+    public static void RecordTool(string name, string outcome)
+    {
+        if (Current is { } usage)
+        {
+            lock (usage._lock)
+            {
+                usage._tools.Add((name, outcome));
+            }
+        }
+    }
+
+    public static void RecordScreen(string verdict, int count = 1)
+    {
+        if (Current is { } usage && count > 0)
+        {
+            usage.Count(usage._screens, verdict, count);
+        }
+    }
 
     public static void RecordHttpRequest(string service, string? deployment = null)
     {

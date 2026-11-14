@@ -240,7 +240,17 @@ The dataset's as-of time (11 November 2026) is later than real time, so the two 
 
 ### Investigation id
 
-Every question gets a server-generated `InvestigationId`. It's on the result's footer, the proposal, the ticket, and the investigation and approval logs, so one investigation can be followed through all of them. It isn't a trace id, and no spans are added for it.
+Every question gets a server-generated `InvestigationId`. It's on the result's footer, the proposal, the ticket, the investigation and approval logs, and the investigation's span, so one investigation can be followed through all of them.
+
+### Telemetry
+
+Each investigation that runs is one trace under the request that started it: an `investigation` span with children for the question screen, each tool call, each knowledge search, the screening of what tools returned, and each model call (OpenTelemetry's `gen_ai` conventions, without message content). The span ends tagged with the outcome, the tokens used, the Content Safety records billed, the requests sent and, when it can be estimated, the cost.
+
+What a turn used is kept apart by what it is, because each is billed differently: requests sent, retries and failures included; Content Safety text records, one per started 1,000 characters of each text it answered; model tokens per deployment, the classifier's included; and screening verdicts served from a cache, which sent nothing. A cost is estimated only from complete usage and prices configured per deployment (`PaymentOps:CostEstimate`); when either is missing the cost is reported as unavailable and the counts still stand. The estimate uses list prices, so it's an upper bound.
+
+One log event per investigation, `3009`, is its decision record: the outcome, the tools called and how each ended, the evidence and sections the answer cited, screen verdicts by kind, and the usage counts. It holds identifiers and counts, never the question, the answer, tool output or who asked. Metrics count investigations by outcome, screen blocks by kind, tokens, requests, records and cache hits. A request refused before an investigation starts (another one already running) is only counted, by reason.
+
+Everything goes to Application Insights through the app's managed identity; the KQL to follow one investigation is in the [Runbook](Runbook.md).
 
 ## Investigation view
 

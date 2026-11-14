@@ -1,4 +1,5 @@
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Agent.Telemetry;
 
 namespace PaymentOps.Agent.Investigating;
 
@@ -14,6 +15,7 @@ internal sealed class InFlightGate(IInvestigationService inner) : IInvestigation
     {
         if (Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
         {
+            AgentTelemetry.RecordRejected(NotAssessedReason.Busy);
             return new AssessmentResult.NotAssessed(NotAssessedReason.Busy);
         }
 

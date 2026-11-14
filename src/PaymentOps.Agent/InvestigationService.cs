@@ -1,4 +1,6 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Approvals;
@@ -6,6 +8,7 @@ using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Domain.Security;
 
 namespace PaymentOps.Agent;
@@ -19,8 +22,12 @@ internal sealed class InvestigationService(
     IOptions<ConversationOptions> conversationOptions,
     IOptions<InvestigationLimits> limits,
     IUserContext user,
-    ProposalStore proposals) : IInvestigationService
+    ProposalStore proposals,
+    ILogger<InvestigationService>? logger = null,
+    IOptions<CostEstimateOptions>? prices = null) : IInvestigationService
 {
+    private readonly ILogger _logger = logger ?? NullLogger<InvestigationService>.Instance;
+
     public ConversationStatus Conversation
     {
         get
@@ -30,9 +37,32 @@ internal sealed class InvestigationService(
         }
     }
 
+    // Every investigation that runs is one trace, one count and one decision record, however it ends.
     public async Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken)
     {
         var investigationId = Guid.NewGuid();
+        using var usage = TurnUsage.Begin();
+        using var activity = InvestigationTelemetry.Start(investigationId, conversation.Turns.Count + 1);
+        AssessmentResult? result = null;
+        Exception? failure = null;
+        try
+        {
+            result = await RunAsync(question, investigationId, progress, cancellationToken);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+            throw;
+        }
+        finally
+        {
+            InvestigationTelemetry.Complete(activity, usage, prices?.Value ?? new CostEstimateOptions(), _logger, investigationId, result, failure);
+        }
+    }
+
+    private async Task<AssessmentResult> RunAsync(string question, Guid investigationId, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken)
+    {
 
         // The page replaces the card with each new question, so a proposal nobody can see any longer stops waiting.
         proposals.Supersede(conversation.Id);

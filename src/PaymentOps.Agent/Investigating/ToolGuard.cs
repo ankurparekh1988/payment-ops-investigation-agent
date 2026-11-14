@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Domain.Security;
 using PaymentOps.Tools;
 using PaymentOps.Tools.Knowledge;
@@ -75,11 +76,15 @@ internal sealed class ToolGuard(
         progress?.Report(new InvestigationProgress.ToolStarted(tool.Name, label));
 
         // One budget from here covers the tool and the screening of what it returned; the tool keeps its own timeout.
+        using var span = AgentTelemetry.Source.StartActivity($"tool.{tool.Name}");
         var started = time.GetTimestamp();
+        var refused = request is null ? null : Unnamed(tool, request);
         var result = request is null
             ? new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.")
-            : Unnamed(tool, request) is { } refused ? refused
-            : await RunAsync(tool, request, cancellationToken);
+            : refused ?? await SearchOrRunAsync(tool, request, cancellationToken);
+        var outcome = result is ToolResult.Ok ? "ok" : refused is not null ? "refused" : "error";
+        span?.SetTag("paymentops.tool.outcome", outcome);
+        TurnUsage.RecordTool(tool.Name, outcome);
         var (json, gap) = Record(tool, result);
         (json, var withheld) = await ScreenAsync(tool, json, limits.ToolResultBudget - time.GetElapsedTime(started), cancellationToken);
         progress?.Report(new InvestigationProgress.ToolFinished(tool.Name, label, result is ToolResult.Ok, Records(result), (gap ?? withheld)?.Wording));
@@ -157,6 +162,20 @@ internal sealed class ToolGuard(
         return new ToolResult.Failed(ToolErrorCode.InvalidArgument, "merchant_id must be a merchant named in the user's questions.");
     }
 
+    // A knowledge search gets its own span, so retrieval is visible apart from screening what it returned.
+    private async Task<ToolResult> SearchOrRunAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)
+    {
+        if (tool.Source != DataSources.Knowledge)
+        {
+            return await RunAsync(tool, request, cancellationToken);
+        }
+
+        using var search = AgentTelemetry.Source.StartActivity("knowledge.search");
+        var result = await RunAsync(tool, request, cancellationToken);
+        search?.SetTag("paymentops.search.results", Records(result));
+        return result;
+    }
+
     private async Task<ToolResult> RunAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)
     {
         using var timeout = new CancellationTokenSource(limits.ToolTimeout, time);
@@ -231,7 +250,20 @@ internal sealed class ToolGuard(
             return (json, null);
         }
 
-        var verdicts = await VerdictsAsync([.. marked.Select(v => UntrustedText.Unwrap(v.GetValue<string>()))], remaining, cancellationToken);
+        IReadOnlyList<ScreenVerdict> verdicts;
+        using (var screening = AgentTelemetry.Source.StartActivity("screen.tool_text"))
+        {
+            verdicts = await VerdictsAsync([.. marked.Select(v => UntrustedText.Unwrap(v.GetValue<string>()))], remaining, cancellationToken);
+            foreach (var verdict in verdicts.GroupBy(v => JsonNamingPolicy.SnakeCaseLower.ConvertName(v.ToString())))
+            {
+                screening?.SetTag($"paymentops.screen.{verdict.Key}", verdict.Count());
+                TurnUsage.RecordScreen($"tool_text:{verdict.Key}", verdict.Count());
+                if (verdict.Key != "clean")
+                {
+                    AgentTelemetry.ScreenBlocks.Add(verdict.Count(), new("kind", "tool_text"), new("verdict", verdict.Key));
+                }
+            }
+        }
 
         // A knowledge section with any part withheld can't support a statement; read before the values are replaced.
         foreach (var section in marked.Zip(verdicts).GroupBy(p => p.First.Parent?[CitationIdProperty]?.GetValue<string>()).Where(g => g.Key is not null))

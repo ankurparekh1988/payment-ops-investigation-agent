@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
 using PaymentOps.Tools;
@@ -62,13 +64,24 @@ internal sealed class InvestigationAgentRunner(
 
         // Before the investigation agent sees it: a question that is harmful, an attack, or couldn't be checked never reaches it.
         QuestionVerdict verdict;
-        try
+        using (var screening = AgentTelemetry.Source.StartActivity("screen.question"))
         {
-            verdict = await questionScreen.ScreenAsync(question, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return new NotAssessed(NotAssessedReason.Cancelled);
+            try
+            {
+                verdict = await questionScreen.ScreenAsync(question, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return new NotAssessed(NotAssessedReason.Cancelled);
+            }
+
+            var name = JsonNamingPolicy.SnakeCaseLower.ConvertName(verdict.ToString());
+            screening?.SetTag("paymentops.screen.verdict", name);
+            TurnUsage.RecordScreen($"question:{name}");
+            if (verdict != QuestionVerdict.Clean)
+            {
+                AgentTelemetry.ScreenBlocks.Add(1, new("kind", "question"), new("verdict", name));
+            }
         }
 
         if (verdict != QuestionVerdict.Clean)

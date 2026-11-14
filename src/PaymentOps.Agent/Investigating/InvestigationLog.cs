@@ -53,6 +53,13 @@ internal static partial class InvestigationLog
     [LoggerMessage(EventId = 3008, Level = LogLevel.Warning, Message = "Investigation {InvestigationId} {Tool}: refused a merchant the user never named")]
     public static partial void MerchantNotNamed(ILogger logger, Guid investigationId, string tool);
 
+    /// <summary>
+    /// The decision record: what one investigation did and used, by outcome. Identifiers and counts only, so an answer
+    /// can be explained from its investigation id without its question or text.
+    /// </summary>
+    [LoggerMessage(EventId = 3009, Level = LogLevel.Information, Message = "Investigation {InvestigationId} decision: {Outcome}, tools {Tools}, evidence {Evidence}, sections {Sections}, screens {Screens}, requests {Requests}, content safety records {ContentSafetyRecords}, tokens {InputTokens}/{OutputTokens}, cache hits {CacheHits}, estimated cost {EstimatedCost} {Currency}, cost unavailable {CostUnavailable}")]
+    public static partial void Decision(ILogger logger, Guid investigationId, string outcome, string tools, string evidence, string sections, string screens, int requests, int contentSafetyRecords, long inputTokens, long outputTokens, int cacheHits, decimal? estimatedCost, string? currency, string? costUnavailable);
+
     [LoggerMessage(EventId = 3004, Level = LogLevel.Error, Message = "Investigation {InvestigationId} aborted by an unexpected failure: {ExceptionType}, after {ElapsedMs} ms")]
     private static partial void Aborted(ILogger logger, Guid investigationId, string exceptionType, long elapsedMs);
 }
