@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace PaymentOps.Agent.Telemetry;
 
 /// <summary>
@@ -123,6 +125,14 @@ internal sealed class TurnUsage : IDisposable
         }
 
         AgentTelemetry.CacheHits.Add(count, new KeyValuePair<string, object?>("cache", cache));
+
+        // Screens run inside their screening span, so the hit is attributed to the span it served.
+        if (Activity.Current is { } span && span.Source == AgentTelemetry.Source)
+        {
+            var tag = $"paymentops.cache.{cache}.hits";
+            span.SetTag(tag, (span.GetTagItem(tag) as int? ?? 0) + count);
+        }
+
         if (Current is { } usage)
         {
             usage.Count(usage._cacheHits, cache, count);

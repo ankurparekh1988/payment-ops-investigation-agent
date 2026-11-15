@@ -29,7 +29,8 @@ internal sealed class ToolGuard(
     IUntrustedTextScreen? screen = null,
     ILogger? logger = null,
     Guid investigationId = default,
-    MerchantSources? merchants = null)
+    MerchantSources? merchants = null,
+    string? searchIndex = null)
 {
     // A guard built without a screen can check nothing, so it withholds every untrusted value: fail closed.
     private readonly IUntrustedTextScreen _screen = screen ?? new UnavailableScreen();
@@ -162,6 +163,10 @@ internal sealed class ToolGuard(
         return new ToolResult.Failed(ToolErrorCode.InvalidArgument, "merchant_id must be a merchant named in the user's questions.");
     }
 
+    /// <summary>One verdict for several screened values: theirs when they agree, <c>mixed</c> when they don't.</summary>
+    internal static string VerdictSummary(IReadOnlyCollection<ScreenVerdict> verdicts) =>
+        verdicts.Distinct().Count() == 1 ? ToolJson.Word(verdicts.First()) : "mixed";
+
     // A knowledge search gets its own span, so retrieval is visible apart from screening what it returned.
     private async Task<ToolResult> SearchOrRunAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)
     {
@@ -171,6 +176,7 @@ internal sealed class ToolGuard(
         }
 
         using var search = AgentTelemetry.Source.StartActivity("knowledge.search");
+        search?.SetTag("paymentops.search.index", searchIndex);
         var result = await RunAsync(tool, request, cancellationToken);
         search?.SetTag("paymentops.search.results", Records(result));
         return result;
@@ -254,6 +260,9 @@ internal sealed class ToolGuard(
         using (var screening = AgentTelemetry.Source.StartActivity("screen.tool_text"))
         {
             verdicts = await VerdictsAsync([.. marked.Select(v => UntrustedText.Unwrap(v.GetValue<string>()))], remaining, cancellationToken);
+            screening?.SetTag("paymentops.screen.source", tool.Source == DataSources.Knowledge ? "knowledge_section" : "record");
+            screening?.SetTag("paymentops.screen.values", verdicts.Count);
+            screening?.SetTag("paymentops.screen.verdict", VerdictSummary([.. verdicts]));
             foreach (var group in verdicts.GroupBy(v => v))
             {
                 var name = ToolJson.Word(group.Key);

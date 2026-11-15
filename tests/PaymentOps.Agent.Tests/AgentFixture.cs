@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Investigation;
@@ -22,7 +23,7 @@ namespace PaymentOps.Agent.Tests;
 /// <summary>The real agent loop and tools over the shipped dataset; only the model and Search are scripted.</summary>
 internal sealed class AgentFixture : IDisposable
 {
-    private static readonly AiRelease Release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+    public static readonly AiRelease Release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
     private readonly ServiceProvider _provider;
 
     /// <param name="time">The host's real clock, which the incident store stamps tickets with.</param>
@@ -51,7 +52,8 @@ internal sealed class AgentFixture : IDisposable
         time ?? TimeProvider.System,
         screen ?? ScriptedScreen.AllClean,
         questionScreen ?? ScriptedQuestionScreen.AllClean,
-        logger ?? NullLogger<InvestigationAgentRunner>.Instance);
+        logger ?? NullLogger<InvestigationAgentRunner>.Instance,
+        TraceContext.From(Release));
 
     public FixedPrompt FixedPrompt => new(_provider.GetServices<IInvestigationTool>(), new PromptProvider(Release), _provider.GetRequiredService<IInvestigationClock>());
 

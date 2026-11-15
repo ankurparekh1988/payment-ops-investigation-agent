@@ -12,6 +12,7 @@ using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Security;
 using PaymentOps.Platform.Ai;
@@ -52,6 +53,19 @@ public sealed class InvestigationRegistrationTests
         using var provider = Services().BuildServiceProvider();
 
         Assert.IsType<UnavailableScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
+    }
+
+    // The evaluation loads the release pointed at its own index; the trace has to name that one, not the live one.
+    [Fact]
+    public void The_trace_context_comes_from_the_loaded_release()
+    {
+        var services = Services();
+        var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+        services.AddSingleton(release with { KnowledgeIndex = release.EvaluationIndex });
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(release.EvaluationIndex, provider.GetRequiredService<TraceContext>().KnowledgeIndex);
     }
 
     [Fact]

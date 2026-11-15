@@ -24,7 +24,8 @@ internal sealed class InvestigationService(
     IUserContext user,
     ProposalStore proposals,
     ILogger<InvestigationService>? logger = null,
-    IOptions<CostEstimateOptions>? prices = null) : IInvestigationService
+    IOptions<CostEstimateOptions>? prices = null,
+    TraceContext? trace = null) : IInvestigationService
 {
     private readonly ILogger _logger = logger ?? NullLogger<InvestigationService>.Instance;
 
@@ -42,7 +43,7 @@ internal sealed class InvestigationService(
     {
         var investigationId = Guid.NewGuid();
         using var usage = TurnUsage.Begin();
-        using var activity = InvestigationTelemetry.Start(investigationId, conversation.Turns.Count + 1);
+        using var activity = InvestigationTelemetry.Start(investigationId, conversation.Turns.Count + 1, trace);
         AssessmentResult? result = null;
         Exception? failure = null;
         try

@@ -25,11 +25,18 @@ internal static class InvestigationTelemetry
         [NotAssessedReason.UsageUnavailable] = "usage_unavailable",
     };
 
-    public static Activity? Start(Guid investigationId, int turn)
+    public static Activity? Start(Guid investigationId, int turn, TraceContext? trace = null)
     {
         var activity = AgentTelemetry.Source.StartActivity("investigation");
         activity?.SetTag("paymentops.investigation.id", investigationId.ToString());
         activity?.SetTag("paymentops.conversation.turn", turn);
+        if (trace is not null)
+        {
+            activity?.SetTag("paymentops.prompt.id", trace.PromptId);
+            activity?.SetTag("paymentops.prompt.version", trace.PromptVersion);
+            activity?.SetTag("paymentops.chat.deployment", trace.ChatDeployment);
+        }
+
         return activity;
     }
 

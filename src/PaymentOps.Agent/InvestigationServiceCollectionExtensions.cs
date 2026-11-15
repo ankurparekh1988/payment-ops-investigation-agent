@@ -55,6 +55,7 @@ public static class InvestigationServiceCollectionExtensions
 
         services.AddSingleton(sp => KnowledgeRetriever.Create(endpoints.SearchEndpoint, sp.GetRequiredService<AiRelease>().KnowledgeIndex, sp.GetRequiredService<TokenCredential>()));
         services.AddSingleton(sp => KnowledgeSectionReader.Create(endpoints.SearchEndpoint, sp.GetRequiredService<AiRelease>().KnowledgeIndex, sp.GetRequiredService<TokenCredential>()));
+        services.AddSingleton(sp => TraceContext.From(sp.GetRequiredService<AiRelease>()));
         services.AddSingleton<IKnowledgeLookup, ReleaseKnowledgeLookup>();
         services.AddSingleton(sp =>
         {

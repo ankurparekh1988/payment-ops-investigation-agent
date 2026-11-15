@@ -128,7 +128,8 @@ public sealed class InvestigationTraceTests : IDisposable
             user,
             new ProposalStore(TimeProvider.System, Options.Create(new ApprovalOptions()), AiReleaseLoader.Load(new EmbeddedAiReleaseSource())),
             logger,
-            Options.Create(new CostEstimateOptions()));
+            Options.Create(new CostEstimateOptions()),
+            TraceContext.From(AgentFixture.Release));
         return (service, logger);
     }
 
@@ -189,6 +190,53 @@ public sealed class InvestigationTraceTests : IDisposable
         Assert.Contains(trace, a => a.OperationName == "knowledge.search");
         Assert.Contains(trace, a => a.OperationName == $"tool.{ToolNames.KnowledgeSearch}" && Equals(a.GetTagItem("paymentops.tool.outcome"), "ok"));
         Assert.All(trace.Where(a => a != root), a => Assert.Equal(root.TraceId, a.TraceId));
+    }
+
+    [Fact]
+    public async Task The_trace_names_the_prompt_deployment_and_index_it_used()
+    {
+        var release = AgentFixture.Release;
+
+        var (root, trace, _) = await RunAsync(Turns["assessed"]);
+
+        Assert.Equal(InvestigationAgentRunner.PromptId, root.GetTagItem("paymentops.prompt.id"));
+        Assert.Equal(release.Prompts[InvestigationAgentRunner.PromptId].Version, root.GetTagItem("paymentops.prompt.version"));
+        Assert.Equal(release.ActiveChatDeployment, root.GetTagItem("paymentops.chat.deployment"));
+        var search = Assert.Single(trace, a => a.OperationName == "knowledge.search");
+        Assert.Equal(release.KnowledgeIndex, search.GetTagItem("paymentops.search.index"));
+    }
+
+    [Fact]
+    public async Task Screened_tool_text_names_its_source_and_summarises_its_verdicts()
+    {
+        var (_, trace, _) = await RunAsync(Turns["assessed"]);
+
+        var screening = Assert.Single(trace, a => a.OperationName == "screen.tool_text" && Equals(a.GetTagItem("paymentops.screen.source"), "knowledge_section"));
+        Assert.Equal("clean", screening.GetTagItem("paymentops.screen.verdict"));
+        Assert.True(screening.GetTagItem("paymentops.screen.values") is int values && values > 0);
+    }
+
+    [Theory]
+    [InlineData(new[] { ScreenVerdict.Clean, ScreenVerdict.Clean }, "clean")]
+    [InlineData(new[] { ScreenVerdict.Attack }, "attack")]
+    [InlineData(new[] { ScreenVerdict.Clean, ScreenVerdict.Attack }, "mixed")]
+    [InlineData(new[] { ScreenVerdict.Harmful, ScreenVerdict.Unavailable }, "mixed")]
+    public void Several_screened_values_have_one_verdict_summary(ScreenVerdict[] verdicts, string summary) =>
+        Assert.Equal(summary, ToolGuard.VerdictSummary(verdicts));
+
+    // Screens run inside the screening span, so a cache hit is attributed to the span that served it.
+    [Fact]
+    public void Cache_hits_are_attributed_to_the_current_screening_span()
+    {
+        using (var screening = AgentTelemetry.Source.StartActivity("screen.tool_text")!)
+        {
+            TurnUsage.RecordCacheHit("harm", 2);
+            TurnUsage.RecordCacheHit("prompt_shields");
+            TurnUsage.RecordCacheHit("harm");
+
+            Assert.Equal(3, screening.GetTagItem("paymentops.cache.harm.hits"));
+            Assert.Equal(1, screening.GetTagItem("paymentops.cache.prompt_shields.hits"));
+        }
     }
 
     [Fact]
