@@ -38,6 +38,7 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | `id-<prefix>-gh-eval-publish` | User-assigned managed identity, GitHub OIDC | Publishing the evaluation index and recording evaluation history |
 | `id-<prefix>-<env>-app` | User-assigned managed identity | The web app |
 | Foundry project identity | System-assigned managed identity | Foundry's trace views |
+| Budget cutoff | System-assigned managed identity of a Logic App | Turning the AI account's public network access off when the budget is reached, only while the cutoff is switched on |
 | Developers | Entra ID users | Running the app locally against Azure (optional) |
 | App users | Entra ID users and groups, assigned app roles | Signing in to the web app, including optional demo users per role |
 
@@ -49,6 +50,8 @@ Higher roles include lower ones. Membership of the **Risk and Compliance** secur
 | Web app | Foundry resource | Prompt Shields User (custom) | Screen questions and untrusted tool text; the role holds only the Prompt Shields and harm analysis calls |
 | Web app | Search service | Search Index Data Reader | Retrieve sections for investigations and show cited sections |
 | Web app | Application Insights | Monitoring Metrics Publisher | Send telemetry with an Entra token |
+| Web app | The `usage` table only | Storage Table Data Contributor | Keep the daily usage counts; nothing else in the storage account |
+| Budget cutoff | Foundry resource | AI Account Network Admin (custom) | Read the account and update its settings, to turn public network access off. Azure's roles can't narrow the write to that one setting; it has no data-plane action, so it can't call models or read data |
 | Foundry project | Application Insights | Monitoring Metrics Publisher | Write traces, authenticating as the project |
 | Foundry project | Application Insights | Log Analytics Reader | Show traces in the Foundry portal |
 | `gh-plan` | Subscription | Reader | Plan infrastructure changes, read the model catalog, and detect drift in the bootstrap's subscription-level resources. Reader can't list keys or read secrets |
@@ -243,3 +246,15 @@ Labels are plain because markers around names changed what the model asked for n
 ## Network
 
 Endpoints are public and protected by Entra ID and TLS 1.2. Private networking is documented in [ProductionGapAnalysis](ProductionGapAnalysis.md).
+
+## Spending controls
+
+Usage is bounded in the app and, as a last resort, by a budget-driven cutoff ([ADR 0021](adr/0021-bounded-usage-and-observable-cost.md)).
+
+| Threat | Control | Residual |
+|---|---|---|
+| Someone signed in runs investigations without end | Daily limits per person and in total, reserved atomically in a table; usage that can't be checked refuses. The pause switch stops everything at once | Within the limits, spending continues until the next UTC day |
+| The usage table holds who asked | Rows are keyed by a hash of the user's object id; the table holds counts only | — |
+| A caller with the cutoff's trigger URL disables the AI account | The URL carries a signature and lives only in Terraform state and the action group; the workflow acts only on a payload matching this budget, subscription and resource group with spending at the budget, and only on the account Terraform names. While the cutoff is off the workflow is disabled | A caller with the URL and a matching payload can turn access off; the next deployment turns it back on. Regenerating the workflow's access keys invalidates the URL |
+| The cutoff's identity changes more than network access | The role is assigned on the one account and holds only the account read and write, no data-plane action | Azure's roles can't narrow the write to one setting |
+| Spending runs past the budget | Budget alerts at 50, 80 and 100% and a forecast alert, a cost anomaly alert, and the cutoff once it's switched on | **The cutoff isn't a spending ceiling:** budget notifications lag spending by up to about a day, so it shortens overspending rather than preventing it |

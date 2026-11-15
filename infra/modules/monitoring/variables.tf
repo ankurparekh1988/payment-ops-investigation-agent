@@ -53,3 +53,48 @@ variable "evaluation_rule_name" {
   description = "Data collection rule that writes evaluation history to its table."
   type        = string
 }
+
+variable "alert_name_prefix" {
+  description = "Prefix for the workbook, alert and availability test names, such as paymentops-dev."
+  type        = string
+}
+
+variable "web_app_id" {
+  description = "The web app whose server errors are alerted on."
+  type        = string
+}
+
+variable "web_app_hostname" {
+  description = "The web app's host name, for the availability test."
+  type        = string
+}
+
+variable "ai_account_host" {
+  description = "The AI account's host name, to find its throttled requests among the app's dependencies."
+  type        = string
+}
+
+variable "action_group_id" {
+  description = "Action group every operational alert notifies."
+  type        = string
+}
+
+variable "availability_test_locations" {
+  description = "Locations the availability test runs from; each one is billed per run."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.availability_test_locations) > 0
+    error_message = "The availability test needs at least one location."
+  }
+}
+
+variable "http5xx_threshold" {
+  description = "Server errors in 15 minutes above which the server-error alert fires."
+  type        = number
+}
+
+variable "guardrail_block_threshold" {
+  description = "Screen blocks in 15 minutes above which the guardrail alert fires."
+  type        = number
+}

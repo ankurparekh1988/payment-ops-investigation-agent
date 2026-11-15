@@ -1,0 +1,162 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "name": "operations",
+      "content": { "json": "## Operations\nRequests, server errors, latency, throttling and availability, over the last seven days." }
+    },
+    {
+      "type": 3,
+      "name": "requests",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Requests and server errors per hour",
+        "query": "requests\n| summarize Requests = count(), ServerErrors = countif(toint(resultCode) >= 500) by bin(timestamp, 1h)",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "latency",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Request latency (p50, p95)",
+        "query": "requests\n| summarize p50 = percentile(duration, 50), p95 = percentile(duration, 95) by bin(timestamp, 1h)",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "throttling",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Throttled dependency calls (429)",
+        "query": "dependencies\n| where resultCode == '429'\n| summarize Throttled = count() by bin(timestamp, 1h), target",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "availability",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Availability (%)",
+        "query": "availabilityResults\n| summarize Availability = 100.0 * avg(toint(success)) by bin(timestamp, 1h)",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 1,
+      "name": "quality",
+      "content": { "json": "## Quality\nHow investigations ended, what the screens blocked, and what was refused before an investigation started." }
+    },
+    {
+      "type": 3,
+      "name": "outcomes",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Investigations by outcome",
+        "query": "customMetrics\n| where name == 'paymentops.investigations'\n| summarize Investigations = sum(valueSum) by Outcome = tostring(customDimensions.outcome)\n| order by Investigations desc",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "blocks",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Screen blocks by kind and verdict",
+        "query": "customMetrics\n| where name == 'paymentops.screen.blocks'\n| summarize Blocks = sum(valueSum) by Kind = tostring(customDimensions.kind), Verdict = tostring(customDimensions.verdict)",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "rejections",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Refused before an investigation started, by reason",
+        "query": "customMetrics\n| where name == 'paymentops.investigations.rejected'\n| summarize Refused = sum(valueSum) by bin(timestamp, 1d), Reason = tostring(customDimensions.reason)",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 1,
+      "name": "cost",
+      "content": { "json": "## Cost\nWhat investigations used, and their estimated cost at list prices where usage and prices were complete." }
+    },
+    {
+      "type": 3,
+      "name": "tokens",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Model tokens per day",
+        "query": "customMetrics\n| where name == 'paymentops.model.tokens'\n| summarize Tokens = sum(valueSum) by bin(timestamp, 1d), Series = strcat(tostring(customDimensions.deployment), ' ', tostring(customDimensions.direction))",
+        "size": 0,
+        "timeContext": { "durationMs": 2592000000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "records",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Content Safety records and requests per day",
+        "query": "customMetrics\n| where name in ('paymentops.content_safety.records', 'paymentops.http.requests')\n| summarize Count = sum(valueSum) by bin(timestamp, 1d), Series = strcat(name, ' ', tostring(customDimensions.service))",
+        "size": 0,
+        "timeContext": { "durationMs": 2592000000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "estimated-cost",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Estimated cost per investigation (average) and per day",
+        "query": "customMetrics\n| where name == 'paymentops.investigation.estimated_cost'\n| summarize PerInvestigation = sum(valueSum) / sum(valueCount), PerDay = sum(valueSum) by bin(timestamp, 1d), Currency = tostring(customDimensions.currency)",
+        "size": 0,
+        "timeContext": { "durationMs": 2592000000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      }
+    }
+  ],
+  "fallbackResourceIds": ["${application_insights_id}"],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

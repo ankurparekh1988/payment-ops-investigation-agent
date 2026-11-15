@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 5.8"
     }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.13"
+    }
   }
 }
 
@@ -41,7 +45,8 @@ resource "azurerm_consumption_budget_resource_group" "this" {
       threshold      = notification.value
       threshold_type = "Actual"
       operator       = "GreaterThanOrEqualTo"
-      contact_groups = [azurerm_monitor_action_group.this.id]
+      # The cutoff is added to the 100% notification only while it's enabled.
+      contact_groups = notification.value == 100 && var.cutoff_enabled ? [azurerm_monitor_action_group.this.id, azurerm_monitor_action_group.cutoff.id] : [azurerm_monitor_action_group.this.id]
     }
   }
 

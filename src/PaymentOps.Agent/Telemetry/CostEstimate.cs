@@ -1,7 +1,14 @@
 namespace PaymentOps.Agent.Telemetry;
 
 /// <summary>List prices per million tokens, for one deployment.</summary>
-public sealed record TokenPrice(decimal InputPerMillion, decimal OutputPerMillion);
+public sealed class DeploymentPrice
+{
+    public string Deployment { get; set; } = string.Empty;
+
+    public decimal InputPerMillion { get; set; }
+
+    public decimal OutputPerMillion { get; set; }
+}
 
 /// <summary>
 /// Prices for estimating what an investigation cost, from configuration. Without a currency nothing is estimated.
@@ -13,7 +20,8 @@ public sealed class CostEstimateOptions
 
     public string? Currency { get; set; }
 
-    public Dictionary<string, TokenPrice> Deployments { get; set; } = new(StringComparer.Ordinal);
+    /// <summary>A list rather than a map, because App Service setting names can't hold a deployment's hyphen.</summary>
+    public List<DeploymentPrice> Deployments { get; set; } = [];
 
     public decimal? ContentSafetyPerThousandRecords { get; set; }
 }
@@ -39,7 +47,7 @@ public sealed record CostEstimate(decimal? Amount, string? Currency, bool Comple
         var amount = 0m;
         foreach (var (deployment, tokens) in usage.Tokens)
         {
-            if (!options.Deployments.TryGetValue(deployment, out var price))
+            if (options.Deployments.Find(p => string.Equals(p.Deployment, deployment, StringComparison.Ordinal)) is not { } price)
             {
                 return new(null, options.Currency, true, $"unpriced deployment {deployment}");
             }

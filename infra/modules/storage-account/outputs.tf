@@ -17,3 +17,8 @@ output "container_ids" {
   description = "Resource IDs of the containers, keyed by name."
   value       = { for name, container in azurerm_storage_container.this : name => container.id }
 }
+
+output "table_endpoint" {
+  description = "The account's table service endpoint."
+  value       = azurerm_storage_account.this.primary_table_endpoint
+}

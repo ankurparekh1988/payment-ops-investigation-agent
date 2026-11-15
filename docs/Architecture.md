@@ -43,6 +43,8 @@ flowchart LR
 
 *As of 2026-10-16.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
 
+Operations sit beside the app: a workbook, alerts on server errors, model throttling and guardrail blocks, an availability test on the liveness endpoint, budget and cost anomaly alerts, and a budget-driven cutoff that's off by default ([Runbook](Runbook.md#alerts)). The app's daily usage counts are a table in the knowledge storage account, which the app can read and write through a role on that table alone.
+
 ## AI release
 
 Models, content filters and prompts are configuration that changes behaviour, so they come from one reviewed file and travel inside the build ([ADR 0004](adr/0004-ai-release-manifest.md)).

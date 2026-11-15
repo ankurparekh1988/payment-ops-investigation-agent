@@ -11,11 +11,11 @@ public sealed class CostEstimateTests
     private static CostEstimateOptions Prices() => new()
     {
         Currency = "USD",
-        Deployments = new Dictionary<string, TokenPrice>(StringComparer.Ordinal)
-        {
-            [Chat] = new(InputPerMillion: 0.75m, OutputPerMillion: 4.50m),
-            [Screen] = new(InputPerMillion: 0.20m, OutputPerMillion: 1.25m),
-        },
+        Deployments =
+        [
+            new() { Deployment = Chat, InputPerMillion = 0.75m, OutputPerMillion = 4.50m },
+            new() { Deployment = Screen, InputPerMillion = 0.20m, OutputPerMillion = 1.25m },
+        ],
         ContentSafetyPerThousandRecords = 0.38m,
     };
 

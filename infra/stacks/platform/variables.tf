@@ -102,3 +102,68 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "daily_limit_per_user" {
+  description = "Investigations one person may start in a UTC day."
+  type        = number
+  default     = 25
+
+  validation {
+    condition     = var.daily_limit_per_user > 0
+    error_message = "The daily limit per person must be positive."
+  }
+}
+
+variable "daily_limit_total" {
+  description = "Investigations everyone together may start in a UTC day."
+  type        = number
+  default     = 150
+
+  validation {
+    condition     = var.daily_limit_total > 0
+    error_message = "The daily total must be positive."
+  }
+}
+
+variable "investigations_paused" {
+  description = "Pause every investigation; nothing is investigated or counted while it's true."
+  type        = bool
+  default     = false
+}
+
+variable "cost_estimate" {
+  description = "List prices for estimating each investigation's cost; without them usage is measured and no cost is estimated."
+  type = object({
+    currency                            = string
+    content_safety_per_thousand_records = number
+    deployments = map(object({
+      input_per_million  = number
+      output_per_million = number
+    }))
+  })
+  default = null
+}
+
+variable "budget_cutoff_enabled" {
+  description = "Let the budget's 100% notification turn the AI account's network access off. Off unless set."
+  type        = bool
+  default     = false
+}
+
+variable "availability_test_locations" {
+  description = "Locations the availability test runs from; each is billed per run, every 15 minutes."
+  type        = list(string)
+  default     = ["us-va-ash-azr"]
+}
+
+variable "http5xx_threshold" {
+  description = "Server errors in 15 minutes above which the server-error alert fires."
+  type        = number
+  default     = 5
+}
+
+variable "guardrail_block_threshold" {
+  description = "Screen blocks in 15 minutes above which the guardrail alert fires."
+  type        = number
+  default     = 10
+}

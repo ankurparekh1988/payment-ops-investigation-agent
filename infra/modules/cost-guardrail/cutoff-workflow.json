@@ -1,0 +1,105 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "accountId": { "type": "String" },
+    "subscriptionId": { "type": "String" },
+    "budgetName": { "type": "String" },
+    "resourceGroup": { "type": "String" }
+  },
+  "triggers": {
+    "budget_notification": {
+      "type": "Request",
+      "kind": "Http",
+      "operationOptions": "EnableSchemaValidation",
+      "inputs": {
+        "schema": {
+          "type": "object",
+          "required": ["schemaId", "data"],
+          "properties": {
+            "schemaId": { "type": "string" },
+            "data": {
+              "type": "object",
+              "required": ["SubscriptionId", "BudgetName", "BudgetType", "ResourceGroup", "NotificationThresholdAmount", "SpendingAmount", "Budget"],
+              "properties": {
+                "SubscriptionId": { "type": "string" },
+                "BudgetName": { "type": "string" },
+                "BudgetType": { "type": "string" },
+                "ResourceGroup": { "type": "string" },
+                "NotificationThresholdAmount": { "type": "string" },
+                "SpendingAmount": { "type": "string" },
+                "Budget": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "actions": {
+    "Validate_notification": {
+      "type": "If",
+      "description": "This budget's own notification once actual spending has reached the budget, whatever unit the threshold field uses. Values arrive as text; text that isn't a number never passes.",
+      "expression": "@and(equals(triggerBody()?['schemaId'], 'AIP Budget Notification'), equals(triggerBody()?['data']?['BudgetType'], 'Cost'), equals(triggerBody()?['data']?['SubscriptionId'], parameters('subscriptionId')), equals(triggerBody()?['data']?['BudgetName'], parameters('budgetName')), equals(triggerBody()?['data']?['ResourceGroup'], parameters('resourceGroup')), greaterOrEquals(float(if(isFloat(triggerBody()?['data']?['NotificationThresholdAmount']), triggerBody()?['data']?['NotificationThresholdAmount'], '-1')), 1), isFloat(triggerBody()?['data']?['SpendingAmount']), isFloat(triggerBody()?['data']?['Budget']), greaterOrEquals(float(if(isFloat(triggerBody()?['data']?['SpendingAmount']), triggerBody()?['data']?['SpendingAmount'], '-1')), float(if(isFloat(triggerBody()?['data']?['Budget']), triggerBody()?['data']?['Budget'], '0'))))",
+      "runAfter": {},
+      "actions": {
+        "Read_account": {
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "@{concat('https://management.azure.com', parameters('accountId'), '?api-version=2025-06-01')}",
+            "authentication": { "type": "ManagedServiceIdentity" }
+          },
+          "runAfter": {}
+        },
+        "Skip_if_already_disabled": {
+          "type": "If",
+          "expression": "@equals(body('Read_account')?['properties']?['publicNetworkAccess'], 'Disabled')",
+          "runAfter": { "Read_account": ["Succeeded"] },
+          "actions": {
+            "Already_disabled": {
+              "type": "Terminate",
+              "inputs": { "runStatus": "Succeeded" },
+              "trackedProperties": { "status": "Skipped: already disabled" }
+            }
+          },
+          "else": {
+            "actions": {
+              "Disable_network_access": {
+                "type": "Http",
+                "inputs": {
+                  "method": "PATCH",
+                  "uri": "@{concat('https://management.azure.com', parameters('accountId'), '?api-version=2025-06-01')}",
+                  "body": { "properties": { "publicNetworkAccess": "Disabled" } },
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                },
+                "trackedProperties": { "status": "Disabled account" }
+              }
+            }
+          }
+        },
+        "Record_failure": {
+          "type": "Terminate",
+          "runAfter": { "Skip_if_already_disabled": ["Failed", "Skipped", "TimedOut"] },
+          "inputs": {
+            "runStatus": "Failed",
+            "runError": {
+              "code": "@{coalesce(outputs('Disable_network_access')?['statusCode'], outputs('Read_account')?['statusCode'], 'unknown')}",
+              "message": "The AI account's network access couldn't be turned off."
+            }
+          }
+        }
+      },
+      "else": {
+        "actions": {
+          "Unexpected_notification": {
+            "type": "Terminate",
+            "inputs": { "runStatus": "Succeeded" },
+            "trackedProperties": { "status": "Skipped: unexpected notification" }
+          }
+        }
+      }
+    }
+  },
+  "outputs": {}
+}

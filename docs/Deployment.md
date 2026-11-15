@@ -53,6 +53,12 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_monthly_budget` | `10` | Budget that triggers alert emails |
 | `TF_VAR_alert_email` | | Where budget, operational and cost anomaly alerts go; the bootstrap reads it too |
 | `TF_VAR_model_retirement_buffer_days` | `90` | Refuse models retiring within this many days |
+| `TF_VAR_daily_limit_per_user`, `TF_VAR_daily_limit_total` | `25`, `150` | Optional. Investigations one person, and everyone together, may start in a UTC day |
+| `TF_VAR_investigations_paused` | `false` | Optional. Pause every investigation ([Runbook](Runbook.md#pausing-and-limits)) |
+| `TF_VAR_cost_estimate` | `'{currency="CAD", content_safety_per_thousand_records=<price>, deployments={chat-blue={input_per_million=<price>, output_per_million=<price>}}}'` | Optional. List prices for estimating each investigation's cost; without them usage is measured and no cost is estimated |
+| `TF_VAR_budget_cutoff_enabled` | `false` | Optional. Let the budget's 100% notification turn the AI account's network access off ([Runbook](Runbook.md#budget-cutoff)) |
+| `TF_VAR_availability_test_locations` | `'["us-va-ash-azr"]'` | Optional. Where the availability test runs from; each location is billed per run |
+| `TF_VAR_http5xx_threshold`, `TF_VAR_guardrail_block_threshold` | `5`, `10` | Optional. Alert thresholds per 15 minutes |
 | `TF_VAR_create_demo_users` | `false` | Create one demo user per role; enable only to demonstrate role behaviour |
 | `TF_VAR_local_app_urls` | `'["https://localhost:7207"]'` | Addresses the app runs on locally, allowed to sign in and out |
 | `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
