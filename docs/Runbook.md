@@ -63,9 +63,11 @@ Every alert emails the environment's action group. The workbook *`<prefix>-<envi
 
 **Model throttling.** Requests to the AI account, the model's endpoint or Content Safety's, were refused with 429 in the last 15 minutes. Investigations retry once and then report that the service isn't responding; questions may go unscreened. Check the deployments' capacity against `ai/manifest.yaml`, and whether an evaluation was running at the time: it shares the account.
 
+**Availability.** The liveness endpoint `/health` failed its availability test, which runs every 15 minutes. The app isn't answering at all: check the web app's state and log stream, and whether a deployment was running. `/health` touches no paid service, so a failure here is the app or its plan, not the model.
+
 **Guardrail block spike.** More questions blocked, or tool text withheld, than the threshold in 15 minutes. Find the investigations in the decision records (`3009` with `screens` other than clean) and treat them as [suspected prompt injection](#suspected-prompt-injection) if the blocks are on tool text. A burst of blocked questions from one person is worth a word with them; the daily limits bound it either way.
 
-**Firing each alert once.** After a deployment that changes an alert, fire it to confirm it reaches the inbox: for server errors, set a temporary threshold of `0` in `TF_VAR_http5xx_threshold` and request a page that errors; for guardrail blocks, ask a question the screen blocks after a threshold of `0`; for throttling, use the alert rule's *Test action group* in the portal. Restore the thresholds afterwards.
+**Firing each alert once.** After a deployment that changes an alert, fire it to confirm it reaches the inbox: for server errors, set a temporary threshold of `0` in `TF_VAR_http5xx_threshold` and request a page that errors; for guardrail blocks, ask a question the screen blocks after a threshold of `0`; for throttling and availability, use the alert rule's *Test action group* in the portal. Restore the thresholds afterwards.
 
 ## Budget cutoff
 

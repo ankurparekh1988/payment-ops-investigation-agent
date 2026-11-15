@@ -1,4 +1,4 @@
-# Operations: the workbook, three alerts and an availability test, all over the app's own telemetry. Every alert goes
+# Operations: the workbook, four alerts and an availability test, all over the app's own telemetry. Every alert goes
 # to the action group the budget uses. Log search alerts run every 15 minutes, the least often Azure allows them to
 # be charged at their lowest rate; the availability test runs from as few locations as the variable sets.
 
@@ -104,6 +104,29 @@ resource "azurerm_application_insights_standard_web_test" "health" {
 
   validation_rules {
     expected_status_code = 200
+  }
+
+  tags = var.tags
+}
+
+# One failing location is the whole test while it runs from one; with more, this still fires on the first.
+resource "azurerm_monitor_metric_alert" "availability" {
+  name                = "${var.alert_name_prefix}-availability"
+  resource_group_name = var.resource_group_name
+  scopes              = [azurerm_application_insights_standard_web_test.health.id, azurerm_application_insights.this.id]
+  description         = "The liveness endpoint failed its availability test. Runbook: Availability."
+  severity            = 1
+  frequency           = "PT1M"
+  window_size         = "PT15M"
+
+  application_insights_web_test_location_availability_criteria {
+    web_test_id           = azurerm_application_insights_standard_web_test.health.id
+    component_id          = azurerm_application_insights.this.id
+    failed_location_count = 1
+  }
+
+  action {
+    action_group_id = var.action_group_id
   }
 
   tags = var.tags
