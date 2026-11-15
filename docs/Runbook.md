@@ -45,3 +45,12 @@ Signs: a General user sees Restricted knowledge; a ticket's title or summary car
 2. **Confirm who saw what.** From the investigation id, find the signed-in user and their roles in Entra; check the section's classification in the corpus and the user's membership of the Restricted group.
 3. **Find the cause.** A misclassified section is fixed in the corpus by pull request. A wrong group membership or app role is fixed in Entra. Text that passed the ticket content policy means a rule is missing; add it with a test.
 4. **Record it.** Note the investigation id, what was seen and by whom, the cause and the fix. The data here is synthetic, so no notification duty applies; with real data, follow the organisation's incident process.
+
+## Pausing and limits
+
+Investigations can be stopped without a deployment, and how many can run in a day is bounded ([ADR 0021](adr/0021-bounded-usage-and-observable-cost.md)).
+
+- **Pause.** Set the web app's `PaymentOps__Usage__Paused` setting to `true`; the app restarts and every question gets "Investigations are paused." Nothing is investigated or counted. Set it back to `false`, or remove it, to resume. Terraform's `investigations_paused` variable sets the same value at the next deployment, so change it there too or the deployment undoes the pause.
+- **Daily limits.** `PaymentOps__Usage__DailyLimitPerUser` and `PaymentOps__Usage__DailyLimitTotal` bound how many investigations one person and everyone together may start in a UTC day. Counts reset at 00:00 UTC. Only admitted investigations count; a refused one consumes nothing.
+- **"Investigations can't start right now."** The usage table couldn't be read or written, so nothing was admitted (event `3201` names the cause's type). Check the web app identity's *Storage Table Data Contributor* assignment on the storage account and the account's health.
+- **Who's refused, and why.** Refusals before an investigation starts are counted by reason in the `paymentops.investigations.rejected` metric (`busy`, `paused`, `daily_limit`, `usage_unavailable`); they have no trace.

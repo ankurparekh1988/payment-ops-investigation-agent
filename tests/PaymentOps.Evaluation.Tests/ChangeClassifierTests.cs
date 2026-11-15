@@ -132,6 +132,8 @@ public sealed class ChangeClassifierTests
     [InlineData("docs/adr/0017-ask-again-when-the-question-screen-cant-check.md", false, true)]
     [InlineData("docs/adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md", false, true)]
     [InlineData("docs/adr/0019-retry-the-case-the-environment-spoiled.md", false, true)]
+    [InlineData("docs/adr/0020-evaluate-on-request-at-lower-cost.md", false, true)]
+    [InlineData("docs/adr/0021-bounded-usage-and-observable-cost.md", false, true)]
     [InlineData("docs/adr/0013-x.md", false, false)]
     [InlineData(".github/workflows/ai-evaluation.yml", false, true)]
     [InlineData(".github/workflows/cd.yml", false, false)]

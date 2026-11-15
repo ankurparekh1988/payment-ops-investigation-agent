@@ -1,6 +1,6 @@
 # 0020. Evaluate on request, once per change, at lower cost
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [0021](0021-bounded-usage-and-observable-cost.md)
 - **Date:** 2026-11-10
 
 ## Context
@@ -25,7 +25,7 @@ An evaluation that repeats work measures nothing new, so its cost buys nothing.
 - **Behaviour and gate policy may change in one pull request.** The work is evaluated once, under the workflow and code of the pull request itself. The classifier still runs from the base branch, and a change to `eval/thresholds.json`, `eval/safety-thresholds.json` or a dataset still needs an ADR in the same pull request, saying what changed and why.
 - **A run's cases share the app's registered screening caches,** one for Prompt Shields verdicts and one for harm verdicts, as the app's investigations share them, and each run starts with empty ones, so runs stay independent measurements. A verdict the screen couldn't give is never cached, as in the app. (Amended 2026-11-14: the harm cache was first built inside the app's registration, out of the harness's reach; the app now registers it, so a run shares it too.)
 - **The safety evaluation runs once on a pull request,** and three times on scheduled and manual runs of `main`. Its hard gates still fail on any run.
-- **`main` is evaluated monthly,** on the first of the month at 06:00 UTC, and on demand.
+- **`main` is evaluated monthly,** on the first of the month at 06:00 UTC, and on demand. (Amended 2026-11-14: the monthly run evaluates only while the repository variable `MONTHLY_EVALUATION` is `on`, [ADR 0021](0021-bounded-usage-and-observable-cost.md).)
 
 ## Consequences
 
