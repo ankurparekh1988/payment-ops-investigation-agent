@@ -70,7 +70,7 @@ retrieval:
 prompts:
   investigation-agent:
     version: 1.2.0
-    sha256: sha256:31d0f2593a67f7f9888b74f84c48339f3dd987c8202feb4ead0833abbc21e99c
+    sha256: sha256:65326e12e283798933062a94a470a4a65c65f0473f0a6eb27355d4d1cf1c6066
   harm-screen:
     version: 1.0.0
     sha256: sha256:18c1c05feb6298186eb71e7af3e7daa3afa71485d292e69efe0aa4ad3c2133ce
