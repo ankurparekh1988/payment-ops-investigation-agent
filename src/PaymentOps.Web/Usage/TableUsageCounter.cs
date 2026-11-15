@@ -72,7 +72,19 @@ internal sealed class TableUsageCounter(TableClient table, int maxAttempts = Tab
     private async Task<(int Count, ETag? ETag)> ReadAsync(string partition, string row, CancellationToken cancellationToken)
     {
         var entity = await table.GetEntityIfExistsAsync<TableEntity>(partition, row, cancellationToken: cancellationToken);
-        return entity.HasValue ? (entity.Value!.GetInt32(CountProperty) ?? 0, entity.Value.ETag) : (0, null);
+        if (!entity.HasValue)
+        {
+            return (0, null);
+        }
+
+        // A row that exists but holds no usable count or ETag isn't a fresh day: zero would reset the limits, and an
+        // update without its ETag would overwrite whatever is there.
+        if (entity.Value!.GetInt32(CountProperty) is not { } count || count < 0 || entity.Value.ETag == default)
+        {
+            throw new UsageUnavailableException("A usage row is malformed.");
+        }
+
+        return (count, entity.Value.ETag);
     }
 
     // A row that didn't exist is inserted, which fails if another reservation inserted it first.

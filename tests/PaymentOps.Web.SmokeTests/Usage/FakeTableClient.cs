@@ -12,6 +12,7 @@ internal sealed class FakeTableClient : TableClient
 {
     private readonly Lock _lock = new();
     private readonly Dictionary<(string Partition, string Row), (int Count, ETag ETag)> _rows = [];
+    private readonly Dictionary<(string Partition, string Row), TableEntity> _planted = [];
     private int _version;
 
     /// <summary>Thrown by every read.</summary>
@@ -26,6 +27,24 @@ internal sealed class FakeTableClient : TableClient
         lock (_lock)
         {
             return _rows.TryGetValue((partition, row), out var entry) ? entry.Count : 0;
+        }
+    }
+
+    /// <summary>Stores a row exactly as given, whatever it holds, as a corrupted or hand-edited table would.</summary>
+    public void Plant(TableEntity entity)
+    {
+        lock (_lock)
+        {
+            _planted[(entity.PartitionKey, entity.RowKey)] = entity;
+        }
+    }
+
+    /// <summary>A planted row as it is now: the same entity unless a transaction replaced it.</summary>
+    public TableEntity Planted(string partition, string row)
+    {
+        lock (_lock)
+        {
+            return _planted[(partition, row)];
         }
     }
 
@@ -51,6 +70,11 @@ internal sealed class FakeTableClient : TableClient
 
         lock (_lock)
         {
+            if (_planted.TryGetValue((partitionKey, rowKey), out var planted))
+            {
+                return Response.FromValue((T)(object)planted, null!);
+            }
+
             if (!_rows.TryGetValue((partitionKey, rowKey), out var entry))
             {
                 return new Missing<T>();
@@ -76,6 +100,17 @@ internal sealed class FakeTableClient : TableClient
             foreach (var action in actions)
             {
                 var key = (action.Entity.PartitionKey, action.Entity.RowKey);
+                if (_planted.TryGetValue(key, out var planted))
+                {
+                    // As the service would: an unconditional replace succeeds, so a test sees the damage.
+                    if (action.ActionType != TableTransactionActionType.UpdateReplace || (action.ETag != default && action.ETag != ETag.All && action.ETag != planted.ETag))
+                    {
+                        throw Failed(action.ActionType == TableTransactionActionType.Add ? 409 : 412);
+                    }
+
+                    continue;
+                }
+
                 var exists = _rows.TryGetValue(key, out var current);
                 if (action.ActionType == TableTransactionActionType.Add && exists)
                 {
@@ -90,6 +125,12 @@ internal sealed class FakeTableClient : TableClient
 
             foreach (var action in actions)
             {
+                if (_planted.ContainsKey((action.Entity.PartitionKey, action.Entity.RowKey)))
+                {
+                    _planted[(action.Entity.PartitionKey, action.Entity.RowKey)] = (TableEntity)action.Entity;
+                    continue;
+                }
+
                 var count = Convert.ToInt32(((TableEntity)action.Entity)["Count"], System.Globalization.CultureInfo.InvariantCulture);
                 _rows[(action.Entity.PartitionKey, action.Entity.RowKey)] = (count, new ETag($"W/\"{++_version}\""));
             }

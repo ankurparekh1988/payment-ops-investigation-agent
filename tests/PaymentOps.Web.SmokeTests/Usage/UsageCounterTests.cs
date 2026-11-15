@@ -1,3 +1,6 @@
+using Azure;
+using Azure.Data.Tables;
+
 using PaymentOps.Web.Usage;
 
 namespace PaymentOps.Web.SmokeTests.Usage;
@@ -163,6 +166,64 @@ public sealed class UsageCounterTests
         var table = new FakeTableClient { ReadsThrow = Outage(kind) };
 
         await Assert.ThrowsAsync<UsageUnavailableException>(() => Counter(table).TryReserveAsync("user-a", Day, 10, 10, CancellationToken.None));
+    }
+
+    // A row that exists but can't be read as a count isn't a fresh day: counting it as zero would reset the limits.
+    public static TheoryData<string, string> MalformedRows()
+    {
+        var rows = new TheoryData<string, string>();
+        foreach (var row in new[] { "user", "total" })
+        {
+            foreach (var damage in new[] { "count missing", "count null", "count negative", "count not a number", "no etag" })
+            {
+                rows.Add(row, damage);
+            }
+        }
+
+        return rows;
+    }
+
+    private static TableEntity Malformed(string row, string damage)
+    {
+        // Setting ETag to default stores "<null>", so a row without one is built without it.
+        var entity = damage == "no etag" ? new TableEntity(Partition, row) : new TableEntity(Partition, row) { ETag = new ETag("W/\"planted\"") };
+        switch (damage)
+        {
+            case "count null":
+                entity["Count"] = null;
+                break;
+            case "count negative":
+                entity["Count"] = -1;
+                break;
+            case "count not a number":
+                entity["Count"] = "7";
+                break;
+            case "no etag":
+                entity["Count"] = 1;
+                break;
+        }
+
+        return entity;
+    }
+
+    [Theory]
+    [MemberData(nameof(MalformedRows))]
+    public async Task A_malformed_row_refuses_and_changes_nothing(string row, string damage)
+    {
+        var table = new FakeTableClient();
+        var counter = Counter(table);
+        await counter.TryReserveAsync("user-a", Day, 10, 10, CancellationToken.None);
+        var key = row == "user" ? TableUsageCounter.UserRow("user-a") : TableUsageCounter.TotalRow;
+        var other = row == "user" ? TableUsageCounter.TotalRow : TableUsageCounter.UserRow("user-a");
+        var planted = Malformed(key, damage);
+        table.Plant(planted);
+        var transactions = table.Transactions;
+
+        await Assert.ThrowsAsync<UsageUnavailableException>(() => counter.TryReserveAsync("user-a", Day, 10, 10, CancellationToken.None));
+
+        Assert.Equal(transactions, table.Transactions);
+        Assert.Same(planted, table.Planted(Partition, key));
+        Assert.Equal(1, table.Count(Partition, other));
     }
 
     [Fact]
