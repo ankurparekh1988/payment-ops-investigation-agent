@@ -56,7 +56,9 @@ internal sealed class TableUsageCounter(TableClient table, int maxAttempts = Tab
                     await Task.Delay(_backoff(attempt), cancellationToken);
                 }
             }
-            catch (RequestFailedException ex)
+            // Any other failure is an outage, whatever form it takes: a service response, retries exhausted, a network
+            // timeout or a sign-in failure. Only the caller's own cancellation stays a cancellation.
+            catch (Exception ex) when (ex is not UsageUnavailableException && !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
                 throw new UsageUnavailableException("Usage couldn't be read or written.", ex);
             }

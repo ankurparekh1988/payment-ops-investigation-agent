@@ -145,6 +145,36 @@ public sealed class UsageCounterTests
         Assert.Equal(0, table.Transactions);
     }
 
+    // An outage is rarely a single service response: retries give up in an AggregateException, a network timeout is a
+    // TaskCanceledException nobody asked for, and a sign-in failure isn't a RequestFailedException at all.
+    public static TheoryData<string> Outages() => ["retries exhausted", "network timeout", "sign-in failed"];
+
+    private static Exception Outage(string kind) => kind switch
+    {
+        "retries exhausted" => new AggregateException("Retry failed after 4 tries.", new Azure.RequestFailedException(503, "unavailable")),
+        "network timeout" => new TaskCanceledException("The request timed out."),
+        _ => new Azure.Identity.AuthenticationFailedException("token"),
+    };
+
+    [Theory]
+    [MemberData(nameof(Outages))]
+    public async Task Any_outage_fails_closed(string kind)
+    {
+        var table = new FakeTableClient { ReadsThrow = Outage(kind) };
+
+        await Assert.ThrowsAsync<UsageUnavailableException>(() => Counter(table).TryReserveAsync("user-a", Day, 10, 10, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_cancelled_request_stays_cancelled()
+    {
+        using var cancel = new CancellationTokenSource();
+        await cancel.CancelAsync();
+        var table = new FakeTableClient { ReadsThrow = new OperationCanceledException(cancel.Token) };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Counter(table).TryReserveAsync("user-a", Day, 10, 10, cancel.Token));
+    }
+
     [Fact]
     public async Task Each_day_has_its_own_counts()
     {

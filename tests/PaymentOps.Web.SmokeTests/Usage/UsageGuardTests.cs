@@ -195,7 +195,7 @@ public sealed class UsageGuardTests : IDisposable
 
     [Theory]
     [InlineData(NotAssessedReason.Paused, "Investigations are paused.")]
-    [InlineData(NotAssessedReason.DailyLimitReached, "You've reached today's investigation limit. It resets at 00:00 UTC.")]
+    [InlineData(NotAssessedReason.DailyLimitReached, "Today's investigation limit has been reached. It resets at 00:00 UTC.")]
     [InlineData(NotAssessedReason.UsageUnavailable, "Investigations can't start right now. Please try again shortly.")]
     public void Each_refusal_has_its_own_text(NotAssessedReason reason, string text) =>
         Assert.Equal(text, NotAssessedText.For(reason, 2000));

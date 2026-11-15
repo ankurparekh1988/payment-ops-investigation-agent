@@ -110,6 +110,20 @@
       }
     },
     {
+      "type": 3,
+      "name": "tools",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Tool calls by outcome (refused: a merchant the user never named)",
+        "query": "dependencies\n| where name startswith 'tool.'\n| summarize Calls = count() by Tool = substring(name, 5), Outcome = tostring(customDimensions['paymentops.tool.outcome'])",
+        "size": 0,
+        "timeContext": { "durationMs": 604800000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      }
+    },
+    {
       "type": 1,
       "name": "cost",
       "content": { "json": "## Cost\nWhat investigations used, and their estimated cost at list prices where usage and prices were complete." }

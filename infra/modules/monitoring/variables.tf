@@ -69,9 +69,9 @@ variable "web_app_hostname" {
   type        = string
 }
 
-variable "ai_account_host" {
-  description = "The AI account's host name, to find its throttled requests among the app's dependencies."
-  type        = string
+variable "ai_account_hosts" {
+  description = "The AI account's host names (model and Content Safety), to find their throttled requests among the app's dependencies."
+  type        = list(string)
 }
 
 variable "action_group_id" {

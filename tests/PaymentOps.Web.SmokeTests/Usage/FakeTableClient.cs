@@ -16,6 +16,9 @@ internal sealed class FakeTableClient : TableClient
 
     public int? FailReadsWith { get; set; }
 
+    /// <summary>Thrown by every read, for failures that aren't a service response.</summary>
+    public Exception? ReadsThrow { get; set; }
+
     public int? FailTransactionsWith { get; set; }
 
     public int Transactions { get; private set; }
@@ -43,6 +46,11 @@ internal sealed class FakeTableClient : TableClient
     {
         // Let concurrent reservations interleave between their read and their write, as they would against a service.
         await Task.Yield();
+        if (ReadsThrow is { } thrown)
+        {
+            throw thrown;
+        }
+
         if (FailReadsWith is { } status)
         {
             throw new RequestFailedException(status, "read failed");

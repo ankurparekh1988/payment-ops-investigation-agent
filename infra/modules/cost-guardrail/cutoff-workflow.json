@@ -84,7 +84,7 @@
           "inputs": {
             "runStatus": "Failed",
             "runError": {
-              "code": "@{coalesce(outputs('Disable_network_access')?['statusCode'], outputs('Read_account')?['statusCode'], 'unknown')}",
+              "code": "@{coalesce(actions('Disable_network_access')?['outputs']?['statusCode'], actions('Read_account')?['outputs']?['statusCode'], 'unknown')}",
               "message": "The AI account's network access couldn't be turned off."
             }
           }

@@ -246,7 +246,7 @@ Every question gets a server-generated `InvestigationId`. It's on the result's f
 
 ### Telemetry
 
-Each investigation that runs is one trace under the request that started it: an `investigation` span with children for the question screen, each tool call, each knowledge search, the screening of what tools returned, and each model call (OpenTelemetry's `gen_ai` conventions, without message content). The span ends tagged with the outcome, the tokens used, the Content Safety records billed, the requests sent and, when it can be estimated, the cost.
+Each investigation that runs is one trace: an `investigation` span with children for the question screen, each tool call, each knowledge search, the screening of what tools returned, and each model call (OpenTelemetry's `gen_ai` conventions, without message content). The span ends tagged with the outcome, the tokens used, the Content Safety records billed, the requests sent and, when it can be estimated, the cost.
 
 What a turn used is kept apart by what it is, because each is billed differently: requests sent, retries and failures included; Content Safety text records, one per started 1,000 characters of each text it answered; model tokens per deployment, the classifier's included; and screening verdicts served from a cache, which sent nothing. A cost is estimated only from complete usage and prices configured per deployment (`PaymentOps:CostEstimate`); when either is missing the cost is reported as unavailable and the counts still stand. The estimate uses list prices, so it's an upper bound.
 

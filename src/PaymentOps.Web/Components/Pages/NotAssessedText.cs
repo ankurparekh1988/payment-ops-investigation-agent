@@ -21,7 +21,7 @@ internal static class NotAssessedText
         NotAssessedReason.Cancelled => "Investigation cancelled. Nothing from it was kept.",
         NotAssessedReason.ConversationLimit => "This conversation is full. Start a new investigation to continue.",
         NotAssessedReason.Paused => "Investigations are paused.",
-        NotAssessedReason.DailyLimitReached => "You've reached today's investigation limit. It resets at 00:00 UTC.",
+        NotAssessedReason.DailyLimitReached => "Today's investigation limit has been reached. It resets at 00:00 UTC.",
         NotAssessedReason.UsageUnavailable => "Investigations can't start right now. Please try again shortly.",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null),
     };

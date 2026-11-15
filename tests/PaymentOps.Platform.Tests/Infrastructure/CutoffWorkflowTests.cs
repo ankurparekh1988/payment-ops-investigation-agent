@@ -169,6 +169,8 @@ public sealed class CutoffWorkflowTests
         Assert.Equal("Failed", (string?)failed["inputs"]!["runStatus"]);
         Assert.DoesNotContain("triggerBody", recorded, StringComparison.Ordinal);
         Assert.Contains("statusCode", recorded, StringComparison.Ordinal);
+        // A skipped action has no outputs to read; actions('name') is safe whether it ran or not.
+        Assert.DoesNotContain("outputs('", (string)failed["inputs"]!["runError"]!["code"]!, StringComparison.Ordinal);
         Assert.All(All(Actions), a => Assert.DoesNotContain("triggerBody", a.Action["trackedProperties"]?.ToJsonString() ?? string.Empty, StringComparison.Ordinal));
     }
 }

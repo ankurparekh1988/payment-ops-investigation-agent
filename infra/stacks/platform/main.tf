@@ -86,10 +86,13 @@ module "monitoring" {
   evaluation_rule_name      = "dcr-${local.base}-eval"
   tags                      = local.tags
 
-  alert_name_prefix           = local.base
-  web_app_id                  = module.web_app.id
-  web_app_hostname            = module.web_app.default_hostname
-  ai_account_host             = trimsuffix(trimprefix(module.foundry.endpoint, "https://"), "/")
+  alert_name_prefix = local.base
+  web_app_id        = module.web_app.id
+  web_app_hostname  = module.web_app.default_hostname
+  # The model is called on the OpenAI endpoint and Content Safety on the generic one: different hosts.
+  ai_account_hosts = [
+    for endpoint in [module.foundry.openai_endpoint, module.foundry.endpoint] : regex("^https://([^/]+)", endpoint)[0]
+  ]
   action_group_id             = module.cost_guardrail.action_group_id
   availability_test_locations = var.availability_test_locations
   http5xx_threshold           = var.http5xx_threshold

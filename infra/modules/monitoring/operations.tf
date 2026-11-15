@@ -43,13 +43,13 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "model_throttling" {
   resource_group_name  = var.resource_group_name
   location             = var.location
   scopes               = [azurerm_log_analytics_workspace.this.id]
-  description          = "Requests to the AI account were throttled (HTTP 429). Runbook: Model throttling."
+  description          = "Requests to the AI account's model or Content Safety were throttled (HTTP 429). Runbook: Model throttling."
   severity             = 2
   evaluation_frequency = "PT15M"
   window_duration      = "PT15M"
 
   criteria {
-    query                   = "AppDependencies | where Target has '${var.ai_account_host}' and ResultCode == '429'"
+    query                   = "AppDependencies | where Target has_any (${join(", ", [for host in var.ai_account_hosts : "'${host}'"])}) and ResultCode == '429'"
     time_aggregation_method = "Count"
     operator                = "GreaterThan"
     threshold               = 0

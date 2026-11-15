@@ -52,7 +52,7 @@ Investigations can be stopped without a deployment, and how many can run in a da
 
 - **Pause.** Set the web app's `PaymentOps__Usage__Paused` setting to `true`; the app restarts and every question gets "Investigations are paused." Nothing is investigated or counted. Set it back to `false`, or remove it, to resume. Terraform's `investigations_paused` variable sets the same value at the next deployment, so change it there too or the deployment undoes the pause.
 - **Daily limits.** `PaymentOps__Usage__DailyLimitPerUser` and `PaymentOps__Usage__DailyLimitTotal` bound how many investigations one person and everyone together may start in a UTC day. Counts reset at 00:00 UTC. Only admitted investigations count; a refused one consumes nothing.
-- **"Investigations can't start right now."** The usage table couldn't be read or written, so nothing was admitted (event `3201` names the cause's type). Check the web app identity's *Storage Table Data Contributor* assignment on the storage account and the account's health.
+- **"Investigations can't start right now."** The usage table couldn't be read or written, so nothing was admitted (event `3201` names the cause's type). Check the web app identity's *Storage Table Data Contributor* assignment on the `usage` table (not the account) and the storage account's health.
 - **Who's refused, and why.** Refusals before an investigation starts are counted by reason in the `paymentops.investigations.rejected` metric (`busy`, `paused`, `daily_limit`, `usage_unavailable`); they have no trace.
 
 ## Alerts
@@ -61,7 +61,7 @@ Every alert emails the environment's action group. The workbook *`<prefix>-<envi
 
 **Server errors.** The web app answered with HTTP 5xx more than the threshold in 15 minutes. Check the app's log stream and `AppExceptions`; a failed deployment or a missing setting fails every request, and startup names the missing setting. 4xx responses don't count: they're the caller's to fix.
 
-**Model throttling.** Requests to the AI account were refused with 429 in the last 15 minutes. Investigations retry once and then report that the service isn't responding; questions may go unscreened. Check the deployments' capacity against `ai/manifest.yaml`, and whether an evaluation was running at the time: it shares the account.
+**Model throttling.** Requests to the AI account, the model's endpoint or Content Safety's, were refused with 429 in the last 15 minutes. Investigations retry once and then report that the service isn't responding; questions may go unscreened. Check the deployments' capacity against `ai/manifest.yaml`, and whether an evaluation was running at the time: it shares the account.
 
 **Guardrail block spike.** More questions blocked, or tool text withheld, than the threshold in 15 minutes. Find the investigations in the decision records (`3009` with `screens` other than clean) and treat them as [suspected prompt injection](#suspected-prompt-injection) if the blocks are on tool text. A burst of blocked questions from one person is worth a word with them; the daily limits bound it either way.
 
