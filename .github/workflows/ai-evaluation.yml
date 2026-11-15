@@ -32,6 +32,9 @@ env:
 jobs:
   classify:
     name: Classify the change
+    # The monthly run of main evaluates only while it's switched on (ADR 0021); off, every job skips and nothing is
+    # spent or reported. Manual runs and pull requests always classify.
+    if: github.event_name != 'schedule' || vars.MONTHLY_EVALUATION == 'on'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -415,7 +418,8 @@ jobs:
   verdict:
     name: AI evaluation
     needs: [classify, publish-eval-index, evaluate, evaluate-safety, record]
-    if: always()
+    # A switched-off monthly run has nothing to judge; every other run gets a verdict.
+    if: always() && needs.classify.result != 'skipped'
     runs-on: ubuntu-latest
     # The required check runs on pull requests, so it gets no repository permissions at all.
     permissions: {}
@@ -505,8 +509,8 @@ jobs:
 
   report-scheduled:
     name: Report the scheduled evaluation
-    needs: verdict
-    if: always() && github.event_name != 'pull_request'
+    needs: [classify, verdict]
+    if: always() && needs.classify.result != 'skipped' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Reading is only for scripts/report-issue.sh; issues is this workflow's only write permission.
     permissions:

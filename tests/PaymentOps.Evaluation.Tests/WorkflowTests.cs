@@ -174,6 +174,79 @@ public sealed partial class WorkflowTests
     private static bool JobRuns(string job, string requested, string required = "true") =>
         WorkflowExpression.IsTrue(Scalar(Job(job), "if")!, Needs(requested, required));
 
+    // A job whose condition reads another job's result or outputs must need that job, or GitHub can't tell what it read.
+    [Fact]
+    public void Every_job_names_the_jobs_its_condition_reads()
+    {
+        foreach (var (id, job) in WorkflowRun.Jobs(Workflow))
+        {
+            Assert.All(WorkflowRun.NeedsRead(job.If ?? string.Empty), read => Assert.True(job.Needs.Contains(read), $"{id} reads needs.{read}"));
+        }
+    }
+
+    private static readonly string[] PaidJobs = ["publish-eval-index", "evaluate", "evaluate-safety"];
+
+    // A required, trusted change whose index publishes and whose evaluations report, so only the event decides.
+    private static readonly Dictionary<string, IReadOnlyDictionary<string, string>> Ran = new(StringComparer.Ordinal)
+    {
+        ["classify"] = new Dictionary<string, string> { ["required"] = "true", ["trusted"] = "true", ["violation"] = string.Empty, ["index-switch"] = "false", ["reason"] = "required: AI behaviour changed" },
+        ["publish-eval-index"] = new Dictionary<string, string> { ["failure-class"] = "none", ["attempt"] = "1" },
+        ["evaluate"] = new Dictionary<string, string> { ["reports-valid"] = "true", ["attempt"] = "1" },
+        ["evaluate-safety"] = new Dictionary<string, string> { ["reports-valid"] = "true", ["attempt"] = "1" },
+    };
+
+    private static Dictionary<string, string> Run(string eventName, string? monthly = null, string action = "", params string[] labels) =>
+        WorkflowRun.Simulate(Workflow, new Dictionary<string, object>
+        {
+            ["github.event_name"] = eventName,
+            ["github.event.action"] = action,
+            ["github.event.pull_request.labels.*.name"] = labels,
+            ["github.run_attempt"] = "1",
+            ["vars.MONTHLY_EVALUATION"] = monthly ?? string.Empty,
+        }, Ran);
+
+    [Theory]
+    [InlineData("schedule", "on", true)]
+    [InlineData("schedule", null, false)]
+    [InlineData("schedule", "off", false)]
+    [InlineData("schedule", "ON ", false)]
+    [InlineData("workflow_dispatch", null, true)]
+    [InlineData("pull_request", null, true)]
+    public void Classify_runs_on_schedule_only_when_switched_on(string eventName, string? monthly, bool runs) =>
+        Assert.Equal(runs ? "success" : "skipped", Run(eventName, monthly, "synchronize")["classify"]);
+
+    // Off, a scheduled run spends nothing and reports nothing: no paid job, no verdict, no history, no issue.
+    [Fact]
+    public void A_switched_off_month_runs_nothing()
+    {
+        var results = Run("schedule");
+
+        Assert.All(results, r => Assert.True(r.Value == "skipped", $"{r.Key} ran"));
+    }
+
+    [Fact]
+    public void A_switched_on_month_runs_as_before()
+    {
+        var results = Run("schedule", "on");
+
+        Assert.All(results, r => Assert.True(r.Value == "success", $"{r.Key} skipped"));
+    }
+
+    [Fact]
+    public void Manual_and_labelled_runs_are_unchanged()
+    {
+        var manual = Run("workflow_dispatch");
+        var labelled = Run("pull_request", action: "labeled", labels: "evaluate");
+        var unlabelled = Run("pull_request", action: "synchronize");
+
+        Assert.All(manual, r => Assert.True(r.Value == "success", $"manual: {r.Key} skipped"));
+        Assert.All(PaidJobs.Append("verdict"), job => Assert.Equal("success", labelled[job]));
+        Assert.Equal("skipped", labelled["record"]);
+        Assert.Equal("skipped", labelled["report-scheduled"]);
+        Assert.All(PaidJobs, job => Assert.Equal("skipped", unlabelled[job]));
+        Assert.Equal("success", unlabelled["verdict"]);
+    }
+
     // Each evaluation costs money, so a pull request is evaluated only once it carries the label; the schedule always is.
     [Fact]
     public void Evaluation_runs_only_when_requested()
