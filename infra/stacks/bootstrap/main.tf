@@ -372,13 +372,14 @@ resource "azurerm_role_definition" "ai_account_network_admin" {
 # --- Spending -----------------------------------------------------------------------------------
 
 # Azure's daily anomaly detection on the subscription's cost; subscription-scoped, so it's created here by the owner.
+# The service refuses a message over 100 characters, and only when applying.
 resource "azurerm_cost_anomaly_alert" "this" {
   name            = "${var.name_prefix}-cost-anomaly"
   display_name    = "${var.name_prefix} cost anomaly"
   subscription_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
   email_subject   = "${var.name_prefix}: unusual Azure spending"
   email_addresses = [var.alert_email]
-  message         = "Azure detected spending outside this subscription's usual pattern. Check the cost analysis and the workbook's cost tab."
+  message         = "Unusual spending on this subscription. Check cost analysis and the workbook's cost tab."
 }
 
 # --- Developers ---------------------------------------------------------------------------------
