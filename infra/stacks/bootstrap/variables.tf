@@ -38,6 +38,17 @@ variable "github_repository_id" {
   type        = number
 }
 
+variable "alert_email" {
+  description = "Email address that receives the cost anomaly alert."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "Provide a valid email address."
+  }
+}
+
 variable "operator_object_id" {
   description = "Entra object ID of the person who runs the bootstrap."
   type        = string

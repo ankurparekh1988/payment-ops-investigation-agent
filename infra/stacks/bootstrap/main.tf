@@ -36,6 +36,8 @@ locals {
     "Log Analytics Reader"           = "73c42c96-874c-492b-b04d-ab87d138a893"
     "Monitoring Metrics Publisher"   = "3913510d-42f4-4e42-8a64-420c390055eb"
     "Prompt Shields User"            = azurerm_role_definition.prompt_shields_user.role_definition_id
+    "Storage Table Data Contributor" = "0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3"
+    "AI Account Network Admin"       = azurerm_role_definition.ai_account_network_admin.role_definition_id
   }
   delegable_role_ids = join(", ", values(local.delegable_roles))
   delegable_role_definition_ids = {
@@ -346,6 +348,37 @@ resource "azurerm_role_definition" "prompt_shields_user" {
   }
 
   assignable_scopes = [azurerm_resource_group.workload.id]
+}
+
+# The budget cutoff's identity turns public network access off on the one AI account it's assigned to. Azure's
+# roles can't narrow an account write to that setting; the identity gets no data-plane action, so it can't call
+# models or read data.
+resource "azurerm_role_definition" "ai_account_network_admin" {
+  name               = "${var.name_prefix} AI Account Network Admin"
+  role_definition_id = uuidv5("url", "https://${var.name_prefix}/roles/ai-account-network-admin")
+  scope              = azurerm_resource_group.workload.id
+  description        = "Read an AI account and update its settings, for the budget cutoff that turns its network access off."
+
+  permissions {
+    actions = [
+      "Microsoft.CognitiveServices/accounts/read",
+      "Microsoft.CognitiveServices/accounts/write",
+    ]
+  }
+
+  assignable_scopes = [azurerm_resource_group.workload.id]
+}
+
+# --- Spending -----------------------------------------------------------------------------------
+
+# Azure's daily anomaly detection on the subscription's cost; subscription-scoped, so it's created here by the owner.
+resource "azurerm_cost_anomaly_alert" "this" {
+  name            = "${var.name_prefix}-cost-anomaly"
+  display_name    = "${var.name_prefix} cost anomaly"
+  subscription_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
+  email_subject   = "${var.name_prefix}: unusual Azure spending"
+  email_addresses = [var.alert_email]
+  message         = "Azure detected spending outside this subscription's usual pattern. Check the cost analysis and the workbook's cost tab."
 }
 
 # --- Developers ---------------------------------------------------------------------------------

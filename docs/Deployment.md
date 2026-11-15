@@ -51,7 +51,7 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_search_sku` | `free` | Search service tier |
 | `TF_VAR_log_retention_days`, `TF_VAR_log_daily_quota_gb` | `30`, `0.5` | Telemetry retention and daily ingestion cap |
 | `TF_VAR_monthly_budget` | `10` | Budget that triggers alert emails |
-| `TF_VAR_alert_email` | | Where budget and operational alerts go |
+| `TF_VAR_alert_email` | | Where budget, operational and cost anomaly alerts go; the bootstrap reads it too |
 | `TF_VAR_model_retirement_buffer_days` | `90` | Refuse models retiring within this many days |
 | `TF_VAR_create_demo_users` | `false` | Create one demo user per role; enable only to demonstrate role behaviour |
 | `TF_VAR_local_app_urls` | `'["https://localhost:7207"]'` | Addresses the app runs on locally, allowed to sign in and out |
@@ -89,8 +89,12 @@ Later runs apply against the remote state directly. To check for drift, run the 
 | *Model Availability Reader* role | Custom role for the model preflight (below) |
 | *Prompt Shields User* role | Custom role holding only the Prompt Shields and Content Safety harm analysis calls, assignable in the environment's resource group. The platform grants it to the app; the bootstrap grants it to `gh-eval` and developers, on the Foundry account once `TF_VAR_eval_foundry_account_id` is set |
 | `gh-deploy` search roles | Search Service Contributor and Search Index Data Contributor on the environment's resource group, so the pipeline can create the knowledge index and publish to it |
+| *AI Account Network Admin* role | Custom role to read an AI account and update its settings, assignable in the environment's resource group. The platform grants it to the budget cutoff's identity on the Foundry account only ([Runbook](Runbook.md#budget-cutoff)) |
+| Cost anomaly alert | Azure's daily anomaly detection on the subscription's cost, emailing `TF_VAR_alert_email`. Subscription-scoped, so only the bootstrap can create it |
 | Developer role assignments | Optional, for `TF_VAR_developer_object_ids`: OpenAI User, Foundry User and Search Index Data Reader, and Prompt Shields User on the Foundry account |
 | Evaluation role assignments | Each on one exact resource, once its `TF_VAR_eval_*` scope is set from the platform outputs ([AI evaluation](#ai-evaluation)) |
+
+The deploy identity's delegable roles include *Storage Table Data Contributor* and *AI Account Network Admin*, for the app's usage counts and the budget cutoff. A pull request that starts assigning a new delegable role is merged only after the bootstrap carrying that role has been applied, because merging deploys.
 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
 

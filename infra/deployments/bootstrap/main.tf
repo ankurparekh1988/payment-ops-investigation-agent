@@ -15,6 +15,7 @@ module "bootstrap" {
   operator_object_id   = var.bootstrap_operator_object_id
   developer_object_ids = var.developer_object_ids
   state_retention_days = var.state_retention_days
+  alert_email          = var.alert_email
 
   eval_foundry_account_id = var.eval_foundry_account_id
   eval_search_service_id  = var.eval_search_service_id
