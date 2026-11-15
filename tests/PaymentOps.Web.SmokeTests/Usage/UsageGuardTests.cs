@@ -165,6 +165,20 @@ public sealed class UsageGuardTests : IDisposable
         Assert.DoesNotContain(logger.Messages, m => m.Contains(UserSentinel, StringComparison.Ordinal));
     }
 
+    // The page catches nothing: a Cancel during the usage check must come back as a result, as it does once running.
+    [Fact]
+    public async Task Cancel_during_the_usage_check_is_a_cancelled_result()
+    {
+        using var cancel = new CancellationTokenSource();
+        await cancel.CancelAsync();
+        var (guard, inner, table, _) = Guard(table: new FakeTableClient { ReadsThrow = new OperationCanceledException(cancel.Token) });
+
+        Assert.Equal(NotAssessedReason.Cancelled, Reason(await guard.InvestigateAsync("q", null, cancel.Token)));
+
+        Assert.Equal(0, inner.Calls);
+        Assert.Empty(table.Rows);
+    }
+
     public static TheoryData<string, NotAssessedReason, string> Rejections() => new()
     {
         { "paused", NotAssessedReason.Paused, "paused" },

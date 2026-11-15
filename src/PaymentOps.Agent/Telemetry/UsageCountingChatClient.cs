@@ -9,7 +9,18 @@ internal sealed class UsageCountingChatClient(IChatClient inner, string deployme
 {
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var response = await base.GetResponseAsync(messages, options, cancellationToken);
+        ChatResponse response;
+        try
+        {
+            response = await base.GetResponseAsync(messages, options, cancellationToken);
+        }
+        catch
+        {
+            // An error response may still have been billed (a filtered prompt), and it carries no usage.
+            TurnUsage.RecordIncomplete("model outcome unknown");
+            throw;
+        }
+
         Record(response.Usage);
         return response;
     }

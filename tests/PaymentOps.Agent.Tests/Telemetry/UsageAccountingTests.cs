@@ -212,6 +212,18 @@ public sealed class UsageAccountingTests
         Assert.Equal(2, usage.HttpRequests["model"]);
     }
 
+    // A request the model answered with an error may still be billed (a filtered prompt), and its usage isn't returned.
+    [Fact]
+    public async Task A_model_error_response_makes_usage_incomplete()
+    {
+        var model = ModelClient.Create(new Uri("https://foundry.invalid/"), Scope, new StaticTokenCredential(), Deployment(), new ScriptedModel(HttpStatusCode.BadRequest));
+        using var usage = TurnUsage.Begin();
+
+        await Assert.ThrowsAsync<ClientResultException>(() => model.GetResponseAsync("q"));
+
+        Assert.False(usage.Complete);
+    }
+
     [Fact]
     public async Task A_model_failure_is_unchanged_by_counting()
     {

@@ -40,6 +40,11 @@ internal sealed partial class UsageGuard(
             UsageUnavailable(logger, ex.InnerException?.GetType().Name ?? nameof(UsageUnavailableException));
             return Refuse(NotAssessedReason.UsageUnavailable);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The person's Cancel is a result here too, as it is once the investigation runs; nothing was reserved.
+            return new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled);
+        }
 
         return reservation == UsageReservation.Admitted
             ? await inner.InvestigateAsync(question, progress, cancellationToken)
