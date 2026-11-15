@@ -27,7 +27,7 @@ public sealed class ProgressTests
             Respond(Call(ToolNames.SettlementBatches, new { merchant_id = "M-1042", start_date = "2026-11-09", end_date = "2026-11-10" })),
             Respond(Call(Submit, Submission())));
 
-        await fixture.Runner(model).InvestigateAsync("q", [], progress, Guid.NewGuid(), CancellationToken.None);
+        await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, [], progress, Guid.NewGuid(), CancellationToken.None);
 
         Assert.Collection(
             progress.Events,
@@ -49,7 +49,7 @@ public sealed class ProgressTests
             Respond(Call(ToolNames.MerchantProfile, new { merchant_id = injected })),
             Respond(Call(Submit, Submission())));
 
-        await fixture.Runner(model).InvestigateAsync("q", [], progress, Guid.NewGuid(), CancellationToken.None);
+        await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, [], progress, Guid.NewGuid(), CancellationToken.None);
 
         var labels = progress.Events.OfType<InvestigationProgress.ToolStarted>().Select(e => e.Label).ToList();
         Assert.Equal(["Knowledge search", "Merchant profile"], labels);
@@ -95,7 +95,7 @@ public sealed class ProgressTests
             Respond(Call(Submit, Submission(claimEvidence: ["payout:PO-404"]))),
             Respond(Call(Submit, Submission(claimEvidence: ["payout:PO-404"]))));
 
-        await fixture.Runner(model).InvestigateAsync("q", [], progress, Guid.NewGuid(), CancellationToken.None);
+        await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, [], progress, Guid.NewGuid(), CancellationToken.None);
 
         Assert.Contains(progress.Events, e => e is InvestigationProgress.CorrectionRequested);
     }
@@ -105,11 +105,11 @@ public sealed class ProgressTests
     {
         using var fixture = new AgentFixture();
         var progress = new RecordingProgress();
-        var calls = Enumerable.Range(0, 11)
-            .Select(i => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = $"M-{9000 + i}" })));
+        var merchants = Enumerable.Range(0, 11).Select(i => $"M-{9000 + i}").ToList();
+        var calls = merchants.Select(id => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = id })));
         var model = new ScriptedChatClient([.. calls, Respond(Call(Submit, Submission()))]);
 
-        await fixture.Runner(model).InvestigateAsync("q", [], progress, Guid.NewGuid(), CancellationToken.None);
+        await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Naming(merchants), [], progress, Guid.NewGuid(), CancellationToken.None);
 
         Assert.Single(progress.Events.OfType<InvestigationProgress.LimitReached>());
     }
@@ -121,7 +121,7 @@ public sealed class ProgressTests
         using var model = new WaitingChatClient();
         using var cancel = new CancellationTokenSource();
 
-        var running = fixture.Runner(model).InvestigateAsync("q", [], null, Guid.NewGuid(), cancel.Token);
+        var running = fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, [], null, Guid.NewGuid(), cancel.Token);
         await model.Started.Task;
         await cancel.CancelAsync();
 
@@ -136,7 +136,7 @@ public sealed class ProgressTests
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
 
-        var a = await fixture.Runner(new ScriptedChatClient(Respond(Call(Submit, Submission()))), logger: logger).InvestigateAsync("q", [], null, first, CancellationToken.None);
+        var a = await fixture.Runner(new ScriptedChatClient(Respond(Call(Submit, Submission()))), logger: logger).InvestigateAsync(RunnerExtensions.Question, [], null, first, CancellationToken.None);
         var b = await fixture.Runner(new ScriptedChatClient(Respond(Call(Submit, Submission()))), logger: logger).InvestigateAsync("", [], null, second, CancellationToken.None);
 
         Assert.Equal(first, a.InvestigationId);

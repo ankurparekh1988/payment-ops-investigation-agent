@@ -51,8 +51,14 @@ Nothing environment-specific is committed. Copy `.env.example` to `.env` (ignore
 | `TF_VAR_search_sku` | `free` | Search service tier |
 | `TF_VAR_log_retention_days`, `TF_VAR_log_daily_quota_gb` | `30`, `0.5` | Telemetry retention and daily ingestion cap |
 | `TF_VAR_monthly_budget` | `10` | Budget that triggers alert emails |
-| `TF_VAR_alert_email` | | Where budget and operational alerts go |
+| `TF_VAR_alert_email` | | Where budget, operational and cost anomaly alerts go; the bootstrap reads it too |
 | `TF_VAR_model_retirement_buffer_days` | `90` | Refuse models retiring within this many days |
+| `TF_VAR_daily_limit_per_user`, `TF_VAR_daily_limit_total` | `25`, `150` | Optional. Investigations one person, and everyone together, may start in a UTC day |
+| `TF_VAR_investigations_paused` | `false` | Optional. Pause every investigation ([Runbook](Runbook.md#pausing-and-limits)) |
+| `TF_VAR_cost_estimate` | `'{currency="CAD", content_safety_per_thousand_records=<price>, deployments={chat-blue={input_per_million=<price>, output_per_million=<price>}}}'` | Optional. List prices for estimating each investigation's cost; without them usage is measured and no cost is estimated |
+| `TF_VAR_budget_cutoff_enabled` | `false` | Optional. Let the budget's 100% notification turn the AI account's network access off ([Runbook](Runbook.md#budget-cutoff)) |
+| `TF_VAR_availability_test_locations` | `'["us-va-ash-azr"]'` | Optional. Where the availability test runs from; each location is billed per run |
+| `TF_VAR_http5xx_threshold`, `TF_VAR_guardrail_block_threshold` | `5`, `10` | Optional. Alert thresholds per 15 minutes |
 | `TF_VAR_create_demo_users` | `false` | Create one demo user per role; enable only to demonstrate role behaviour |
 | `TF_VAR_local_app_urls` | `'["https://localhost:7207"]'` | Addresses the app runs on locally, allowed to sign in and out |
 | `TF_VAR_entra_client_id`, `TF_VAR_restricted_group_id` | | Written by `scripts/identity.sh` |
@@ -89,8 +95,12 @@ Later runs apply against the remote state directly. To check for drift, run the 
 | *Model Availability Reader* role | Custom role for the model preflight (below) |
 | *Prompt Shields User* role | Custom role holding only the Prompt Shields and Content Safety harm analysis calls, assignable in the environment's resource group. The platform grants it to the app; the bootstrap grants it to `gh-eval` and developers, on the Foundry account once `TF_VAR_eval_foundry_account_id` is set |
 | `gh-deploy` search roles | Search Service Contributor and Search Index Data Contributor on the environment's resource group, so the pipeline can create the knowledge index and publish to it |
+| *AI Account Network Admin* role | Custom role to read an AI account and update its settings, assignable in the environment's resource group. The platform grants it to the budget cutoff's identity on the Foundry account only ([Runbook](Runbook.md#budget-cutoff)) |
+| Cost anomaly alert | Azure's daily anomaly detection on the subscription's cost, emailing `TF_VAR_alert_email`. Subscription-scoped, so only the bootstrap can create it |
 | Developer role assignments | Optional, for `TF_VAR_developer_object_ids`: OpenAI User, Foundry User and Search Index Data Reader, and Prompt Shields User on the Foundry account |
 | Evaluation role assignments | Each on one exact resource, once its `TF_VAR_eval_*` scope is set from the platform outputs ([AI evaluation](#ai-evaluation)) |
+
+The deploy identity's delegable roles include *Storage Table Data Contributor* and *AI Account Network Admin*, for the app's usage counts and the budget cutoff. A pull request that starts assigning a new delegable role is merged only after the bootstrap carrying that role has been applied, because merging deploys.
 
 It also registers the Azure resource providers the platform uses, because registration is a subscription-level action the pipeline identities can't perform. The cost is a few cents a month.
 
@@ -274,7 +284,7 @@ The pipeline maps stage for stage onto Azure DevOps:
 
 | Job | What it does |
 |---|---|
-| Classify the change | Runs the change classifier from the **base** commit, with the base's .NET SDK, so a pull request can't change how it's classified. Decides whether evaluation is required, whether the author is trusted (not a fork or a bot) and whether the change breaks a gate-policy rule. Records whether the pull request carries the `evaluate` label; without it, including after the label is removed, nothing is published or evaluated, and the check fails asking for it. Scheduled and manual runs of `main` are always evaluated |
+| Classify the change | Runs the change classifier from the **base** commit, with the base's .NET SDK, so a pull request can't change how it's classified. Decides whether evaluation is required, whether the author is trusted (not a fork or a bot) and whether the change breaks a gate-policy rule. Records whether the pull request carries the `evaluate` label; without it, including after the label is removed, nothing is published or evaluated, and the check fails asking for it. Manual runs of `main` are always evaluated, and scheduled ones while `MONTHLY_EVALUATION` is `on`; otherwise a scheduled run skips this job and every job after it |
 | Publish the evaluation index | As `gh-eval-publish`: first proves it can't write the live index (a no-op delete there must be refused with 403), then makes `knowledge-eval-v1` hold exactly the change's corpus. It never creates or changes an index definition |
 | Evaluate investigations and retrieval | As `gh-eval`: three investigation runs and the retrieval run against `knowledge-eval-v1`, gated by `eval/thresholds.json`. Pull requests skip the judge; scheduled and manual runs keep it. The Foundry account's generic endpoint (`EVAL_CONTENT_SAFETY_ENDPOINT`), where Content Safety is called, is passed separately from the model endpoint when the environment sets it |
 | Evaluate safety | As `gh-eval`, in parallel with the job above and in the same environment, so one approval starts both: the safety evaluation against the same index, once on a pull request and three times on `main`, with its hard gates applied and its rates reported. Each takes 20 to 40 minutes, almost all of it model calls. Run one at a time, neither peaked above 70K tokens a minute on the chat deployment or 35K on `screen`, of 250K each, and neither was throttled by Content Safety |
@@ -306,6 +316,8 @@ A pull request that needs evaluating therefore waits for two approvals, one per 
 **After a rebuild.** The evaluation roles are granted on exact resources, so they go with the resources. After recreating the platform, update the `TF_VAR_eval_*` values from the new outputs, re-run `scripts/bootstrap.sh`, then `scripts/configure-github.sh`.
 
 **Changing the index schema.** The evaluation publisher writes documents only and never changes an index definition, so any schema change, even one Search could apply in place, gets new names for both `retrieval.index` and `retrieval.evaluationIndex`; the AI release check refuses a renamed live index with an unchanged evaluation index. The pull request that switches `retrieval.index` is evaluated against the new live index rather than through the evaluation index, and may not also change the corpus or how it's built. CD creates that index only after the merge, so such a pull request reports "dev environment unavailable", and once `AI evaluation` is a required check it can't merge: the `main` ruleset has no bypass actors. Before the next live-index migration, either the release must gain a candidate index that CD builds ahead of the switch, or the owner must deliberately take the ruleset through a separate maintenance change for that one merge. While the old and new indexes both exist, the free tier's third index slot is taken, so the knowledge self-test can't run until the old index is removed.
+
+**Switching the monthly run on.** The scheduled run evaluates only while the repository variable `MONTHLY_EVALUATION` is `on`: `gh variable set MONTHLY_EVALUATION --body on`; `gh variable delete MONTHLY_EVALUATION` switches it off. Off, the scheduled run skips every job and reports nothing. Manual runs and pull requests don't read it.
 
 **When the monthly run stops.** GitHub disables scheduled workflows in a public repository after 60 days without repository activity. The monthly evaluation then stops without failing or opening an issue. That's a limit of the host, not of the evaluation: re-enable the workflow from the Actions tab, or run it by hand.
 

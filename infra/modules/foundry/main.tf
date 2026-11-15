@@ -36,6 +36,9 @@ resource "azurerm_cognitive_account" "this" {
   local_auth_enabled         = false
   project_management_enabled = true
 
+  # Stated, not defaulted: the budget cutoff turns this off, and the next deployment must turn it back on.
+  public_network_access_enabled = true
+
   identity {
     type = "SystemAssigned"
   }

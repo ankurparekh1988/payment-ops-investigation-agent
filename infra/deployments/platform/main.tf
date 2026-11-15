@@ -59,4 +59,13 @@ module "platform" {
   alert_email              = var.alert_email
   entra_client_id          = var.entra_client_id
   restricted_group_id      = var.restricted_group_id
+
+  daily_limit_per_user        = var.daily_limit_per_user
+  daily_limit_total           = var.daily_limit_total
+  investigations_paused       = var.investigations_paused
+  cost_estimate               = var.cost_estimate
+  budget_cutoff_enabled       = var.budget_cutoff_enabled
+  availability_test_locations = var.availability_test_locations
+  http5xx_threshold           = var.http5xx_threshold
+  guardrail_block_threshold   = var.guardrail_block_threshold
 }

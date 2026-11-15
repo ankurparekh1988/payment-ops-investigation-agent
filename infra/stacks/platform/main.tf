@@ -42,6 +42,23 @@ locals {
   })
 
   knowledge_container = "knowledge"
+  usage_table         = "usage"
+
+  # Prices are optional; without them usage is still measured and no cost is estimated. A list, because App
+  # Service setting names can't hold a deployment's hyphen.
+  cost_estimate_settings = var.cost_estimate == null ? {} : merge(
+    {
+      PaymentOps__CostEstimate__Currency                        = var.cost_estimate.currency
+      PaymentOps__CostEstimate__ContentSafetyPerThousandRecords = tostring(var.cost_estimate.content_safety_per_thousand_records)
+    },
+    merge([
+      for i, name in sort(keys(var.cost_estimate.deployments)) : {
+        "PaymentOps__CostEstimate__Deployments__${i}__Deployment"       = name
+        "PaymentOps__CostEstimate__Deployments__${i}__InputPerMillion"  = tostring(var.cost_estimate.deployments[name].input_per_million)
+        "PaymentOps__CostEstimate__Deployments__${i}__OutputPerMillion" = tostring(var.cost_estimate.deployments[name].output_per_million)
+      }
+    ]...)
+  )
 
   # Sign-in settings come from the identity deployment, which needs the deployed web app's address
   # first. Until it has run, the app is deployed without them and its sign-in smoke test fails.
@@ -68,6 +85,18 @@ module "monitoring" {
   evaluation_endpoint_name  = "dce-${local.base}-eval"
   evaluation_rule_name      = "dcr-${local.base}-eval"
   tags                      = local.tags
+
+  alert_name_prefix = local.base
+  web_app_id        = module.web_app.id
+  web_app_hostname  = module.web_app.default_hostname
+  # The model is called on the OpenAI endpoint and Content Safety on the generic one: different hosts.
+  ai_account_hosts = [
+    for endpoint in [module.foundry.openai_endpoint, module.foundry.endpoint] : regex("^https://([^/]+)", endpoint)[0]
+  ]
+  action_group_id             = module.cost_guardrail.action_group_id
+  availability_test_locations = var.availability_test_locations
+  http5xx_threshold           = var.http5xx_threshold
+  guardrail_block_threshold   = var.guardrail_block_threshold
 }
 
 module "foundry" {
@@ -133,10 +162,31 @@ module "web_app" {
     PaymentOps__Foundry__Endpoint         = module.foundry.openai_endpoint
     PaymentOps__ContentSafety__Endpoint   = module.foundry.endpoint
     PaymentOps__Search__Endpoint          = module.search.endpoint
+    PaymentOps__Usage__TableEndpoint      = module.knowledge_storage.table_endpoint
+    PaymentOps__Usage__DailyLimitPerUser  = tostring(var.daily_limit_per_user)
+    PaymentOps__Usage__DailyLimitTotal    = tostring(var.daily_limit_total)
+    PaymentOps__Usage__Paused             = tostring(var.investigations_paused)
 
     # App Service terminates TLS, so sign-in redirects must come from the forwarded scheme.
     ASPNETCORE_FORWARDEDHEADERS_ENABLED = "true"
-  }, local.sign_in_settings)
+  }, local.sign_in_settings, local.cost_estimate_settings)
+}
+
+# The app's daily usage counts. AzAPI, through Azure Resource Manager: the account has no keys to reach its data plane.
+resource "azapi_resource" "usage_table" {
+  type      = "Microsoft.Storage/storageAccounts/tableServices/tables@2023-05-01"
+  name      = local.usage_table
+  parent_id = "${module.knowledge_storage.id}/tableServices/default"
+  body      = {}
+}
+
+# On the one table, not the account: the app reads and writes its counts and nothing else in storage.
+resource "azurerm_role_assignment" "app_usage_table" {
+  scope                = azapi_resource.usage_table.id
+  role_definition_name = "Storage Table Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+  principal_type       = "ServicePrincipal"
+  description          = "The web app keeps its daily usage counts here."
 }
 
 module "cost_guardrail" {
@@ -150,6 +200,14 @@ module "cost_guardrail" {
   monthly_amount          = var.monthly_budget
   alert_email             = var.alert_email
   tags                    = local.tags
+
+  location                   = var.location
+  cutoff_enabled             = var.budget_cutoff_enabled
+  cutoff_workflow_name       = "logic-${local.base}-cutoff"
+  cutoff_action_group_name   = "ag-${local.base}-cutoff"
+  cutoff_role_name           = "${var.name_prefix} AI Account Network Admin"
+  ai_account_id              = module.foundry.account_id
+  log_analytics_workspace_id = module.monitoring.workspace_id
 }
 
 # Connects Application Insights to the Foundry project for tracing. The project authenticates with

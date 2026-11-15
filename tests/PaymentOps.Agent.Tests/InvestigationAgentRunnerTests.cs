@@ -31,6 +31,34 @@ public sealed class InvestigationAgentRunnerTests
     }
 
     [Fact]
+    public async Task A_merchant_the_user_never_named_is_refused_to_the_model()
+    {
+        using var fixture = new AgentFixture();
+        var model = new ScriptedChatClient(
+            Respond(Call(ToolNames.MerchantProfile, new { merchant_id = "M-2087" })),
+            Respond(Call(Submit, Submission())));
+
+        await fixture.Runner(model).InvestigateAsync("Why was M-1042's payout late yesterday?", CancellationToken.None);
+
+        var result = Assert.Single(ToolResults(model.Requests[1].Messages));
+        Assert.Contains("named in the user's questions", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_merchant_an_earlier_question_named_is_looked_up()
+    {
+        using var fixture = new AgentFixture();
+        var model = new ScriptedChatClient(
+            Respond(Call(ToolNames.MerchantProfile, new { merchant_id = "M-2087" })),
+            Respond(Call(Submit, Submission())));
+        ChatMessage[] history = [new(ChatRole.User, "Why is M-2087's money held?"), new(ChatRole.Assistant, "A hold is in place.")];
+
+        await fixture.Runner(model).InvestigateAsync("And when does it end?", history, null, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Contains("\"status\":\"ok\"", Assert.Single(ToolResults(model.Requests[1].Messages)), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_refusal_with_a_support_line_ends_as_a_refusal_without_a_correction()
     {
         using var fixture = new AgentFixture();
@@ -59,7 +87,7 @@ public sealed class InvestigationAgentRunnerTests
         using var fixture = new AgentFixture();
         var model = new ScriptedChatClient(Respond(Call(ToolNames.MerchantProfile, new { merchant_id = "M-1042" })), Respond(Call(Submit, Submission())));
 
-        await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         var options = model.Requests[0].Options!;
         Assert.Contains("Today is 2026-11-11.", options.Instructions, StringComparison.Ordinal);
@@ -77,7 +105,7 @@ public sealed class InvestigationAgentRunnerTests
             Respond(Call(Submit, Submission(claimEvidence: ["payout:PO-404"]))),
             Respond(Call(Submit, Submission())));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.IsType<AssessmentResult.Assessed>(result);
         Assert.Equal([Submit], model.Requests[2].Tools);
@@ -94,7 +122,7 @@ public sealed class InvestigationAgentRunnerTests
             Respond(Call(Submit, Submission(claimEvidence: ["payout:PO-404"]))),
             Respond(Call(Submit, Submission(claimEvidence: ["payout:PO-404"]))));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.AssessmentUnverified, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
     }
@@ -108,7 +136,7 @@ public sealed class InvestigationAgentRunnerTests
             Respond(Text("It was an outage.")),
             Respond(Call(Submit, Submission())));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.IsType<AssessmentResult.Assessed>(result);
         Assert.Equal([Submit], model.Requests[2].Tools);
@@ -122,7 +150,7 @@ public sealed class InvestigationAgentRunnerTests
             Respond(Call(ToolNames.MerchantProfile, new { merchant_id = "M-1042" })),
             Respond(Calls((Submit, Submission(), null), (Submit, Submission(claimEvidence: ["payout:PO-404"]), null), (ToolNames.MerchantProfile, new { merchant_id = "M-2087" }, null))));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         var assessed = Assert.IsType<AssessmentResult.Assessed>(result);
         Assert.Equal("merchant:M-1042", Assert.Single(assessed.Claims[0].Evidence).Id);
@@ -135,7 +163,7 @@ public sealed class InvestigationAgentRunnerTests
         using var fixture = new AgentFixture();
         var model = new ScriptedChatClient();
 
-        var result = await fixture.Runner(model, TestUser.General).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model, TestUser.General).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.NotAuthorized, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
         Assert.Empty(model.Requests);
@@ -160,7 +188,7 @@ public sealed class InvestigationAgentRunnerTests
         using var fixture = new AgentFixture();
         var model = new ScriptedChatClient(_ => throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout."));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.ModelUnavailable, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
     }
@@ -174,7 +202,7 @@ public sealed class InvestigationAgentRunnerTests
             Respond(Call("get_payouts", new { merchant_id = "M-1042" })),
             Respond(Call(Submit, Submission())));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.AssessmentUnverified, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
         Assert.Single(model.Requests);
@@ -186,7 +214,7 @@ public sealed class InvestigationAgentRunnerTests
         using var fixture = new AgentFixture();
         var model = new ScriptedChatClient(_ => throw new HttpRequestException("connection refused"));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.ModelUnavailable, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
     }

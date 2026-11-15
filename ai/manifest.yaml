@@ -69,8 +69,8 @@ retrieval:
 # first uses it.
 prompts:
   investigation-agent:
-    version: 1.1.0
-    sha256: sha256:e7eac04083533bc4112a2354e7ca1ade2809a93a044c4ea5659bc6b12fbf0395
+    version: 1.2.0
+    sha256: sha256:65326e12e283798933062a94a470a4a65c65f0473f0a6eb27355d4d1cf1c6066
   harm-screen:
     version: 1.0.0
     sha256: sha256:18c1c05feb6298186eb71e7af3e7daa3afa71485d292e69efe0aa4ad3c2133ce

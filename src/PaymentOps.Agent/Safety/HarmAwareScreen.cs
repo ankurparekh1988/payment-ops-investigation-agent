@@ -1,3 +1,5 @@
+using PaymentOps.Agent.Telemetry;
+
 namespace PaymentOps.Agent.Safety;
 
 /// <summary>
@@ -12,7 +14,9 @@ internal sealed class HarmAwareScreen(IUntrustedTextScreen shields, ContentSafet
         ArgumentNullException.ThrowIfNull(segments);
 
         var verdicts = (await shields.ScreenAsync(segments, cancellationToken)).ToArray();
-        var pending = segments.Where((segment, i) => verdicts[i] == ScreenVerdict.Clean && !cache.TryGet(segment, out _)).Distinct(StringComparer.Ordinal).ToList();
+        var clean = segments.Where((segment, i) => verdicts[i] == ScreenVerdict.Clean).Distinct(StringComparer.Ordinal).ToList();
+        var pending = clean.Where(segment => !cache.TryGet(segment, out _)).ToList();
+        TurnUsage.RecordCacheHit("harm", clean.Count - pending.Count);
         var checkedTexts = await Task.WhenAll(pending.Select(async text => (text, Verdict: await CheckAsync(text, cancellationToken))));
         foreach (var (text, verdict) in checkedTexts.Where(c => c.Verdict != ScreenVerdict.Unavailable))
         {

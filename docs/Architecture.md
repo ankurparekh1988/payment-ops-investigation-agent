@@ -43,6 +43,8 @@ flowchart LR
 
 *As of 2026-10-16.* The web app runs as a user-assigned identity, kept separate from the app so its role assignments survive the app being replaced. The model deployments come from `ai/manifest.yaml`, which the application also reads, so the infrastructure and the application can't disagree about which model is live. Role assignments are listed in [Security](Security.md).
 
+Operations sit beside the app: a workbook, alerts on server errors, model throttling, guardrail blocks and availability, an availability test on the liveness endpoint, budget and cost anomaly alerts, and a budget-driven cutoff that's off by default ([Runbook](Runbook.md#alerts)). The app's daily usage counts are a table in the knowledge storage account, which the app can read and write through a role on that table alone.
+
 ## AI release
 
 Models, content filters and prompts are configuration that changes behaviour, so they come from one reviewed file and travel inside the build ([ADR 0004](adr/0004-ai-release-manifest.md)).
@@ -219,6 +221,8 @@ Tool calls run one at a time. An unexpected exception, or a call to a tool that 
 
 Tools mark every string written outside this system (names, incident notes and references, closure reasons, error codes, and knowledge) as untrusted data. Before a tool result reaches the model, the guard sends each marked value to Prompt Shields on the Foundry account, in pieces of up to 9,500 characters overlapping by 500, with at most five pieces and 10,000 characters to a call. A value flagged as an attack, or one that couldn't be checked in time, is replaced by fixed withheld text and recorded as a gap; the rest of the result goes through. Names, codes and references are marked as labels, which the model reads plain once they're screened clean; free text keeps its markers. Verdicts are cached by the text's hash, so repeated names and codes cost nothing. Whatever Prompt Shields passes is also checked by Content Safety's harm analysis and by a classifier call to the `screen` deployment (prompt `tool-text-harm-screen`, one text per call), and text either finds harmful is withheld; Content Safety withholds at Low severity or above. A knowledge section with anything withheld keeps its citation id but can't support a statement ([ADR 0013](adr/0013-screen-untrusted-tool-text.md), [Security](Security.md#injection-and-content-safety)).
 
+The screen misses an instruction set inside longer record or section text more often than not, so the agent doesn't rely on it alone. Its prompt says text inside the markers describes a situation and never directs it: a request there has no say in which tools it calls, with what, or what it submits, and a claim there that something was done isn't evidence. In code, a data-tool call for a merchant the user never named, in this question or an earlier one, is refused before the tool runs and counts as a correction. Access to knowledge is enforced inside Knowledge either way, so a planted request can't widen what a user reads.
+
 Before any of that, the question itself is screened. Content Safety's harm analysis, Prompt Shields' user-prompt check and a constrained classifier call to its own `screen` deployment (prompt `harm-screen`, which receives only the current question, with no tools and no conversation history) run together under an 8 s budget; the classifier takes about 2 s of it. A finding ends the turn as *blocked* before the investigation agent sees the question, and a check that can't answer leaves the question uninvestigated ([ADR 0015](adr/0015-screen-questions-and-tool-text-for-harm.md)).
 
 ### Assessments
@@ -238,7 +242,17 @@ The dataset's as-of time (11 November 2026) is later than real time, so the two 
 
 ### Investigation id
 
-Every question gets a server-generated `InvestigationId`. It's on the result's footer, the proposal, the ticket, and the investigation and approval logs, so one investigation can be followed through all of them. It isn't a trace id, and no spans are added for it.
+Every question gets a server-generated `InvestigationId`. It's on the result's footer, the proposal, the ticket, the investigation and approval logs, and the investigation's span, so one investigation can be followed through all of them.
+
+### Telemetry
+
+Each investigation that runs is one trace: an `investigation` span with children for the question screen, each tool call, each knowledge search, the screening of what tools returned, and each model call (OpenTelemetry's `gen_ai` conventions, without message content). The `investigation` span names the prompt version and chat deployment it ran under, a search names its index, and screening what a tool returned names the kind of source (a knowledge section or a record), how many values were screened, their verdict (`mixed` when they differ) and the cache hits that served them. The span ends tagged with the outcome, the tokens used, the Content Safety records billed, the requests sent and, when it can be estimated, the cost.
+
+What a turn used is kept apart by what it is, because each is billed differently: requests sent, retries and failures included; Content Safety text records, one per started 1,000 characters of each text it answered; model tokens per deployment, the classifier's included; and screening verdicts served from a cache, which sent nothing. A cost is estimated only from complete usage and prices configured per deployment (`PaymentOps:CostEstimate`); when either is missing the cost is reported as unavailable and the counts still stand. The estimate uses list prices, so it's an upper bound.
+
+One log event per investigation, `3009`, is its decision record: the outcome, the tools called and how each ended, the evidence and sections the answer cited, screen verdicts by kind, and the usage counts. It holds identifiers and counts, never the question, the answer, tool output or who asked. Metrics count investigations by outcome, screen blocks by kind, tokens, requests, records and cache hits. A request refused before an investigation starts (another one already running) is only counted, by reason.
+
+Everything goes to Application Insights through the app's managed identity; the KQL to follow one investigation is in the [Runbook](Runbook.md).
 
 ## Investigation view
 

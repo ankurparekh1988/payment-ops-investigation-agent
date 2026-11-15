@@ -27,7 +27,7 @@ public sealed class ModelFailureTests
         var logger = new RecordingLogger<InvestigationAgentRunner>();
         var model = new ScriptedChatClient(_ => throw ContentFilterRejection());
 
-        var result = await fixture.Runner(model, logger: logger).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model, logger: logger).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.Blocked, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
         Assert.Single(model.Requests);
@@ -41,7 +41,7 @@ public sealed class ModelFailureTests
         var logger = new RecordingLogger<InvestigationAgentRunner>();
         var model = ContentFilter.Checked(new ScriptedChatClient(_ => Filtered()));
 
-        var result = await fixture.Runner(model, logger: logger).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model, logger: logger).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.Blocked, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
         Assert.Contains(logger.Entries, e => e.Message.Contains("blocked by the content filter on the completion", StringComparison.Ordinal));
@@ -53,7 +53,7 @@ public sealed class ModelFailureTests
         using var fixture = new AgentFixture();
         var model = new ScriptedChatClient(_ => throw new ClientResultException(new FakePipelineResponse(400, "{\"error\":{\"code\":\"invalid_request\"}}")));
 
-        var result = await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None);
+        var result = await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
 
         Assert.Equal(NotAssessedReason.ModelUnavailable, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
     }

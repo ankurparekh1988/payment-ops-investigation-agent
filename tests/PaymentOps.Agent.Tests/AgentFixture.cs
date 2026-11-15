@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Investigation;
@@ -22,7 +23,7 @@ namespace PaymentOps.Agent.Tests;
 /// <summary>The real agent loop and tools over the shipped dataset; only the model and Search are scripted.</summary>
 internal sealed class AgentFixture : IDisposable
 {
-    private static readonly AiRelease Release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+    public static readonly AiRelease Release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
     private readonly ServiceProvider _provider;
 
     /// <param name="time">The host's real clock, which the incident store stamps tickets with.</param>
@@ -51,7 +52,8 @@ internal sealed class AgentFixture : IDisposable
         time ?? TimeProvider.System,
         screen ?? ScriptedScreen.AllClean,
         questionScreen ?? ScriptedQuestionScreen.AllClean,
-        logger ?? NullLogger<InvestigationAgentRunner>.Instance);
+        logger ?? NullLogger<InvestigationAgentRunner>.Instance,
+        TraceContext.From(Release));
 
     public FixedPrompt FixedPrompt => new(_provider.GetServices<IInvestigationTool>(), new PromptProvider(Release), _provider.GetRequiredService<IInvestigationClock>());
 
@@ -71,10 +73,11 @@ internal sealed class AgentFixture : IDisposable
         string[]? rootCitations = null,
         string outcome = "assessed",
         string confidence = "high",
-        object? ticket = null) => new
+        object? ticket = null,
+        string summaryText = "M-1042's Fabrikam batch for 9 November didn't arrive.") => new
         {
             outcome,
-            summary = new { text = "M-1042's Fabrikam batch for 9 November didn't arrive.", evidence_ids = new[] { summaryEvidence }, citation_ids = Array.Empty<string>() },
+            summary = new { text = summaryText, evidence_ids = new[] { summaryEvidence }, citation_ids = Array.Empty<string>() },
             claims = new[] { new { text = "The merchant is routed to Fabrikam Pay.", evidence_ids = claimEvidence ?? ["merchant:M-1042"], citation_ids = claimCitations ?? [] } },
             root_cause = new { text = rootCause, evidence_ids = rootEvidence ?? [], citation_ids = rootCitations ?? [] },
             confidence,
@@ -85,6 +88,12 @@ internal sealed class AgentFixture : IDisposable
 
 internal static class RunnerExtensions
 {
+    /// <summary>Names M-1042, the merchant most scripted calls look up: only merchants the user named are looked up.</summary>
+    public const string Question = "Why was M-1042's payout late yesterday?";
+
+    /// <summary>A question naming each merchant, for a script that looks up several.</summary>
+    public static string Naming(IEnumerable<string> merchantIds) => $"Compare {string.Join(", ", merchantIds)}.";
+
     /// <summary>A first question: no history, nobody watching.</summary>
     public static Task<AssessmentResult> InvestigateAsync(this InvestigationAgentRunner runner, string question, CancellationToken cancellationToken) =>
         runner.InvestigateAsync(question, [], null, Guid.NewGuid(), cancellationToken);

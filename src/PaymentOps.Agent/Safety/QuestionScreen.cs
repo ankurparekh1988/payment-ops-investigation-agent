@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Model;
+using PaymentOps.Agent.Telemetry;
 
 namespace PaymentOps.Agent.Safety;
 
@@ -74,7 +75,7 @@ internal static class HarmAnalysis
 
     private static async Task<Dictionary<string, int>?> PieceAsync(ContentSafetyClient client, string piece, CancellationToken cancellationToken)
     {
-        using var body = await client.PostAsync("contentsafety/text:analyze", new { text = piece, categories = Categories, outputType = "FourSeverityLevels" }, cancellationToken);
+        using var body = await client.PostAsync("contentsafety/text:analyze", new { text = piece, categories = Categories, outputType = "FourSeverityLevels" }, TextRecords.For(piece), cancellationToken);
         if (body?.RootElement.TryGetProperty("categoriesAnalysis", out var analysis) != true || analysis.ValueKind != JsonValueKind.Array)
         {
             return null;
@@ -187,7 +188,7 @@ internal sealed class ContentSafetyQuestionScreen(ContentSafetyClient client, Ha
 
     private async Task<QuestionVerdict> AttackAsync(string question, CancellationToken cancellationToken)
     {
-        using var body = await client.PostAsync("contentsafety/text:shieldPrompt", new { userPrompt = question, documents = Array.Empty<string>() }, cancellationToken);
+        using var body = await client.PostAsync("contentsafety/text:shieldPrompt", new { userPrompt = question, documents = Array.Empty<string>() }, TextRecords.For(question), cancellationToken);
         return body?.RootElement.TryGetProperty("userPromptAnalysis", out var analysis) == true && analysis.TryGetProperty("attackDetected", out var detected)
             && detected.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? detected.GetBoolean() ? QuestionVerdict.Attack : QuestionVerdict.Clean

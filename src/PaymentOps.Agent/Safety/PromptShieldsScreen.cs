@@ -2,6 +2,8 @@ using System.Text.Json;
 
 using Azure.Core;
 
+using PaymentOps.Agent.Telemetry;
+
 namespace PaymentOps.Agent.Safety;
 
 /// <summary>
@@ -30,6 +32,7 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
             if (cache.TryGet(segment, out var cached))
             {
                 known[segment] = cached;
+                TurnUsage.RecordCacheHit("prompt_shields");
             }
             else
             {
@@ -106,7 +109,7 @@ internal sealed class PromptShieldsScreen(HttpClient http, Uri endpoint, string 
 
     private async Task<IReadOnlyList<ScreenVerdict>> CallAsync(IReadOnlyList<string> documents, CancellationToken cancellationToken)
     {
-        using var body = await _client.PostAsync("contentsafety/text:shieldPrompt", new { userPrompt = string.Empty, documents }, cancellationToken);
+        using var body = await _client.PostAsync("contentsafety/text:shieldPrompt", new { userPrompt = string.Empty, documents }, documents.Sum(TextRecords.For), cancellationToken);
         return body?.RootElement.TryGetProperty("documentsAnalysis", out var analysis) == true
             && analysis.ValueKind == JsonValueKind.Array
             && analysis.GetArrayLength() == documents.Count

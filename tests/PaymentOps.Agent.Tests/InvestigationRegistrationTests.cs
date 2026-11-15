@@ -12,6 +12,7 @@ using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Security;
 using PaymentOps.Platform.Ai;
@@ -54,6 +55,19 @@ public sealed class InvestigationRegistrationTests
         Assert.IsType<UnavailableScreen>(provider.GetRequiredService<IUntrustedTextScreen>());
     }
 
+    // The evaluation loads the release pointed at its own index; the trace has to name that one, not the live one.
+    [Fact]
+    public void The_trace_context_comes_from_the_loaded_release()
+    {
+        var services = Services();
+        var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+        services.AddSingleton(release with { KnowledgeIndex = release.EvaluationIndex });
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(release.EvaluationIndex, provider.GetRequiredService<TraceContext>().KnowledgeIndex);
+    }
+
     [Fact]
     public void The_question_classifier_calls_the_screen_deployment()
     {
@@ -80,6 +94,48 @@ public sealed class InvestigationRegistrationTests
         Assert.IsType<InFlightGate>(service);
         Assert.Same(service, first.ServiceProvider.GetRequiredService<IInvestigationService>());
         Assert.NotSame(service, second.ServiceProvider.GetRequiredService<IInvestigationService>());
+    }
+
+    /// <summary>Stands in for the host's usage guard: holds its first investigation open and counts what reaches it.</summary>
+    private sealed class HoldingGuard : IInvestigationService
+    {
+        public static int Calls;
+
+        public static TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ConversationStatus Conversation => new(0, 0, false);
+
+        public async Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref Calls);
+            await Release.Task;
+            return new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled);
+        }
+
+        public void StartNew()
+        {
+        }
+
+        public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    // The host's guard sits inside the one-at-a-time gate, so a click while one runs never reaches it and counts nothing.
+    [Fact]
+    public async Task A_guard_sits_inside_the_in_flight_gate()
+    {
+        var services = Services();
+        services.AddInvestigation(new InvestigationEndpoints(new Uri("https://search.example"), new Uri("https://foundry.example/"), "https://cognitiveservices.azure.com/.default"), guard: (_, _) => new HoldingGuard());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var investigations = scope.ServiceProvider.GetRequiredService<IInvestigationService>();
+
+        var first = investigations.InvestigateAsync("q", null, CancellationToken.None);
+        var second = await investigations.InvestigateAsync("q", null, CancellationToken.None);
+
+        Assert.Equal(NotAssessedReason.Busy, Assert.IsType<AssessmentResult.NotAssessed>(second).Reason);
+        Assert.Equal(1, HoldingGuard.Calls);
+        HoldingGuard.Release.SetResult();
+        await first;
     }
 
     [Fact]

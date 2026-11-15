@@ -22,7 +22,7 @@ namespace PaymentOps.Evaluation.Running;
 /// A question the screen couldn't check never reached the system, so it's asked once more, as the app tells the person
 /// to. Still unscreened, the attempt measured the screen's availability rather than the system, so it's the
 /// environment's; the run plan's case retry starts the whole case over.
-/// The app's registered screening cache is the exception: the app keeps it for its process, so a run's cases share one.
+/// The app's registered screening caches are the exception: the app keeps them for its process, so a run's cases share them.
 /// </summary>
 internal abstract class CaseRunner(
     AiRelease release,
@@ -40,8 +40,9 @@ internal abstract class CaseRunner(
     private static readonly string Unscreened = Outcomes.NotAssessed(NotAssessedReason.Unscreened);
 
     private ScreenCache _runScreenCache = new();
+    private ScreenCache _runHarmCache = new();
 
-    public void BeginRun() => _runScreenCache = new ScreenCache();
+    public void BeginRun() => (_runScreenCache, _runHarmCache) = (new ScreenCache(), new ScreenCache());
 
     public async Task<CaseAttempt> RunCaseAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
@@ -71,11 +72,12 @@ internal abstract class CaseRunner(
     private async Task<CaseAttempt> AskAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
         var recorder = new CaseRecorder();
-        var runCache = _runScreenCache;
+        var (runCache, runHarmCache) = (_runScreenCache, _runHarmCache);
         void Configure(IServiceCollection services)
         {
             configure?.Invoke(services);
             services.Replace(ServiceDescriptor.Singleton(runCache));
+            services.Replace(ServiceDescriptor.KeyedSingleton(ScreenCache.HarmKey, runHarmCache));
         }
 
         using var provider = EvaluationServices.Build(release, endpoints, credential, c, recorder, substituteModel, substituteKnowledge, Configure, overlay?.Invoke(c));

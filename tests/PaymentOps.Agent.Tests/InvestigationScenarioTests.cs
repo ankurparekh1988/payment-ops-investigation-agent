@@ -64,10 +64,15 @@ public sealed class InvestigationScenarioTests
         ["S1"],
         confidence);
 
-    private static async Task<AssessmentResult> RunAsync(ScriptedChatClient model, Dictionary<string, string?>? faults = null, IUserContext? user = null, int maxListItems = 20)
+    private const string S2Question = "Why did M-6230's sale from Thursday 5 November settle on Monday?";
+    private const string S3Question = "Why is M-2087's money held?";
+    private const string S4Question = "Why did M-3310 get two payouts for its 5 November sales?";
+
+    private static async Task<AssessmentResult> RunAsync(
+        ScriptedChatClient model, Dictionary<string, string?>? faults = null, IUserContext? user = null, int maxListItems = 20, string question = "Why were M-1042's payouts delayed yesterday?")
     {
         using var fixture = new AgentFixture(faults, new CorpusKnowledge(), maxListItems);
-        return await fixture.Runner(model, user).InvestigateAsync("Why were M-1042's payouts delayed yesterday?", CancellationToken.None);
+        return await fixture.Runner(model, user).InvestigateAsync(question, CancellationToken.None);
     }
 
     [Fact]
@@ -230,7 +235,7 @@ public sealed class InvestigationScenarioTests
             Call(ToolNames.KnowledgeSearch, new { query = "settlement-closure-days-policy" }),
             Call(Submit, submission));
 
-        var assessed = Assert.IsType<AssessmentResult.Assessed>(await RunAsync(model));
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(await RunAsync(model, question: S2Question));
 
         Assert.Equal(RootCauseLabel.Assessment, assessed.RootCause!.Label);
     }
@@ -246,7 +251,7 @@ public sealed class InvestigationScenarioTests
             Call(Submit, claim),
             Call(Submit, claim));
 
-        var result = await RunAsync(model, new() { ["DemoData:Faults:Settlement:Mode"] = "Empty" });
+        var result = await RunAsync(model, new() { ["DemoData:Faults:Settlement:Mode"] = "Empty" }, question: S2Question);
 
         Assert.Equal(NotAssessedReason.AssessmentUnverified, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
     }
@@ -262,7 +267,7 @@ public sealed class InvestigationScenarioTests
             Call(Submit, submission),
             Call(Submit, submission));
 
-        var result = await RunAsync(model, user: TestUser.Reader);
+        var result = await RunAsync(model, user: TestUser.Reader, question: S3Question);
 
         Assert.Equal(NotAssessedReason.AssessmentUnverified, Assert.IsType<AssessmentResult.NotAssessed>(result).Reason);
         Assert.DoesNotContain(model.Requests.SelectMany(r => ToolResults(r.Messages)), r => r.Contains("restricted", StringComparison.OrdinalIgnoreCase) || r.Contains("\"citation_id\":", StringComparison.Ordinal));
@@ -277,7 +282,7 @@ public sealed class InvestigationScenarioTests
             Call(ToolNames.KnowledgeSearch, new { query = "risk-hold-review-policy" }),
             Call(Submit, submission));
 
-        var assessed = Assert.IsType<AssessmentResult.Assessed>(await RunAsync(model, user: TestUser.RestrictedReader));
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(await RunAsync(model, user: TestUser.RestrictedReader, question: S3Question));
 
         Assert.StartsWith("risk-hold-review-policy", assessed.RootCause!.Statement.Citations[0].SectionKey, StringComparison.Ordinal);
     }
@@ -297,7 +302,7 @@ public sealed class InvestigationScenarioTests
             Call(ToolNames.KnowledgeSearch, new { query = "duplicate-settlement-batch" }),
             Call(Submit, submission));
 
-        var assessed = Assert.IsType<AssessmentResult.Assessed>(await RunAsync(model));
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(await RunAsync(model, question: S4Question));
         var batches = Assert.Single(ToolResults(model.Requests[^1].Messages), r => r.Contains("\"merchant_id\":\"M-3310\"", StringComparison.Ordinal));
 
         Assert.Equal(RootCauseLabel.Assessment, assessed.RootCause!.Label);

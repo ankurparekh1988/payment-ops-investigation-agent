@@ -54,3 +54,39 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "location" {
+  description = "Region for the budget cutoff's workflow."
+  type        = string
+}
+
+variable "cutoff_enabled" {
+  description = "Whether the budget's 100% notification turns the AI account's network access off. Off unless set."
+  type        = bool
+  default     = false
+}
+
+variable "cutoff_workflow_name" {
+  description = "Name of the budget cutoff's Logic App."
+  type        = string
+}
+
+variable "cutoff_action_group_name" {
+  description = "Name of the action group that calls the budget cutoff."
+  type        = string
+}
+
+variable "cutoff_role_name" {
+  description = "Name of the custom role, created by the bootstrap, that lets the cutoff update the AI account."
+  type        = string
+}
+
+variable "ai_account_id" {
+  description = "The one AI account the cutoff may turn off; fixed here, never taken from a notification."
+  type        = string
+}
+
+variable "log_analytics_workspace_id" {
+  description = "Where the cutoff's run history goes."
+  type        = string
+}

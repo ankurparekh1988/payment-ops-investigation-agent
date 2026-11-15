@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Domain.Investigation;
 using PaymentOps.Domain.Security;
 using PaymentOps.Tools;
@@ -30,7 +31,8 @@ internal sealed class InvestigationAgentRunner(
     TimeProvider time,
     IUntrustedTextScreen screen,
     IQuestionScreen questionScreen,
-    ILogger<InvestigationAgentRunner> logger)
+    ILogger<InvestigationAgentRunner> logger,
+    TraceContext? trace = null)
 {
     public const string PromptId = "investigation-agent";
 
@@ -62,13 +64,20 @@ internal sealed class InvestigationAgentRunner(
 
         // Before the investigation agent sees it: a question that is harmful, an attack, or couldn't be checked never reaches it.
         QuestionVerdict verdict;
-        try
+        using (var screening = AgentTelemetry.Source.StartActivity("screen.question"))
         {
-            verdict = await questionScreen.ScreenAsync(question, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return new NotAssessed(NotAssessedReason.Cancelled);
+            try
+            {
+                verdict = await questionScreen.ScreenAsync(question, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return new NotAssessed(NotAssessedReason.Cancelled);
+            }
+
+            var name = ToolJson.Word(verdict);
+            screening?.SetTag("paymentops.screen.verdict", name);
+            TurnUsage.RecordScreen("question", name);
         }
 
         if (verdict != QuestionVerdict.Clean)
@@ -83,7 +92,8 @@ internal sealed class InvestigationAgentRunner(
         }
 
         var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);
-        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId);
+        var named = new MerchantSources([question, .. history.Where(m => m.Role == ChatRole.User).Select(m => m.Text)]);
+        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId, named, trace?.KnowledgeIndex);
         List<AITool> readTools = [.. tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).Select(guard.Wrap)];
 
         // No default tools: tools passed per run are added to an agent's defaults, and the correction run must offer only submit_assessment.

@@ -6,12 +6,16 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+
 using PaymentOps.Agent;
 using PaymentOps.Agent.Approvals;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
 using PaymentOps.Knowledge.Retrieval;
 using PaymentOps.Platform.Ai;
@@ -20,6 +24,7 @@ using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
 using PaymentOps.Web.Security;
+using PaymentOps.Web.Usage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +49,8 @@ builder.Services.AddOptions<InvestigationLimits>()
             && o.TurnTimeout > TimeSpan.Zero && o.TurnTimeout <= TimeSpan.FromMinutes(5),
         $"{InvestigationLimits.SectionName} needs positive limits and timeouts of at most 5 minutes.")
     .ValidateOnStart();
+// Prices are deployment settings; without them usage is still measured, but no cost is estimated.
+builder.Services.AddOptions<CostEstimateOptions>().Bind(builder.Configuration.GetSection(CostEstimateOptions.SectionName));
 builder.Services.AddOptions<ConversationOptions>()
     .Bind(builder.Configuration.GetSection(ConversationOptions.SectionName))
     .Validate(
@@ -73,7 +80,14 @@ builder.Services.AddPaymentOpsSecurity(builder.Configuration);
 // disabled, so the exporter signs in with the app's identity.
 if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
 {
-    builder.Services.AddOpenTelemetry().UseAzureMonitor(options => options.Credential = azureCredential);
+    // The agent's own spans and metrics go with the request telemetry; model spans never carry message content.
+    builder.Services.AddOpenTelemetry()
+        .UseAzureMonitor(options => options.Credential = azureCredential)
+        .WithTracing(tracing => tracing.AddSource(AgentTelemetry.Name))
+        // The model clients' gen_ai histograms repeat paymentops.model.tokens; only their spans are kept.
+        .WithMetrics(metrics => metrics
+            .AddMeter(AgentTelemetry.Name)
+            .AddView(instrument => instrument.Name.StartsWith("gen_ai.", StringComparison.Ordinal) ? MetricStreamConfiguration.Drop : null));
 }
 
 var healthChecks = builder.Services.AddHealthChecks();
@@ -90,7 +104,8 @@ if (search?.Endpoint is { } searchEndpoint && foundry?.Endpoint is { } answering
         throw new InvalidOperationException($"{ContentSafetyOptions.EndpointKey} must be an https address outside Development.");
     }
 
-    builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope));
+    builder.Services.AddUsageGuard(builder.Configuration, builder.Environment);
+    builder.Services.AddInvestigation(new InvestigationEndpoints(searchEndpoint, answeringEndpoint, foundry.TokenScope), guard: UsageServiceCollectionExtensions.Guard);
     healthChecks.Add(new HealthCheckRegistration(
         "search",
         services => new SearchReadinessCheck(services.GetRequiredService<KnowledgeRetriever>().CheckReachableAsync),

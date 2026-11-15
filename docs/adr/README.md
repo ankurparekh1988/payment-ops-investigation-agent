@@ -23,4 +23,5 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0017](0017-ask-again-when-the-question-screen-cant-check.md) | Ask a question again when the question screen couldn't check it | Accepted; amended by 0019 |
 | [0018](0018-evaluation-thresholds-from-measured-run-to-run-spread.md) | Evaluation thresholds from measured run-to-run spread, and a branch update counts as the rerun | Accepted |
 | [0019](0019-retry-the-case-the-environment-spoiled.md) | Retry the case the environment spoiled, not the whole run | Accepted |
-| [0020](0020-evaluate-on-request-at-lower-cost.md) | Evaluate on request, once per change, at lower cost | Accepted |
+| [0020](0020-evaluate-on-request-at-lower-cost.md) | Evaluate on request, once per change, at lower cost | Accepted; amended by 0021 |
+| [0021](0021-bounded-usage-and-observable-cost.md) | Bounded usage and observable cost | Accepted |

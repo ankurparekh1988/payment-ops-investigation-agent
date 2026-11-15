@@ -20,7 +20,7 @@ public sealed class InvestigationLimitTests
         var time = new FakeTimeProvider();
         using var model = new ProgressTests.WaitingChatClient();
 
-        var running = fixture.Runner(model, time: time).InvestigateAsync("q", CancellationToken.None);
+        var running = fixture.Runner(model, time: time).InvestigateAsync(RunnerExtensions.Question, CancellationToken.None);
         await model.Started.Task;
         time.Advance(TimeSpan.FromSeconds(60));
 
@@ -32,11 +32,11 @@ public sealed class InvestigationLimitTests
     public async Task Hitting_the_call_limit_still_allows_one_submission_and_makes_it_incomplete()
     {
         using var fixture = new AgentFixture();
-        var calls = Enumerable.Range(0, 11)
-            .Select(i => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = i == 0 ? "M-1042" : $"M-{9000 + i}" })));
+        string[] merchants = ["M-1042", .. Enumerable.Range(1, 10).Select(i => $"M-{9000 + i}")];
+        var calls = merchants.Select(id => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = id })));
         var model = new ScriptedChatClient([.. calls, _ => Call(ToolNames.SubmitAssessment, Submission())]);
 
-        var assessed = Assert.IsType<AssessmentResult.Assessed>(await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None));
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Naming(merchants), CancellationToken.None));
 
         Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
         Assert.Equal(Confidence.Low, assessed.Confidence);
@@ -49,8 +49,8 @@ public sealed class InvestigationLimitTests
     public async Task Hitting_the_call_limit_withholds_an_unsupported_ticket_without_a_correction()
     {
         using var fixture = new AgentFixture();
-        var calls = Enumerable.Range(0, 11)
-            .Select(i => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = i == 0 ? "M-1042" : $"M-{9000 + i}" })));
+        string[] merchants = ["M-1042", .. Enumerable.Range(1, 10).Select(i => $"M-{9000 + i}")];
+        var calls = merchants.Select(id => (Func<IReadOnlyList<ChatMessage>, ChatResponse>)(_ => Call(ToolNames.MerchantProfile, new { merchant_id = id })));
         var ticket = new
         {
             processor_id = "fabrikam-pay",
@@ -64,7 +64,7 @@ public sealed class InvestigationLimitTests
         };
         var model = new ScriptedChatClient([.. calls, _ => Call(ToolNames.SubmitAssessment, Submission(ticket: ticket))]);
 
-        var assessed = Assert.IsType<AssessmentResult.Assessed>(await fixture.Runner(model).InvestigateAsync("q", CancellationToken.None));
+        var assessed = Assert.IsType<AssessmentResult.Assessed>(await fixture.Runner(model).InvestigateAsync(RunnerExtensions.Naming(merchants), CancellationToken.None));
 
         Assert.Equal(AssessmentOutcome.Incomplete, assessed.Outcome);
         Assert.Equal(Confidence.Low, assessed.Confidence);

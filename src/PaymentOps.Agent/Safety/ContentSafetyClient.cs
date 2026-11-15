@@ -6,6 +6,8 @@ using System.Text.Json;
 using Azure.Core;
 using Azure.Identity;
 
+using PaymentOps.Agent.Telemetry;
+
 namespace PaymentOps.Agent.Safety;
 
 /// <summary>
@@ -24,7 +26,8 @@ internal sealed class ContentSafetyClient(HttpClient http, Uri endpoint, string 
     private volatile CachedToken? _token;
 
     /// <param name="operation">The operation's path under the endpoint, such as <c>contentsafety/text:analyze</c>.</param>
-    public async Task<JsonDocument?> PostAsync(string operation, object body, CancellationToken cancellationToken)
+    /// <param name="records">The text records the body bills when it's answered (<see cref="TextRecords"/>).</param>
+    public async Task<JsonDocument?> PostAsync(string operation, object body, int records, CancellationToken cancellationToken)
     {
         try
         {
@@ -38,9 +41,13 @@ internal sealed class ContentSafetyClient(HttpClient http, Uri endpoint, string 
             }
 
             using var answered = response;
-            return response.IsSuccessStatusCode
-                ? await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken)
-                : null;
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            TurnUsage.RecordContentSafety(RequestCountingHandler.Service(operation), records);
+            return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested
             && ex is HttpRequestException or TaskCanceledException or AuthenticationFailedException or JsonException or InvalidOperationException)

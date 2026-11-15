@@ -4,8 +4,9 @@ namespace PaymentOps.Evaluation.Tests;
 
 /// <summary>
 /// Evaluates the subset of GitHub Actions expressions the evaluation workflow uses, so its conditions are tested as
-/// written rather than by their text: context paths, string literals, ==, !=, !, &amp;&amp;, || and parentheses, always() and
-/// contains(). A context path is looked up whole (labels.*.name included); one that's missing is the empty string.
+/// written rather than by their text: context paths, string literals, ==, !=, !, &amp;&amp;, || and parentheses, the status
+/// functions and contains(). <c>success()</c> reads the context's <c>success()</c> entry, true when absent; failure() and
+/// cancelled() are false. A context path is looked up whole (labels.*.name included); one that's missing is the empty string.
 /// </summary>
 internal sealed partial class WorkflowExpression
 {
@@ -101,6 +102,8 @@ internal sealed partial class WorkflowExpression
             return token switch
             {
                 "always" => true,
+                "success" => !_context.TryGetValue("success()", out var succeeded) || Truthy(succeeded),
+                "failure" or "cancelled" => false,
                 "contains" when arguments[0] is IEnumerable<string> items => items.Contains((string)arguments[1], StringComparer.OrdinalIgnoreCase),
                 "contains" => Text(arguments[0]).Contains(Text(arguments[1]), StringComparison.OrdinalIgnoreCase),
                 _ => throw new FormatException($"unsupported function {token}"),

@@ -70,11 +70,16 @@ required_settings=(
 )
 # Written by scripts/identity.sh, which needs a deployed platform, so empty on a first run.
 identity_settings=(TF_VAR_entra_client_id TF_VAR_restricted_group_id)
+# Optional: Terraform's defaults apply unless .env sets them.
+optional_settings=(
+  TF_VAR_daily_limit_per_user TF_VAR_daily_limit_total TF_VAR_investigations_paused TF_VAR_cost_estimate
+  TF_VAR_budget_cutoff_enabled TF_VAR_availability_test_locations TF_VAR_http5xx_threshold TF_VAR_guardrail_block_threshold
+)
 
 settings="{"
 add_setting() { settings+="\"$1\":\"${2//\"/\\\"}\","; }
 for key in "${required_settings[@]}"; do add_setting "$key" "${!key:?Set $key in .env}"; done
-for key in "${identity_settings[@]}"; do [[ -z "${!key:-}" ]] || add_setting "$key" "${!key}"; done
+for key in "${identity_settings[@]}" "${optional_settings[@]}"; do [[ -z "${!key:-}" ]] || add_setting "$key" "${!key}"; done
 settings="${settings%,}}"
 gh variable set TERRAFORM_SETTINGS --repo "$repo" --body "$settings"
 

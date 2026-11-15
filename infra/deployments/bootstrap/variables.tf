@@ -64,3 +64,9 @@ variable "eval_dcr_id" {
   type        = string
   default     = null
 }
+
+variable "alert_email" {
+  description = "Email address that receives the cost anomaly alert; the same one the platform's alerts use."
+  type        = string
+  sensitive   = true
+}

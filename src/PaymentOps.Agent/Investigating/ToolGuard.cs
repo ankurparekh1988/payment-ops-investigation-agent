@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Domain.Security;
 using PaymentOps.Tools;
 using PaymentOps.Tools.Knowledge;
@@ -27,7 +28,9 @@ internal sealed class ToolGuard(
     IProgress<InvestigationProgress>? progress,
     IUntrustedTextScreen? screen = null,
     ILogger? logger = null,
-    Guid investigationId = default)
+    Guid investigationId = default,
+    MerchantSources? merchants = null,
+    string? searchIndex = null)
 {
     // A guard built without a screen can check nothing, so it withholds every untrusted value: fail closed.
     private readonly IUntrustedTextScreen _screen = screen ?? new UnavailableScreen();
@@ -37,6 +40,7 @@ internal sealed class ToolGuard(
     private const string Unscreenable = "[withheld: this text couldn't be checked]";
     private const string HarmfulCopy = "[withheld: this text contains harmful content]";
     private static readonly string CitationIdProperty = ToolJson.Options.PropertyNamingPolicy!.ConvertName("CitationId");
+    private static readonly string MerchantIdProperty = ToolJson.Options.PropertyNamingPolicy!.ConvertName("MerchantId");
 
     private static readonly string LimitReached = ToolJson.Serialize(new ToolResult.Failed(
         ToolErrorCode.LimitReached, "The investigation has reached its step limit. Call submit_assessment with what you have."));
@@ -73,10 +77,15 @@ internal sealed class ToolGuard(
         progress?.Report(new InvestigationProgress.ToolStarted(tool.Name, label));
 
         // One budget from here covers the tool and the screening of what it returned; the tool keeps its own timeout.
+        using var span = AgentTelemetry.Source.StartActivity($"tool.{tool.Name}");
         var started = time.GetTimestamp();
-        var result = request is not null
-            ? await RunAsync(tool, request, cancellationToken)
-            : new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.");
+        var refused = request is null ? null : Unnamed(tool, request);
+        var result = request is null
+            ? new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.")
+            : refused ?? await SearchOrRunAsync(tool, request, cancellationToken);
+        var outcome = result is ToolResult.Ok ? "ok" : refused is not null ? "refused" : "error";
+        span?.SetTag("paymentops.tool.outcome", outcome);
+        TurnUsage.RecordTool(tool.Name, outcome);
         var (json, gap) = Record(tool, result);
         (json, var withheld) = await ScreenAsync(tool, json, limits.ToolResultBudget - time.GetElapsedTime(started), cancellationToken);
         progress?.Report(new InvestigationProgress.ToolFinished(tool.Name, label, result is ToolResult.Ok, Records(result), (gap ?? withheld)?.Wording));
@@ -136,6 +145,41 @@ internal sealed class ToolGuard(
         {
             return null;
         }
+    }
+
+    // A merchant the user never named came from text the model read, so the tool doesn't run for it.
+    private ToolResult.Failed? Unnamed(IInvestigationTool tool, object request)
+    {
+        if (merchants is null
+            || !JsonSerializer.SerializeToElement(request, tool.RequestType, ToolJson.Options).TryGetProperty(MerchantIdProperty, out var id)
+            || id.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(id.GetString())
+            || merchants.Named(id.GetString()!))
+        {
+            return null;
+        }
+
+        InvestigationLog.MerchantNotNamed(_logger, investigationId, tool.Name);
+        return new ToolResult.Failed(ToolErrorCode.InvalidArgument, "merchant_id must be a merchant named in the user's questions.");
+    }
+
+    /// <summary>One verdict for several screened values: theirs when they agree, <c>mixed</c> when they don't.</summary>
+    internal static string VerdictSummary(IReadOnlyCollection<ScreenVerdict> verdicts) =>
+        verdicts.Distinct().Count() == 1 ? ToolJson.Word(verdicts.First()) : "mixed";
+
+    // A knowledge search gets its own span, so retrieval is visible apart from screening what it returned.
+    private async Task<ToolResult> SearchOrRunAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)
+    {
+        if (tool.Source != DataSources.Knowledge)
+        {
+            return await RunAsync(tool, request, cancellationToken);
+        }
+
+        using var search = AgentTelemetry.Source.StartActivity("knowledge.search");
+        search?.SetTag("paymentops.search.index", searchIndex);
+        var result = await RunAsync(tool, request, cancellationToken);
+        search?.SetTag("paymentops.search.results", Records(result));
+        return result;
     }
 
     private async Task<ToolResult> RunAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)
@@ -212,7 +256,20 @@ internal sealed class ToolGuard(
             return (json, null);
         }
 
-        var verdicts = await VerdictsAsync([.. marked.Select(v => UntrustedText.Unwrap(v.GetValue<string>()))], remaining, cancellationToken);
+        IReadOnlyList<ScreenVerdict> verdicts;
+        using (var screening = AgentTelemetry.Source.StartActivity("screen.tool_text"))
+        {
+            verdicts = await VerdictsAsync([.. marked.Select(v => UntrustedText.Unwrap(v.GetValue<string>()))], remaining, cancellationToken);
+            screening?.SetTag("paymentops.screen.source", tool.Source == DataSources.Knowledge ? "knowledge_section" : "record");
+            screening?.SetTag("paymentops.screen.values", verdicts.Count);
+            screening?.SetTag("paymentops.screen.verdict", VerdictSummary([.. verdicts]));
+            foreach (var group in verdicts.GroupBy(v => v))
+            {
+                var name = ToolJson.Word(group.Key);
+                screening?.SetTag($"paymentops.screen.{name}", group.Count());
+                TurnUsage.RecordScreen("tool_text", name, group.Count());
+            }
+        }
 
         // A knowledge section with any part withheld can't support a statement; read before the values are replaced.
         foreach (var section in marked.Zip(verdicts).GroupBy(p => p.First.Parent?[CitationIdProperty]?.GetValue<string>()).Where(g => g.Key is not null))
