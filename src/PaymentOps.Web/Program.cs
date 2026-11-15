@@ -84,7 +84,10 @@ if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_
     builder.Services.AddOpenTelemetry()
         .UseAzureMonitor(options => options.Credential = azureCredential)
         .WithTracing(tracing => tracing.AddSource(AgentTelemetry.Name))
-        .WithMetrics(metrics => metrics.AddMeter(AgentTelemetry.Name));
+        // The model clients' gen_ai histograms repeat paymentops.model.tokens; only their spans are kept.
+        .WithMetrics(metrics => metrics
+            .AddMeter(AgentTelemetry.Name)
+            .AddView(instrument => instrument.Name.StartsWith("gen_ai.", StringComparison.Ordinal) ? MetricStreamConfiguration.Drop : null));
 }
 
 var healthChecks = builder.Services.AddHealthChecks();

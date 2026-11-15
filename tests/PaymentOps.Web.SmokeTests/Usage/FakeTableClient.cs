@@ -14,9 +14,7 @@ internal sealed class FakeTableClient : TableClient
     private readonly Dictionary<(string Partition, string Row), (int Count, ETag ETag)> _rows = [];
     private int _version;
 
-    public int? FailReadsWith { get; set; }
-
-    /// <summary>Thrown by every read, for failures that aren't a service response.</summary>
+    /// <summary>Thrown by every read.</summary>
     public Exception? ReadsThrow { get; set; }
 
     public int? FailTransactionsWith { get; set; }
@@ -49,11 +47,6 @@ internal sealed class FakeTableClient : TableClient
         if (ReadsThrow is { } thrown)
         {
             throw thrown;
-        }
-
-        if (FailReadsWith is { } status)
-        {
-            throw new RequestFailedException(status, "read failed");
         }
 
         lock (_lock)

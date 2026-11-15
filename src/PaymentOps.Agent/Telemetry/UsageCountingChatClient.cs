@@ -39,13 +39,10 @@ internal sealed class UsageCountingChatClient(IChatClient inner, string deployme
 
     private void Record(UsageDetails? usage)
     {
-        if (usage is { InputTokenCount: { } input, OutputTokenCount: { } output })
-        {
-            TurnUsage.RecordTokens(deployment, input, output);
-            return;
-        }
-
         TurnUsage.RecordTokens(deployment, usage?.InputTokenCount ?? 0, usage?.OutputTokenCount ?? 0);
-        TurnUsage.RecordIncomplete("model usage missing");
+        if (usage?.InputTokenCount is null || usage.OutputTokenCount is null)
+        {
+            TurnUsage.RecordIncomplete("model usage missing");
+        }
     }
 }

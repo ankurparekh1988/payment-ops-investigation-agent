@@ -79,11 +79,17 @@ internal sealed class TurnUsage : IDisposable
         }
     }
 
-    public static void RecordScreen(string verdict, int count = 1)
+    /// <summary>Screen verdicts of one kind: the turn's count, and the block counter for anything not clean.</summary>
+    public static void RecordScreen(string kind, string verdict, int count = 1)
     {
+        if (verdict != "clean")
+        {
+            AgentTelemetry.ScreenBlocks.Add(count, new("kind", kind), new("verdict", verdict));
+        }
+
         if (Current is { } usage && count > 0)
         {
-            usage.Count(usage._screens, verdict, count);
+            usage.Count(usage._screens, $"{kind}:{verdict}", count);
         }
     }
 
@@ -109,12 +115,17 @@ internal sealed class TurnUsage : IDisposable
         Current?.AddTokens(deployment, input, output);
     }
 
-    public static void RecordCacheHit(string cache)
+    public static void RecordCacheHit(string cache, int count = 1)
     {
-        AgentTelemetry.CacheHits.Add(1, new KeyValuePair<string, object?>("cache", cache));
+        if (count <= 0)
+        {
+            return;
+        }
+
+        AgentTelemetry.CacheHits.Add(count, new KeyValuePair<string, object?>("cache", cache));
         if (Current is { } usage)
         {
-            usage.Count(usage._cacheHits, cache, 1);
+            usage.Count(usage._cacheHits, cache, count);
         }
     }
 

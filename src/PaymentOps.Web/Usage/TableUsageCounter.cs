@@ -33,8 +33,10 @@ internal sealed class TableUsageCounter(TableClient table, int maxAttempts = Tab
         {
             try
             {
-                var user = await ReadAsync(partition, userRow, cancellationToken);
-                var total = await ReadAsync(partition, TotalRow, cancellationToken);
+                var userRead = ReadAsync(partition, userRow, cancellationToken);
+                var totalRead = ReadAsync(partition, TotalRow, cancellationToken);
+                await Task.WhenAll(userRead, totalRead);
+                var (user, total) = (userRead.Result, totalRead.Result);
                 if (user.Count >= perUserLimit)
                 {
                     return UsageReservation.UserLimitReached;

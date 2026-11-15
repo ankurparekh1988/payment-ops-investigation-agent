@@ -254,14 +254,11 @@ internal sealed class ToolGuard(
         using (var screening = AgentTelemetry.Source.StartActivity("screen.tool_text"))
         {
             verdicts = await VerdictsAsync([.. marked.Select(v => UntrustedText.Unwrap(v.GetValue<string>()))], remaining, cancellationToken);
-            foreach (var verdict in verdicts.GroupBy(v => JsonNamingPolicy.SnakeCaseLower.ConvertName(v.ToString())))
+            foreach (var group in verdicts.GroupBy(v => v))
             {
-                screening?.SetTag($"paymentops.screen.{verdict.Key}", verdict.Count());
-                TurnUsage.RecordScreen($"tool_text:{verdict.Key}", verdict.Count());
-                if (verdict.Key != "clean")
-                {
-                    AgentTelemetry.ScreenBlocks.Add(verdict.Count(), new("kind", "tool_text"), new("verdict", verdict.Key));
-                }
+                var name = ToolJson.Word(group.Key);
+                screening?.SetTag($"paymentops.screen.{name}", group.Count());
+                TurnUsage.RecordScreen("tool_text", name, group.Count());
             }
         }
 

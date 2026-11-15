@@ -16,10 +16,7 @@ internal sealed class HarmAwareScreen(IUntrustedTextScreen shields, ContentSafet
         var verdicts = (await shields.ScreenAsync(segments, cancellationToken)).ToArray();
         var clean = segments.Where((segment, i) => verdicts[i] == ScreenVerdict.Clean).Distinct(StringComparer.Ordinal).ToList();
         var pending = clean.Where(segment => !cache.TryGet(segment, out _)).ToList();
-        for (var hit = 0; hit < clean.Count - pending.Count; hit++)
-        {
-            TurnUsage.RecordCacheHit("harm");
-        }
+        TurnUsage.RecordCacheHit("harm", clean.Count - pending.Count);
         var checkedTexts = await Task.WhenAll(pending.Select(async text => (text, Verdict: await CheckAsync(text, cancellationToken))));
         foreach (var (text, verdict) in checkedTexts.Where(c => c.Verdict != ScreenVerdict.Unavailable))
         {

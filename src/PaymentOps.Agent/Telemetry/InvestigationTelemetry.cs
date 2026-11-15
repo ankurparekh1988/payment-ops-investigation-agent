@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
 
 using Microsoft.Extensions.Logging;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Tools;
 
 namespace PaymentOps.Agent.Telemetry;
 
@@ -37,7 +37,7 @@ internal static class InvestigationTelemetry
     public static string Outcome(AssessmentResult? result) => result switch
     {
         AssessmentResult.Assessed => "assessed",
-        AssessmentResult.NotAssessed notAssessed => JsonNamingPolicy.SnakeCaseLower.ConvertName(notAssessed.Reason.ToString()),
+        AssessmentResult.NotAssessed notAssessed => ToolJson.Word(notAssessed.Reason),
         _ => ErrorOutcome,
     };
 

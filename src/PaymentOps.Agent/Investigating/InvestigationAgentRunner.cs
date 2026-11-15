@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -75,13 +74,9 @@ internal sealed class InvestigationAgentRunner(
                 return new NotAssessed(NotAssessedReason.Cancelled);
             }
 
-            var name = JsonNamingPolicy.SnakeCaseLower.ConvertName(verdict.ToString());
+            var name = ToolJson.Word(verdict);
             screening?.SetTag("paymentops.screen.verdict", name);
-            TurnUsage.RecordScreen($"question:{name}");
-            if (verdict != QuestionVerdict.Clean)
-            {
-                AgentTelemetry.ScreenBlocks.Add(1, new("kind", "question"), new("verdict", name));
-            }
+            TurnUsage.RecordScreen("question", name);
         }
 
         if (verdict != QuestionVerdict.Clean)

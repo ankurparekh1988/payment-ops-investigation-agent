@@ -138,7 +138,7 @@ public sealed class UsageCounterTests
     [Fact]
     public async Task Unavailable_storage_fails_closed()
     {
-        var table = new FakeTableClient { FailReadsWith = 503 };
+        var table = new FakeTableClient { ReadsThrow = new Azure.RequestFailedException(503, "read failed") };
 
         await Assert.ThrowsAsync<UsageUnavailableException>(() => Counter(table).TryReserveAsync("user-a", Day, 10, 10, CancellationToken.None));
 

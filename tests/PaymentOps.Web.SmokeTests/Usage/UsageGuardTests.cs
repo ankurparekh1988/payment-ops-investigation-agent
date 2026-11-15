@@ -156,7 +156,7 @@ public sealed class UsageGuardTests : IDisposable
     [Fact]
     public async Task Unavailable_usage_refuses_without_logging_the_user()
     {
-        var (guard, inner, _, logger) = Guard(table: new FakeTableClient { FailReadsWith = 503 });
+        var (guard, inner, _, logger) = Guard(table: new FakeTableClient { ReadsThrow = new Azure.RequestFailedException(503, "read failed") });
 
         Assert.Equal(NotAssessedReason.UsageUnavailable, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
 
@@ -193,7 +193,7 @@ public sealed class UsageGuardTests : IDisposable
         var (guard, _, _, _) = reason switch
         {
             NotAssessedReason.Paused => Guard(new UsageOptions { Paused = true, DailyLimitPerUser = 1, DailyLimitTotal = 1 }),
-            NotAssessedReason.UsageUnavailable => Guard(table: new FakeTableClient { FailReadsWith = 503 }),
+            NotAssessedReason.UsageUnavailable => Guard(table: new FakeTableClient { ReadsThrow = new Azure.RequestFailedException(503, "read failed") }),
             _ => Guard(new UsageOptions { DailyLimitPerUser = 1, DailyLimitTotal = 1 }),
         };
         if (reason == NotAssessedReason.DailyLimitReached)
