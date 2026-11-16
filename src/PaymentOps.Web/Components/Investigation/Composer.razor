@@ -2,7 +2,7 @@
 <MudPaper Class="panel composer" Elevation="0">
     <form @onsubmit="Submit">
         <label for="question" class="field-label">Question</label>
-        <textarea id="question" class="question-input" rows="4" maxlength="@MaxLength" disabled="@Busy"
+        <textarea @ref="_input" id="question" class="field-input question-input" rows="4" maxlength="@MaxLength" disabled="@Busy"
                   value="@Value" @oninput="OnInput" aria-describedby="question-count"></textarea>
         <div class="composer-footer">
             <span id="question-count" class="field-hint">@Value.Length.ToString("N0", CultureInfo.InvariantCulture) / @MaxLength.ToString("N0", CultureInfo.InvariantCulture)</span>
@@ -22,6 +22,8 @@
 </MudPaper>
 
 @code {
+    private ElementReference _input;
+
     [Parameter, EditorRequired]
     public string Value { get; set; } = string.Empty;
 
@@ -48,6 +50,8 @@
 
     [Parameter]
     public EventCallback StartNew { get; set; }
+
+    public ValueTask FocusAsync() => _input.FocusAsync();
 
     private Task OnInput(ChangeEventArgs e) => ValueChanged.InvokeAsync(e.Value as string ?? string.Empty);
 }

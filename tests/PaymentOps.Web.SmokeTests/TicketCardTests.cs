@@ -73,6 +73,18 @@ public sealed class TicketCardTests
         Assert.DoesNotContain("<button", html, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [MemberData(nameof(Statuses))]
+    public async Task Every_status_has_a_stated_line(ProposalStatus status)
+    {
+        var html = await Render(Proposal(status));
+
+        Assert.Contains("class=\"ticket-status", html, StringComparison.Ordinal);
+        Assert.Equal(status == ProposalStatus.Pending, html.Contains("<button", StringComparison.Ordinal));
+    }
+
+    public static TheoryData<ProposalStatus> Statuses() => [.. Enum.GetValues<ProposalStatus>()];
+
     [Fact]
     public async Task Model_text_is_escaped()
     {

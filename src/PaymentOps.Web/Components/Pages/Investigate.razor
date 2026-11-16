@@ -5,6 +5,7 @@
 @using PaymentOps.Web.Investigating
 @inject InvestigationSession Session
 @inject QuestionLimits Limits
+@inject NavigationManager Navigation
 
 <PageTitle>Investigate · Contoso Payments</PageTitle>
 
@@ -13,7 +14,7 @@
 <div class="investigate-grid">
     <div class="investigate-side">
         <ConversationNotice Status="Session.Conversation" MaxQuestionLength="Limits.MaxQuestionLength" />
-        <Composer Value="@Session.Draft" ValueChanged="OnDraftChanged" MaxLength="Limits.MaxQuestionLength"
+        <Composer @ref="_composer" Value="@Session.Draft" ValueChanged="OnDraftChanged" MaxLength="Limits.MaxQuestionLength"
                   Busy="Session.Busy" Deciding="Session.Deciding" CanSubmit="Session.CanStart(Session.Draft)"
                   Submit="InvestigateAsync" Cancel="Session.Cancel" StartNew="Session.StartNew" />
         <ConversationList Turns="Session.Questions" />
@@ -41,14 +42,15 @@
                     <p class="result-question">@Session.CurrentQuestion</p>
                     @if (result is AssessmentResult.NotAssessed notAssessed)
                     {
-                        <p role="status">@NotAssessedText.For(notAssessed.Reason, Limits.MaxQuestionLength)</p>
+                        <NotAssessedPanel Reason="notAssessed.Reason" MaxQuestionLength="Limits.MaxQuestionLength"
+                                          EditQuestion="EditQuestionAsync" TryAgain="TryAgainAsync" StartNew="Session.StartNew" SignIn="SignIn" />
                     }
                     else
                     {
                         <AssessmentView Result="result" Deciding="Session.Deciding" Approve="Session.ApproveAsync" Reject="RejectAsync" />
                         @if (Session.DecisionFailed)
                         {
-                            <p role="alert">The ticket couldn't be created right now. The proposal is still pending; please try again.</p>
+                            <p class="notice notice-error" role="alert">The ticket couldn't be created right now. The proposal is still pending; please try again.</p>
                         }
                     }
                 </section>
@@ -59,6 +61,7 @@
 
 @code {
     private ElementReference _resultHeading;
+    private Composer? _composer;
 
     // Results already shown aren't focused again when the person comes back to the page.
     private int _focusedRuns;
@@ -72,6 +75,21 @@
     private void OnDraftChanged(string draft) => Session.Draft = draft;
 
     private Task InvestigateAsync() => Session.StartAsync(Session.Draft);
+
+    // The question goes back into the box to be changed; nothing runs until the person asks again.
+    private async Task EditQuestionAsync()
+    {
+        Session.Draft = Session.CurrentQuestion ?? string.Empty;
+        if (_composer is not null)
+        {
+            await _composer.FocusAsync();
+        }
+    }
+
+    private Task TryAgainAsync() => Session.StartAsync(Session.CurrentQuestion ?? string.Empty);
+
+    // A full load goes through sign-in again; the circuit's own sign-in has ended.
+    private void SignIn() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
 
     private Task RejectAsync((RejectionReason Reason, string? Note) rejection) => Session.RejectAsync(rejection.Reason, rejection.Note);
 

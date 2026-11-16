@@ -3,10 +3,13 @@
 @* The proposal as the server stored it. Only its owning Engineer ever sees it pending; the server checks again on
    every decision. Model-written title and summary are bound as text. *@
 <section class="ticket-card" aria-labelledby="ticket-heading">
-    <h3 id="ticket-heading">Proposed incident ticket</h3>
+    <div class="ticket-header">
+        <h4 id="ticket-heading" class="section-title">Proposed incident ticket</h4>
+        <span class="chip chip-@StatusTone">@StatusWord</span>
+    </div>
     <p class="ticket-title">@Proposal.Title</p>
-    <p>@Proposal.Summary</p>
-    <dl>
+    <p class="ticket-summary">@Proposal.Summary</p>
+    <dl class="ticket-facts">
         <dt>Processor</dt>
         <dd>@Proposal.ProcessorId@(Proposal.ProcessorReference is { } reference ? $" (their reference {reference})" : string.Empty)</dd>
         <dt>Merchants</dt>
@@ -19,39 +22,45 @@
     @switch (Proposal.Status)
     {
         case ProposalStatus.Draft:
-            <p role="note">Draft prepared. An Operations Engineer must run their own investigation before a ticket can be created.</p>
+            <p class="ticket-status" role="note">Draft prepared. An Operations Engineer must run their own investigation before a ticket can be created.</p>
             break;
         case ProposalStatus.Pending:
-            <p>Can be approved until @Proposal.ExpiresAt?.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) UTC. Approving creates the ticket as shown.</p>
-            <label for="reject-reason">Reason to reject</label>
-            <select id="reject-reason" @bind="_reason" disabled="@Deciding">
-                @foreach (var reason in Enum.GetValues<RejectionReason>())
-                {
-                    <option value="@reason">@RejectionReasons.Describe(reason)</option>
-                }
-            </select>
-            <label for="reject-note">Note (optional)</label>
-            <textarea id="reject-note" @bind="_note" maxlength="500" rows="2" disabled="@Deciding"></textarea>
-            <button type="button" @onclick="Approve" disabled="@Deciding">Approve</button>
-            <button type="button" @onclick="RejectAsync" disabled="@Deciding">Reject</button>
+            <p class="ticket-status">Can be approved until @Proposal.ExpiresAt?.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) UTC. Approving creates the ticket as shown.</p>
+            <div class="ticket-decision">
+                <div class="ticket-reject-fields">
+                    <label for="reject-reason" class="field-label">Reason to reject</label>
+                    <select id="reject-reason" class="field-input" @bind="_reason" disabled="@Deciding">
+                        @foreach (var reason in Enum.GetValues<RejectionReason>())
+                        {
+                            <option value="@reason">@RejectionReasons.Describe(reason)</option>
+                        }
+                    </select>
+                    <label for="reject-note" class="field-label">Note (optional)</label>
+                    <textarea id="reject-note" class="field-input" @bind="_note" maxlength="500" rows="2" disabled="@Deciding"></textarea>
+                </div>
+                <div class="ticket-actions">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="RejectAsync" Disabled="Deciding">Reject</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Approve" Disabled="Deciding">Approve</MudButton>
+                </div>
+            </div>
             break;
         case ProposalStatus.Approved:
-            <p role="status">Ticket @Proposal.TicketId created.</p>
+            <p class="ticket-status" role="status">Ticket @Proposal.TicketId created.</p>
             break;
         case ProposalStatus.Rejected:
-            <p role="status">Rejected@(Proposal.Rejection is { } why ? $": {RejectionReasons.Describe(why)}" : string.Empty).</p>
+            <p class="ticket-status" role="status">Rejected@(Proposal.Rejection is { } why ? $": {RejectionReasons.Describe(why)}" : string.Empty).</p>
             break;
         case ProposalStatus.Unavailable:
-            <p role="note">This proposal can't be approved right now. Run the investigation again later to propose it again.</p>
+            <p class="ticket-status" role="note">This proposal can't be approved right now. Run the investigation again later to propose it again.</p>
             break;
         case ProposalStatus.Expired:
-            <p role="note">This proposal expired before it was approved. Run the investigation again to propose it again.</p>
+            <p class="ticket-status" role="note">This proposal expired before it was approved. Run the investigation again to propose it again.</p>
             break;
         case ProposalStatus.CapacityReached:
-            <p role="note">No ticket was created: the demo ticket store has reached capacity.</p>
+            <p class="ticket-status" role="note">No ticket was created: the demo ticket store has reached capacity.</p>
             break;
         case ProposalStatus.Superseded:
-            <p role="note">This proposal was replaced by a later proposal in this conversation.</p>
+            <p class="ticket-status" role="note">This proposal was replaced by a later proposal in this conversation.</p>
             break;
     }
 </section>
@@ -73,6 +82,26 @@
     public EventCallback<(RejectionReason Reason, string? Note)> Reject { get; set; }
 
     private Task RejectAsync() => Reject.InvokeAsync((_reason, _note));
+
+    private string StatusWord => Proposal.Status switch
+    {
+        ProposalStatus.Draft => "Draft",
+        ProposalStatus.Pending => "Awaiting approval",
+        ProposalStatus.Approved => "Created",
+        ProposalStatus.Rejected => "Rejected",
+        ProposalStatus.Expired => "Expired",
+        ProposalStatus.Superseded => "Superseded",
+        ProposalStatus.CapacityReached => "Not created",
+        _ => "Unavailable",
+    };
+
+    private string StatusTone => Proposal.Status switch
+    {
+        ProposalStatus.Pending => "info",
+        ProposalStatus.Approved => "success",
+        ProposalStatus.CapacityReached or ProposalStatus.Unavailable => "warning",
+        _ => "neutral",
+    };
 
     private string Dates() => Proposal.StartDate == Proposal.EndDate
         ? Proposal.StartDate.ToString("d MMM yyyy", CultureInfo.InvariantCulture)

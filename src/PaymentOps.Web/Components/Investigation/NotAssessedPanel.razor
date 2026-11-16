@@ -1,0 +1,82 @@
+@using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Components.Pages
+
+@* Fixed text per reason, grouped by what the person can do. The self-harm notice is deliberately plain: no alarm
+   colour, no icon and no retry. *@
+<div class="notice notice-@Tone" role="status">
+    @if (Icon is { } icon)
+    {
+        <MudIcon Icon="@icon" Size="Size.Small" Class="notice-icon" aria-hidden="true" />
+    }
+    <div class="notice-body">
+        @if (Title is { } title)
+        {
+            <p class="notice-title">@title</p>
+        }
+        <p class="notice-text">@NotAssessedText.For(Reason, MaxQuestionLength)</p>
+        @switch (Group)
+        {
+            case NotAssessedGroup.YouCanFixIt when Reason == NotAssessedReason.ConversationLimit:
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="StartNew">New investigation</MudButton>
+                break;
+            case NotAssessedGroup.YouCanFixIt:
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="EditQuestion">Edit question</MudButton>
+                break;
+            case NotAssessedGroup.TryAgainShortly:
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="TryAgain">Try again</MudButton>
+                break;
+            case NotAssessedGroup.SignedOut:
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SignIn">Sign in</MudButton>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public NotAssessedReason Reason { get; set; }
+
+    [Parameter]
+    public int MaxQuestionLength { get; set; }
+
+    [Parameter]
+    public EventCallback EditQuestion { get; set; }
+
+    [Parameter]
+    public EventCallback TryAgain { get; set; }
+
+    [Parameter]
+    public EventCallback StartNew { get; set; }
+
+    [Parameter]
+    public EventCallback SignIn { get; set; }
+
+    private NotAssessedGroup Group => NotAssessedGroups.For(Reason);
+
+    private string Tone => Group switch
+    {
+        NotAssessedGroup.YouCanFixIt => "warning",
+        NotAssessedGroup.TryAgainShortly or NotAssessedGroup.LimitOrPolicy or NotAssessedGroup.SignedOut => "info",
+        _ => "neutral",
+    };
+
+    private string? Title => Group switch
+    {
+        NotAssessedGroup.YouCanFixIt => "Check the question",
+        NotAssessedGroup.TryAgainShortly => "Try again shortly",
+        NotAssessedGroup.LimitOrPolicy => "Not investigated",
+        NotAssessedGroup.Cancelled => "Cancelled",
+        NotAssessedGroup.SignedOut => "Signed out",
+        _ => null,
+    };
+
+    private string? Icon => Group switch
+    {
+        NotAssessedGroup.YouCanFixIt => Icons.Material.Outlined.EditNote,
+        NotAssessedGroup.TryAgainShortly => Icons.Material.Outlined.Schedule,
+        NotAssessedGroup.LimitOrPolicy => Icons.Material.Outlined.Block,
+        NotAssessedGroup.Cancelled => Icons.Material.Outlined.Cancel,
+        NotAssessedGroup.SignedOut => Icons.Material.Outlined.Login,
+        _ => null,
+    };
+}
