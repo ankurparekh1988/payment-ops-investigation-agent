@@ -5,20 +5,23 @@
 @inject IInvestigationService Investigation
 
 @* Static rendering, inside App, so the page gets the document head and can set its status code. *@
-<PageTitle>Source</PageTitle>
+<PageTitle>@(_source is SourceResult.Found titled ? titled.Title : "Source") · Contoso Payments</PageTitle>
 
 @switch (_source)
 {
     case null:
         break;
     case SourceResult.Found found:
-        <h1>@found.Title</h1>
-        <p>@found.SectionPath</p>
-        @((MarkupString)SectionRenderer.RenderSection(found.Content))
+        <article class="source-body">
+            <p class="source-path">@found.SectionPath</p>
+            <h1 class="page-title">@found.Title</h1>
+            @((MarkupString)SectionRenderer.RenderSection(found.Content))
+        </article>
         break;
     case SourceResult.Unavailable:
-        <h1>Source unavailable</h1>
-        <p>The knowledge service isn't responding right now. Please try again shortly.</p>
+        <StatusCard Title="Source unavailable">
+            <p class="status-text">The knowledge service isn't responding right now. Please try again shortly.</p>
+        </StatusCard>
         break;
     default:
         @* A 404 is rendered by the app's not-found page, like any other missing address. *@

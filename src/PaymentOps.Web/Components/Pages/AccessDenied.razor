@@ -1,9 +1,20 @@
 @page "/access-denied"
 @attribute [ExcludeFromInteractiveRouting]
 @attribute [AllowAnonymous]
+@inject IUserContext CurrentUser
 
-<PageTitle>No access</PageTitle>
+<PageTitle>No access · Contoso Payments</PageTitle>
 
-<h1>You don't have access to this app</h1>
-
-<p>You're signed in, but your account hasn't been given a role here. Ask an administrator to assign you one.</p>
+<StatusCard Title="You don't have access to Payment Operations">
+    <p class="status-text">Ask your administrator to assign you a role.</p>
+    @if (CurrentUser.IsAuthenticated)
+    {
+        <div class="status-footer">
+            <span>Signed in as @CurrentUser.DisplayName</span>
+            <form method="post" action="account/sign-out">
+                <AntiforgeryToken />
+                <button type="submit" class="link-button">Sign out</button>
+            </form>
+        </div>
+    }
+</StatusCard>

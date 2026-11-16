@@ -19,7 +19,8 @@
             <span class="brand-name">Contoso Payments</span>
             <span class="brand-module" style="color:@ContosoTheme.AppBarMutedText">Payment Operations</span>
         </a>
-        @if (CurrentUser.IsAuthenticated)
+        @* Only someone with a role has anywhere to go; the No access page offers sign-out instead. *@
+        @if (CurrentUser.IsInRole(OpsRoles.Reader))
         {
             <NavBar />
         }
