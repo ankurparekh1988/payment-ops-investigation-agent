@@ -17,14 +17,14 @@ Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.
 - **Authorization code flow with PKCE.** The browser carries only a one-time code. The server redeems it, keeps the tokens on the server, and gives the browser an encrypted session cookie. The user is held in a scoped `IUserContext`, built from the token's claims, which every authorization decision reads.
 - **No stored sign-in credential in Azure.** The deployed app redeems codes as its managed identity, which the app registration trusts through a federated credential: no client secret, certificate or credential in the app settings. Local development uses a separate, short-lived secret kept in .NET user-secrets, which exists only while local addresses are configured.
 - **Demo users are opt-in.** They're ordinary tenant accounts, created only when `TF_VAR_create_demo_users=true` and assigned roles only on this application. Their passwords don't expire because they're shared for demonstrations, so remove them when not in use.
-- **Everything requires a role** unless it's explicitly public: `/health`, `/health/ready`, sign-out and the signed-out and access-denied pages. That includes the source pages behind citations. A signed-in user without a role sees the access-denied page.
+- **Everything requires a role** unless it's explicitly public: `/health`, `/health/ready`, sign-out and the signed-out, access-denied, not-found and error pages. That includes the source pages behind citations. A signed-in user without a role sees the access-denied page.
 - **Sign-ins last a fixed time.** Roles and groups come from the token, so a sign-in ends after `PaymentOps:Authorization:SessionLifetime` (8 hours by default) without sliding, and changes made in Entra apply at the next one. Open pages are signed out at the same moment.
 
 | App role | Can |
 |---|---|
 | `Ops.Reader` | Ask questions, run investigations, view citations |
 | `Ops.Engineer` | Everything a Reader can, plus approve or reject the tickets their own investigations propose |
-| `Ops.Admin` | Everything an Engineer can, plus administration |
+| `Ops.Admin` | Everything an Engineer can, plus pausing and resuming investigations for everyone |
 
 Higher roles include lower ones. Membership of the **Risk and Compliance** security group grants access to Restricted knowledge, and only when the group is configured: with no group id set, nobody gets Restricted knowledge. The token carries only groups assigned to the app, which keeps unrelated group IDs out of it and avoids overage for users in many groups.
 
@@ -255,6 +255,9 @@ Usage is bounded in the app and, as a last resort, by a budget-driven cutoff ([A
 |---|---|---|
 | Someone signed in runs investigations without end | Daily limits per person and in total, reserved atomically in a table; usage that can't be checked refuses. The pause switch stops everything at once | Within the limits, spending continues until the next UTC day |
 | The usage table holds who asked | Rows are keyed by a hash of the user's object id; the table holds counts only | — |
+| Someone without the Admin role pauses or resumes investigations | The pause switch checks the Admin role on every change, whatever the page shows; a change is decided from a fresh read and written only if the row is unchanged | — |
+| The pause can't be read | New investigations are refused until it can be, as with the counter | A storage outage stops investigations |
+| A pause change leaks who made it or why | The log event (`3301`) holds the new state, the pseudonymous id the usage rows use and the reason's length. The display name and reason are kept only in the pause row, shown to Admins | — |
 | A caller with the cutoff's trigger URL disables the AI account | The URL carries a signature and lives only in Terraform state and the action group; the workflow acts only on a payload matching this budget, subscription and resource group with spending at the budget, and only on the account Terraform names. While the cutoff is off the workflow is disabled | A caller with the URL and a matching payload can turn access off; the next deployment turns it back on. Regenerating the workflow's access keys invalidates the URL |
 | The cutoff's identity changes more than network access | The role is assigned on the one account and holds only the account read and write, no data-plane action | Azure's roles can't narrow the write to one setting |
 | Spending runs past the budget | Budget alerts at 50, 80 and 100% and a forecast alert, a cost anomaly alert, and the cutoff once it's switched on | **The cutoff isn't a spending ceiling:** budget notifications lag spending by up to about a day, so it shortens overspending rather than preventing it |

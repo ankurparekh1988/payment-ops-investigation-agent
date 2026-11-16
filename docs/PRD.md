@@ -20,7 +20,7 @@ The agent performs the cross-referencing, cites every piece of evidence, states 
 |---|---|---|
 | Ops Analyst | `Ops.Reader` | Ask questions, run investigations, view citations |
 | Ops Engineer | `Ops.Engineer` | Everything above, plus approve state-changing actions |
-| Platform Admin | `Ops.Admin` | Everything above, plus re-index knowledge and switch the demo dataset |
+| Platform Admin | `Ops.Admin` | Everything above, plus pause and resume investigations for everyone, re-index knowledge and switch the demo dataset |
 | Risk & Compliance *(security group)* | — | Additionally retrieve **Restricted** knowledge documents |
 
 ## Scenarios

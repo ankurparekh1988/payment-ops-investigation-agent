@@ -68,7 +68,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Investigation pause changes (actor as a pseudonymous id, reason length only)",
-        "query": "traces\n| where tostring(customDimensions.EventId) == '3301'\n| project timestamp, Paused = tobool(customDimensions.Paused), Actor = tostring(customDimensions.Actor), ReasonLength = toint(customDimensions.ReasonLength)\n| order by timestamp desc",
+        "query": "traces\n| where tostring(customDimensions.EventId) == '3301' or message startswith 'Investigation pause set to'\n| project timestamp, Paused = tobool(customDimensions.Paused), Actor = tostring(customDimensions.Actor), ReasonLength = toint(customDimensions.ReasonLength)\n| order by timestamp desc",
         "size": 0,
         "timeContext": { "durationMs": 2592000000 },
         "queryType": 0,
