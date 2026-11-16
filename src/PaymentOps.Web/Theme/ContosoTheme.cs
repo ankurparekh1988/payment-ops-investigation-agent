@@ -101,11 +101,28 @@ public static class ContosoTheme
             TableLines = Dark.Border,
             Divider = Dark.Border,
         },
+        // One scale for the whole app: 14px body, 600 for headings and actions, sentence-case buttons.
         Typography = new Typography
         {
-            Default = new DefaultTypography { FontFamily = [.. FontStack.Split(", ")] },
+            Default = new DefaultTypography { FontFamily = [.. FontStack.Split(", ")], FontSize = "0.875rem", FontWeight = "400", LineHeight = "1.5", LetterSpacing = "normal" },
+            H1 = new H1Typography { FontSize = "1.375rem", FontWeight = "600", LineHeight = "1.3", LetterSpacing = "normal" },
+            H2 = new H2Typography { FontSize = "1rem", FontWeight = "600", LineHeight = "1.4", LetterSpacing = "normal" },
+            H3 = new H3Typography { FontSize = "0.875rem", FontWeight = "600", LineHeight = "1.4", LetterSpacing = "normal" },
+            Body1 = new Body1Typography { FontSize = "0.875rem", FontWeight = "400", LineHeight = "1.5", LetterSpacing = "normal" },
+            Body2 = new Body2Typography { FontSize = "0.8125rem", FontWeight = "400", LineHeight = "1.5", LetterSpacing = "normal" },
+            Caption = new CaptionTypography { FontSize = "0.75rem", FontWeight = "500", LineHeight = "1.4", LetterSpacing = "normal" },
+            Button = new ButtonTypography { FontSize = "0.875rem", FontWeight = "600", LineHeight = "1.5", LetterSpacing = "normal", TextTransform = "none" },
         },
-        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "10px" },
+        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "8px" },
+    };
+
+    /// <summary>Every colour the app may use; the stylesheet is tested against this list.</summary>
+    public static IReadOnlySet<string> Colours { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Light.AppBar, Light.AppBarText, Light.AppBarMuted, Light.Background, Light.Surface, Light.Text, Light.TextSecondary,
+        Light.Border, Light.Primary, Light.Success, Light.Warning, Light.Error, Light.OnColour,
+        Dark.Background, Dark.Surface, Dark.Text, Dark.TextSecondary, Dark.Border, Dark.Primary, Dark.Success, Dark.Warning,
+        Dark.Error, Dark.OnColour,
     };
 
     /// <summary>Every text colour the theme uses, on each background it appears on, per mode.</summary>
