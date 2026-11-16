@@ -23,6 +23,7 @@ internal sealed class HomeOverview(
     TimeProvider wallClock,
     IOptionsMonitor<UsageOptions> usage,
     IOptions<UiOptions> ui,
+    IPauseStore pause,
     IUsageCounter? counter = null)
 {
     public const int AttentionLimit = 10;
@@ -56,7 +57,7 @@ internal sealed class HomeOverview(
             ShowApprovals: engineer,
             Tickets: engineer ? await RecentTicketsAsync(cancellationToken) : null,
             Operations: admin
-                ? new OperationsView(totalToday, limits.DailyLimitTotal, limits.DailyLimitPerUser, limits.Paused, ui.Value.WorkbookUrl, ui.Value.AlertsUrl)
+                ? new OperationsView(totalToday, limits.DailyLimitTotal, limits.DailyLimitPerUser, limits.Paused, await PauseAsync(cancellationToken), ui.Value.WorkbookUrl, ui.Value.AlertsUrl)
                 : null,
             RestrictedKnowledge: user.CanAccessRestrictedKnowledge);
 
@@ -113,6 +114,18 @@ internal sealed class HomeOverview(
         catch (UsageUnavailableException)
         {
             return (null, null, true);
+        }
+    }
+
+    private async Task<PauseState?> PauseAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await pause.ReadAsync(cancellationToken);
+        }
+        catch (PauseUnavailableException)
+        {
+            return null;
         }
     }
 

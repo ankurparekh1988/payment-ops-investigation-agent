@@ -87,7 +87,7 @@ public sealed class UsageGuardTests : IDisposable
     }
 
     private static (UsageGuard Guard, CountingService Inner, FakeTableClient Table, RecordingLogger Logger) Guard(
-        UsageOptions? options = null, FakeTableClient? table = null, TimeProvider? clock = null, Func<AssessmentResult>? answer = null)
+        UsageOptions? options = null, FakeTableClient? table = null, TimeProvider? clock = null, Func<AssessmentResult>? answer = null, IPauseStore? pause = null)
     {
         var inner = new CountingService(answer);
         var fake = table ?? new FakeTableClient();
@@ -95,6 +95,7 @@ public sealed class UsageGuardTests : IDisposable
         var guard = new UsageGuard(
             inner,
             new TableUsageCounter(fake, TableUsageCounter.DefaultMaxAttempts, _ => TimeSpan.Zero),
+            pause ?? new InMemoryPauseStore(),
             TestUser.Reader with { UserId = UserSentinel },
             new Monitor(options ?? new UsageOptions { DailyLimitPerUser = 2, DailyLimitTotal = 10 }),
             clock ?? new FakeTimeProvider(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero)),
@@ -213,4 +214,38 @@ public sealed class UsageGuardTests : IDisposable
     [InlineData(NotAssessedReason.UsageUnavailable, "Investigations can't start right now. Please try again shortly.")]
     public void Each_refusal_has_its_own_text(NotAssessedReason reason, string text) =>
         Assert.Equal(text, NotAssessedText.For(reason, 2000));
+
+    [Fact]
+    public async Task A_paused_switch_refuses_new_investigations()
+    {
+        var pause = new InMemoryPauseStore();
+        await pause.WriteAsync(new PauseState(true, "u-admin", "Ada", DateTimeOffset.UnixEpoch, null), null, CancellationToken.None);
+        var (guard, inner, table, _) = Guard(pause: pause);
+
+        Assert.Equal(NotAssessedReason.Paused, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
+
+        Assert.Equal(0, inner.Calls);
+        Assert.Empty(table.Rows);
+    }
+
+    [Fact]
+    public async Task An_unreadable_pause_row_refuses_as_usage_unavailable()
+    {
+        var pauseTable = new FakeEntityTable { ReadsThrow = new Azure.RequestFailedException(503, "unavailable") };
+        var (guard, inner, table, _) = Guard(pause: new TablePauseStore(pauseTable, TimeProvider.System));
+
+        Assert.Equal(NotAssessedReason.UsageUnavailable, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
+
+        Assert.Equal(0, inner.Calls);
+        Assert.Empty(table.Rows);
+    }
+
+    [Fact]
+    public async Task Configuration_pause_wins_over_a_running_switch()
+    {
+        var (guard, inner, _, _) = Guard(new UsageOptions { Paused = true, DailyLimitPerUser = 2, DailyLimitTotal = 10 }, pause: new InMemoryPauseStore());
+
+        Assert.Equal(NotAssessedReason.Paused, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
+        Assert.Equal(0, inner.Calls);
+    }
 }

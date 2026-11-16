@@ -15,4 +15,16 @@ public sealed class WorkbookTests
     [Fact]
     public void The_quality_section_shows_tool_calls_by_outcome() =>
         Assert.Contains(Queries, q => q.Contains("startswith 'tool.'", StringComparison.Ordinal) && q.Contains("paymentops.tool.outcome", StringComparison.Ordinal));
+
+    // Pause changes are the Admin's audit trail: the log event, never the reason text or a name.
+    [Fact]
+    public void The_operations_section_lists_pause_changes()
+    {
+        var query = Assert.Single(Queries, q => q.Contains("'3301'", StringComparison.Ordinal));
+
+        Assert.StartsWith("traces", query, StringComparison.Ordinal);
+        Assert.Contains("ReasonLength", query, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChangedByName", query, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reason =", query, StringComparison.Ordinal);
+    }
 }

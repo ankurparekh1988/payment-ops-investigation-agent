@@ -132,6 +132,10 @@ else
     builder.Services.AddScoped<IApprovalService, UnconfiguredApprovalService>();
 }
 
+// The Admin's pause is checked on every change; without the usage guard (Development) it's kept in memory.
+builder.Services.TryAddSingleton<IPauseStore, InMemoryPauseStore>();
+builder.Services.AddScoped<IPauseSwitch, PauseSwitch>();
+
 // Readiness depends on Foundry once an endpoint is configured; locally and in tests it isn't.
 if (foundry?.Endpoint is { } foundryEndpoint)
 {

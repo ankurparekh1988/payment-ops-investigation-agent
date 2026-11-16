@@ -14,6 +14,7 @@ namespace PaymentOps.Web.Usage;
 internal sealed partial class UsageGuard(
     IInvestigationService inner,
     IUsageCounter counter,
+    IPauseStore pause,
     IUserContext user,
     IOptionsMonitor<UsageOptions> options,
     TimeProvider clock,
@@ -27,6 +28,20 @@ internal sealed partial class UsageGuard(
         if (limits.Paused)
         {
             return Refuse(NotAssessedReason.Paused);
+        }
+
+        // An Admin's pause, read from the shared row; a row that can't be read refuses, as the counter does.
+        try
+        {
+            if ((await pause.ReadAsync(cancellationToken)).Paused)
+            {
+                return Refuse(NotAssessedReason.Paused);
+            }
+        }
+        catch (PauseUnavailableException ex)
+        {
+            UsageUnavailable(logger, ex.InnerException?.GetType().Name ?? nameof(PauseUnavailableException));
+            return Refuse(NotAssessedReason.UsageUnavailable);
         }
 
         UsageReservation reservation;

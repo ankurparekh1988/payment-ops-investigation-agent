@@ -18,11 +18,13 @@ public sealed class HomeOverviewTests
 
     private readonly OverviewPorts _ports = new();
     private readonly InMemoryUsageCounter _counter = new();
+    private readonly InMemoryPauseStore _pause = new();
 
     private HomeOverview Overview(IUserContext user, UsageOptions? usage = null, UiOptions? ui = null, bool withCounter = true) => new(
         user, _ports, _ports, _ports, _ports, new FakeTimeProvider(WallNow),
         new Monitor(usage ?? new UsageOptions { DailyLimitPerUser = 25, DailyLimitTotal = 150 }),
         Options.Create(ui ?? new UiOptions()),
+        _pause,
         withCounter ? _counter : null);
 
     private static TestUser Admin => TestUser.Engineer with { Roles = OpsRoles.Effective([OpsRoles.Admin]) };
@@ -70,6 +72,7 @@ public sealed class HomeOverviewTests
         Assert.Equal(25, operations.PerUserLimit);
         Assert.Equal(ui.WorkbookUrl, operations.WorkbookUrl);
         Assert.Equal(ui.AlertsUrl, operations.AlertsUrl);
+        Assert.Equal(PauseState.Running, operations.Pause);
         Assert.Equal(new UsageToday(1, 25), view.Usage);
     }
 

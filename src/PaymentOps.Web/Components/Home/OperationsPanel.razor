@@ -1,18 +1,31 @@
 @using PaymentOps.Web.Home
+@using PaymentOps.Web.Usage
+@inject IPauseSwitch Switch
+@inject IDialogService Dialogs
 
-@* Admins only: the service builds this section for no one else. *@
+@* Admins only: the service builds this section for no one else, and the switch checks the role again on every change. *@
 <HomePanel Title="Operations" AddedBy="Admins">
     <div class="ops-grid">
         <div class="ops-item">
             <p class="ops-label">Investigations</p>
-            @if (View.PausedByConfiguration)
-            {
-                <p class="ops-value"><span class="chip chip-warning">Paused by configuration</span></p>
-            }
-            else
-            {
-                <p class="ops-value"><span class="chip chip-success">Running</span></p>
-            }
+            <p class="ops-value pause-status">
+                @if (View.PausedByConfiguration)
+                {
+                    <span class="chip chip-warning">Paused by configuration</span>
+                }
+                else if (_pause is null)
+                {
+                    <span class="chip chip-warning">Unknown</span>
+                }
+                else if (_pause.Paused)
+                {
+                    <span class="chip chip-warning">Paused</span>
+                }
+                else
+                {
+                    <span class="chip chip-success">Running</span>
+                }
+            </p>
         </div>
         <div class="ops-item">
             <p class="ops-label">Used today, everyone</p>
@@ -32,6 +45,37 @@
             <p class="ops-value">@View.PerUserLimit</p>
         </div>
     </div>
+
+    <div class="pause-control">
+        @if (View.PausedByConfiguration)
+        {
+            <p class="row-meta">The deployment's settings pause investigations; that can only be changed by a deployment.</p>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="true">Resume investigations</MudButton>
+        }
+        else if (_pause is null)
+        {
+            <p class="row-meta">The pause can't be read right now, so new investigations are refused until it can.</p>
+        }
+        else
+        {
+            @if (_pause.ChangedAt is { } changedAt)
+            {
+                <p class="row-meta">
+                    Last change: @(_pause.Paused ? "paused" : "resumed") by @(_pause.ChangedByName ?? "an Admin"),
+                    @changedAt.UtcDateTime.ToString("d MMM HH:mm", CultureInfo.InvariantCulture) UTC@(_pause.Reason is { } reason ? $" · {reason}" : string.Empty)
+                </p>
+            }
+            <MudButton @ref="_trigger" Variant="@(_pause.Paused ? Variant.Filled : Variant.Outlined)"
+                       Color="@(_pause.Paused ? Color.Primary : Color.Warning)" Disabled="_changing" OnClick="ChangeAsync">
+                @(_pause.Paused ? "Resume investigations" : "Pause investigations")
+            </MudButton>
+        }
+        @if (_message is { } message)
+        {
+            <p class="notice @(_failed ? "notice-error" : "notice-info") pause-message" role="status">@message</p>
+        }
+    </div>
+
     @if (View.WorkbookUrl is not null || View.AlertsUrl is not null)
     {
         <p class="ops-links">
@@ -48,8 +92,59 @@
 </HomePanel>
 
 @code {
+    private PauseState? _pause;
+    private MudButton? _trigger;
+    private bool _changing;
+    private bool _failed;
+    private string? _message;
+
     [Parameter, EditorRequired]
     public OperationsView View { get; set; } = default!;
+
+    protected override void OnInitialized() => _pause = View.Pause;
+
+    private async Task ChangeAsync()
+    {
+        if (_pause is null || _changing)
+        {
+            return;
+        }
+
+        var pausing = !_pause.Paused;
+        var dialog = await Dialogs.ShowAsync<PauseDialog>(
+            pausing ? "Pause all investigations?" : "Resume investigations?",
+            new DialogParameters<PauseDialog> { { d => d.Pausing, pausing }, { d => d.MaxReasonLength, PauseSwitch.MaxReasonLength } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        var answer = await dialog.Result;
+
+        // The dialog returns focus to whatever had it before; put it back on the button that opened it.
+        if (_trigger is not null)
+        {
+            await _trigger.FocusAsync();
+        }
+
+        if (answer is null || answer.Canceled)
+        {
+            return;
+        }
+
+        _changing = true;
+        try
+        {
+            var result = await Switch.SetAsync(pausing, answer.Data as string, CancellationToken.None);
+            (_pause, _message, _failed) = result switch
+            {
+                PauseResult.Changed changed => (changed.State, changed.State.Paused ? "Investigations paused." : "Investigations resumed.", false),
+                PauseResult.Conflict conflict => (conflict.Current, "Another Admin changed this first. It's shown as it is now.", false),
+                PauseResult.NotAuthorized => (_pause, "Only Admins can pause or resume investigations.", true),
+                _ => (_pause, "Couldn't change the pause. Try again.", true),
+            };
+        }
+        finally
+        {
+            _changing = false;
+        }
+    }
 
     private double Percent(int total) => View.TotalLimit <= 0 ? 0 : Math.Min(100, 100.0 * total / View.TotalLimit);
 }

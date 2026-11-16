@@ -4,7 +4,7 @@
     {
       "type": 1,
       "name": "operations",
-      "content": { "json": "## Operations\nRequests, server errors, latency, throttling and availability, over the last seven days." }
+      "content": { "json": "## Operations\nRequests, server errors, latency, throttling and availability over the last seven days, and pause changes over thirty." }
     },
     {
       "type": 3,
@@ -60,6 +60,20 @@
         "queryType": 0,
         "resourceType": "microsoft.insights/components",
         "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "pause-changes",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Investigation pause changes (actor as a pseudonymous id, reason length only)",
+        "query": "traces\n| where tostring(customDimensions.EventId) == '3301'\n| project timestamp, Paused = tobool(customDimensions.Paused), Actor = tostring(customDimensions.Actor), ReasonLength = toint(customDimensions.ReasonLength)\n| order by timestamp desc",
+        "size": 0,
+        "timeContext": { "durationMs": 2592000000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
       }
     },
     {

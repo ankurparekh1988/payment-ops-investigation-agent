@@ -1,3 +1,5 @@
+using PaymentOps.Web.Usage;
+
 namespace PaymentOps.Web.Home;
 
 /// <summary>
@@ -38,10 +40,12 @@ public sealed record UsageToday(int Used, int Limit);
 
 /// <param name="TotalToday">Everyone's investigations today; null when usage couldn't be read.</param>
 /// <param name="PausedByConfiguration">The deployment's setting pauses investigations, whatever the switch says.</param>
+/// <param name="Pause">The Admin switch and its last change; null when it couldn't be read.</param>
 public sealed record OperationsView(
     int? TotalToday,
     int TotalLimit,
     int PerUserLimit,
     bool PausedByConfiguration,
+    PauseState? Pause,
     Uri? WorkbookUrl,
     Uri? AlertsUrl);

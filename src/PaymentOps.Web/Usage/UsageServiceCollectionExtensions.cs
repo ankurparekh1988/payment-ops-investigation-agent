@@ -27,9 +27,17 @@ internal static class UsageServiceCollectionExtensions
             throw new InvalidOperationException($"{UsageOptions.SectionName}:TableEndpoint is required outside Development.");
         }
 
-        services.AddSingleton<IUsageCounter>(sp => endpoint is null
-            ? new InMemoryUsageCounter()
-            : new TableUsageCounter(new TableClient(endpoint, TableName, sp.GetRequiredService<TokenCredential>())));
+        if (endpoint is null)
+        {
+            services.AddSingleton<IUsageCounter, InMemoryUsageCounter>();
+            services.AddSingleton<IPauseStore, InMemoryPauseStore>();
+            return services;
+        }
+
+        // The counts and the Admin's pause share one table.
+        services.AddSingleton(sp => new TableClient(endpoint, TableName, sp.GetRequiredService<TokenCredential>()));
+        services.AddSingleton<IUsageCounter>(sp => new TableUsageCounter(sp.GetRequiredService<TableClient>()));
+        services.AddSingleton<IPauseStore>(sp => new TablePauseStore(sp.GetRequiredService<TableClient>(), sp.GetService<TimeProvider>() ?? TimeProvider.System));
         return services;
     }
 

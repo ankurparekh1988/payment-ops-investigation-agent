@@ -103,6 +103,7 @@ public sealed class HomeInteractionTests : InteractiveTestContext
         Context.Services.Configure<UsageOptions>(o => (o.DailyLimitPerUser, o.DailyLimitTotal) = (25, 150));
         Context.Services.AddSingleton(Options.Create(new UiOptions()));
         Context.Services.AddScoped<InvestigationSession>();
+        Context.Services.AddSingleton<IPauseStore, InMemoryPauseStore>();
         Context.Services.AddScoped<HomeOverview>();
     }
 
