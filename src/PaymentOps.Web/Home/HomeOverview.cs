@@ -32,6 +32,12 @@ internal sealed class HomeOverview(
 
     public async Task<HomeView> LoadAsync(CancellationToken cancellationToken)
     {
+        // The page requires a role too; this keeps a signed-out circuit from reading anything on its way out.
+        if (!user.IsAuthenticated || !user.IsInRole(OpsRoles.Reader))
+        {
+            return new HomeView(demoClock.Now, [], [], null, ShowApprovals: false, Tickets: null, Operations: null, RestrictedKnowledge: false);
+        }
+
         var engineer = user.IsInRole(OpsRoles.Engineer);
         var admin = user.IsInRole(OpsRoles.Admin);
         var asOf = demoClock.Now;
@@ -131,5 +137,5 @@ internal sealed class HomeOverview(
 
     private async Task<IReadOnlyList<TicketItem>> RecentTicketsAsync(CancellationToken cancellationToken) =>
         [.. (await tickets.GetRecentAsync(TicketLimit, cancellationToken))
-            .Select(t => new TicketItem(t.Id, t.Content.Title, t.Content.ProcessorId, t.Content.MerchantIds, t.CreatedAt))];
+            .Select(t => new TicketItem(t.Id, t.Content.ProcessorId, t.Content.MerchantIds, t.CreatedAt))];
 }

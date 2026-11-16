@@ -76,6 +76,21 @@ public sealed class HomeOverviewTests
         Assert.Equal(new UsageToday(1, 25), view.Usage);
     }
 
+    // A circuit whose sign-in ended, or someone without a role, gets nothing read on their behalf.
+    [Fact]
+    public async Task Someone_without_a_role_gets_nothing_fetched()
+    {
+        var view = await Overview(TestUser.Anonymous).LoadAsync(CancellationToken.None);
+
+        Assert.Empty(view.Processors);
+        Assert.Empty(view.Attention);
+        Assert.Null(view.Usage);
+        Assert.Null(view.Tickets);
+        Assert.Null(view.Operations);
+        Assert.Empty(_ports.IncidentWindows);
+        Assert.Empty(_ports.AttentionWindows);
+    }
+
     [Fact]
     public async Task Recent_tickets_are_the_newest_five()
     {

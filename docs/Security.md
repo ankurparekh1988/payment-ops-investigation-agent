@@ -17,7 +17,7 @@ Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.
 - **Authorization code flow with PKCE.** The browser carries only a one-time code. The server redeems it, keeps the tokens on the server, and gives the browser an encrypted session cookie. The user is held in a scoped `IUserContext`, built from the token's claims, which every authorization decision reads.
 - **No stored sign-in credential in Azure.** The deployed app redeems codes as its managed identity, which the app registration trusts through a federated credential: no client secret, certificate or credential in the app settings. Local development uses a separate, short-lived secret kept in .NET user-secrets, which exists only while local addresses are configured.
 - **Demo users are opt-in.** They're ordinary tenant accounts, created only when `TF_VAR_create_demo_users=true` and assigned roles only on this application. Their passwords don't expire because they're shared for demonstrations, so remove them when not in use.
-- **Everything requires a role** unless it's explicitly public: `/health`, `/health/ready`, sign-out and the signed-out, access-denied, not-found and error pages. That includes the source pages behind citations. A signed-in user without a role sees the access-denied page.
+- **Everything requires a role** unless it's explicitly public, and the interactive pages state it themselves, because navigating inside an open page isn't an HTTP request; a page whose sign-in has ended is sent back through a full load: `/health`, `/health/ready`, sign-out and the signed-out, access-denied, not-found and error pages. That includes the source pages behind citations. A signed-in user without a role sees the access-denied page.
 - **Sign-ins last a fixed time.** Roles and groups come from the token, so a sign-in ends after `PaymentOps:Authorization:SessionLifetime` (8 hours by default) without sliding, and changes made in Entra apply at the next one. Open pages are signed out at the same moment.
 
 | App role | Can |
@@ -142,7 +142,7 @@ Creating an incident ticket is the only action that changes anything outside the
 |---|---|---|
 | Conversation and Reader drafts | The page's circuit, in memory | That user, until refresh, sign-out or restart |
 | Pending proposals | Process memory, keyed by a server-generated id | Only through the approval service, which checks the owner on every call |
-| Tickets | Process memory | The owner's card; there's no other read path |
+| Tickets | Process memory | The owner's card. Engineers and above also see the newest five on the home page as id, processor, merchants and creation time only: the title and summary are model-written and may draw on restricted runbooks |
 | `approval.decided` and investigation logs | Application Insights | Identities with workspace read. Ids, the investigation id, the decision, a reason code, a pseudonymous approver id and the prompt and model version; never the title, summary, note, question, model text or a detected value |
 
 | Threat | Control | Tested by |

@@ -33,7 +33,11 @@ public enum AttentionKind
 /// <param name="Question">A fixed question built from the record, handed to Investigate without running it.</param>
 public sealed record AttentionItem(AttentionKind Kind, string Subject, string ProcessorName, DateOnly BatchDate, string Question);
 
-public sealed record TicketItem(string Id, string Title, string ProcessorId, IReadOnlyList<string> MerchantIds, DateTimeOffset CreatedAt);
+/// <summary>
+/// A ticket as the team list shows it: facts from typed data only. The title and summary are model-written and may draw on
+/// restricted runbooks, so they stay on the owner's card.
+/// </summary>
+public sealed record TicketItem(string Id, string ProcessorId, IReadOnlyList<string> MerchantIds, DateTimeOffset CreatedAt);
 
 /// <summary>The person's investigations started today against their daily limit.</summary>
 public sealed record UsageToday(int Used, int Limit);

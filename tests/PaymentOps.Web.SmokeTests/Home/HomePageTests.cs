@@ -159,4 +159,21 @@ public sealed class HomeInteractionTests : InteractiveTestContext
         home.WaitForAssertion(() => Assert.Contains("Fabrikam Pay settlement file missing", home.Markup, StringComparison.Ordinal));
         Assert.Contains("Review", home.Markup, StringComparison.Ordinal);
     }
+
+    // A ticket's title is model-written and may draw on restricted runbooks; only its owner's card shows it.
+    [Fact]
+    public void Recent_tickets_show_ids_and_facts_never_titles()
+    {
+        _ports.Tickets.Add(new IncidentTicket(
+            "INC-0042",
+            new IncidentTicketContent("fabrikam-pay", ["M-1042"], new DateOnly(2026, 11, 9), new DateOnly(2026, 11, 9),
+                "Title drawn from a restricted runbook", "Summary", [], null, Guid.NewGuid(), "00000000-0000-0000-0000-000000000009"),
+            Results.Now));
+
+        var home = Render<PaymentOps.Web.Components.Pages.Home>();
+
+        home.WaitForAssertion(() => Assert.Contains("INC-0042", home.Markup, StringComparison.Ordinal));
+        Assert.DoesNotContain("Title drawn from a restricted runbook", home.Markup, StringComparison.Ordinal);
+        Assert.Contains("M-1042", home.Markup, StringComparison.Ordinal);
+    }
 }

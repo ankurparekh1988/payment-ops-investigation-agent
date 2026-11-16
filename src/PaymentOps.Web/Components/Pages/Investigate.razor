@@ -1,4 +1,6 @@
 @page "/investigate"
+@attribute [Authorize(Policy = AuthorizationPolicies.Investigate)]
+@using PaymentOps.Web.Security
 @implements IDisposable
 @using PaymentOps.Agent.Contracts
 @using PaymentOps.Web.Components.Investigation

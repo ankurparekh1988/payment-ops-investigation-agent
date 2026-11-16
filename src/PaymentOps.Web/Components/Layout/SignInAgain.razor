@@ -1,0 +1,8 @@
+@inject NavigationManager Navigation
+
+@* Reached only inside a circuit whose sign-in ended or has no role. A full load goes through the HTTP checks:
+   company sign-in, or the No access page. *@
+
+@code {
+    protected override void OnInitialized() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+}

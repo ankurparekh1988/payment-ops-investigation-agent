@@ -1,4 +1,6 @@
 @page "/"
+@attribute [Authorize(Policy = AuthorizationPolicies.Investigate)]
+@using PaymentOps.Web.Security
 @implements IDisposable
 @using PaymentOps.Agent.Contracts
 @using PaymentOps.Web.Components.Home
@@ -160,7 +162,7 @@ else
                             {
                                 <li class="list-row">
                                     <div>
-                                        <p class="row-title">@ticket.Id · @ticket.Title</p>
+                                        <p class="row-title">@ticket.Id</p>
                                         <p class="row-meta">@ticket.ProcessorId · @string.Join(", ", ticket.MerchantIds) · @ticket.CreatedAt.UtcDateTime.ToString("d MMM HH:mm", CultureInfo.InvariantCulture) UTC</p>
                                     </div>
                                 </li>
