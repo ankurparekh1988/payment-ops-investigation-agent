@@ -28,4 +28,12 @@ internal sealed class InMemoryUsageCounter : IUsageCounter
             return Task.FromResult(UsageReservation.Admitted);
         }
     }
+
+    public Task<(int User, int Total)> ReadAsync(string userId, DateOnly day, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult((_users.GetValueOrDefault((day, userId)), _totals.GetValueOrDefault(day)));
+        }
+    }
 }

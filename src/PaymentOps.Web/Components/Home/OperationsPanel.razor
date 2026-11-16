@@ -1,0 +1,55 @@
+@using PaymentOps.Web.Home
+
+@* Admins only: the service builds this section for no one else. *@
+<HomePanel Title="Operations" AddedBy="Admins">
+    <div class="ops-grid">
+        <div class="ops-item">
+            <p class="ops-label">Investigations</p>
+            @if (View.PausedByConfiguration)
+            {
+                <p class="ops-value"><span class="chip chip-warning">Paused by configuration</span></p>
+            }
+            else
+            {
+                <p class="ops-value"><span class="chip chip-success">Running</span></p>
+            }
+        </div>
+        <div class="ops-item">
+            <p class="ops-label">Used today, everyone</p>
+            @if (View.TotalToday is { } total)
+            {
+                <p class="ops-value">@total of @View.TotalLimit</p>
+                <MudProgressLinear Value="@Percent(total)" Color="Color.Primary" Class="ops-bar"
+                                   aria-label="@($"{total} of {View.TotalLimit} investigations used today")" />
+            }
+            else
+            {
+                <p class="ops-value">Not available</p>
+            }
+        </div>
+        <div class="ops-item">
+            <p class="ops-label">Per person, each day</p>
+            <p class="ops-value">@View.PerUserLimit</p>
+        </div>
+    </div>
+    @if (View.WorkbookUrl is not null || View.AlertsUrl is not null)
+    {
+        <p class="ops-links">
+            @if (View.WorkbookUrl is { } workbook)
+            {
+                <a href="@workbook" target="_blank" rel="noopener noreferrer">Operations workbook</a>
+            }
+            @if (View.AlertsUrl is { } alerts)
+            {
+                <a href="@alerts" target="_blank" rel="noopener noreferrer">Alert rules</a>
+            }
+        </p>
+    }
+</HomePanel>
+
+@code {
+    [Parameter, EditorRequired]
+    public OperationsView View { get; set; } = default!;
+
+    private double Percent(int total) => View.TotalLimit <= 0 ? 0 : Math.Min(100, 100.0 * total / View.TotalLimit);
+}

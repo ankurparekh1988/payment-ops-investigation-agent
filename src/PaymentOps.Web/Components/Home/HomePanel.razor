@@ -1,0 +1,27 @@
+@* One home section. A section a higher role adds says so, so the layering by role is visible. *@
+<MudPaper Class="panel home-panel" Elevation="0">
+    <section aria-labelledby="@_headingId">
+        <div class="panel-header">
+            <h2 id="@_headingId" class="panel-title">@Title</h2>
+            @if (AddedBy is { } role)
+            {
+                <span class="panel-layer">@role</span>
+            }
+        </div>
+        @ChildContent
+    </section>
+</MudPaper>
+
+@code {
+    private readonly string _headingId = $"panel-{Guid.NewGuid():N}";
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>The role that adds this section, such as "Engineers and above"; null for everyone's sections.</summary>
+    [Parameter]
+    public string? AddedBy { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

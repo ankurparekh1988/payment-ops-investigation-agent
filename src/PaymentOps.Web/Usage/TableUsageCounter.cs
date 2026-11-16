@@ -33,8 +33,8 @@ internal sealed class TableUsageCounter(TableClient table, int maxAttempts = Tab
         {
             try
             {
-                var userRead = ReadAsync(partition, userRow, cancellationToken);
-                var totalRead = ReadAsync(partition, TotalRow, cancellationToken);
+                var userRead = ReadRowAsync(partition, userRow, cancellationToken);
+                var totalRead = ReadRowAsync(partition, TotalRow, cancellationToken);
                 await Task.WhenAll(userRead, totalRead);
                 var (user, total) = (userRead.Result, totalRead.Result);
                 if (user.Count >= perUserLimit)
@@ -69,7 +69,24 @@ internal sealed class TableUsageCounter(TableClient table, int maxAttempts = Tab
         throw new UsageUnavailableException("Usage kept changing while it was being reserved.");
     }
 
-    private async Task<(int Count, ETag? ETag)> ReadAsync(string partition, string row, CancellationToken cancellationToken)
+    public async Task<(int User, int Total)> ReadAsync(string userId, DateOnly day, CancellationToken cancellationToken)
+    {
+        var partition = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        try
+        {
+            var userRead = ReadRowAsync(partition, UserRow(userId), cancellationToken);
+            var totalRead = ReadRowAsync(partition, TotalRow, cancellationToken);
+            await Task.WhenAll(userRead, totalRead);
+            return (userRead.Result.Count, totalRead.Result.Count);
+        }
+        // Read failures are outages, as they are for a reservation; only the caller's own cancellation stays one.
+        catch (Exception ex) when (ex is not UsageUnavailableException && !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
+        {
+            throw new UsageUnavailableException("Usage couldn't be read.", ex);
+        }
+    }
+
+    private async Task<(int Count, ETag? ETag)> ReadRowAsync(string partition, string row, CancellationToken cancellationToken)
     {
         var entity = await table.GetEntityIfExistsAsync<TableEntity>(partition, row, cancellationToken: cancellationToken);
         if (!entity.HasValue)

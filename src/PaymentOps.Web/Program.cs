@@ -26,6 +26,7 @@ using PaymentOps.Tools;
 using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
+using PaymentOps.Web.Home;
 using PaymentOps.Web.Investigating;
 using PaymentOps.Web.Security;
 using PaymentOps.Web.Usage;
@@ -79,6 +80,7 @@ builder.Services.AddOptions<UiOptions>().Bind(builder.Configuration.GetSection(U
 builder.Services.AddMudServices();
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddScoped<InvestigationSession>();
+builder.Services.AddScoped<HomeOverview>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
