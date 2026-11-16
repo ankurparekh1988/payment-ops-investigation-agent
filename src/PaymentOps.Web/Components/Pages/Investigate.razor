@@ -11,6 +11,11 @@
 
 <h1 class="page-title">Investigate</h1>
 
+@{
+    // Read once per render: each read checks expiry against the clock.
+    var current = Session.Current;
+}
+
 <div class="investigate-grid">
     <div class="investigate-side">
         <ConversationNotice Status="Session.Conversation" MaxQuestionLength="Limits.MaxQuestionLength" />
@@ -23,8 +28,8 @@
             <MudPaper Class="panel" Elevation="0">
                 <section aria-labelledby="timeline-heading">
                     <h2 id="timeline-heading" class="panel-title">Steps</h2>
-                    <Timeline Events="steps" Finished="true"
-                              Stopped="@(Session.Current is AssessmentResult.NotAssessed { Reason: NotAssessedReason.Cancelled })" />
+                    <Timeline Events="steps"
+                              Run="@(current is AssessmentResult.NotAssessed { Reason: NotAssessedReason.Cancelled } ? TimelineRun.Stopped : TimelineRun.Finished)" />
                 </section>
             </MudPaper>
         }
@@ -35,7 +40,7 @@
         {
             <RunningCard Question="@(Session.CurrentQuestion ?? string.Empty)" Steps="Session.Steps" />
         }
-        else if (Session.Current is not null || Session.Notice is not null)
+        else if (current is not null || Session.Notice is not null)
         {
             <MudPaper Class="panel" Elevation="0">
                 <section aria-labelledby="result-heading">
@@ -43,18 +48,22 @@
                     @if (Session.Notice is { } notice)
                     {
                         @* Refused before it ran: the result below, and its ticket card, are still as they were. *@
-                        <NotAssessedPanel Reason="notice" MaxQuestionLength="Limits.MaxQuestionLength"
-                                          EditQuestion="EditQuestionAsync" TryAgain="TryAgainAsync" StartNew="Session.StartNew" SignIn="SignIn" />
+                        <NotAssessedPanel Reason="notice.Reason" MaxQuestionLength="Limits.MaxQuestionLength"
+                                          EditQuestion="() => EditAsync(notice.Question)" TryAgain="() => Session.StartAsync(notice.Question)"
+                                          StartNew="Session.StartNew" SignIn="SignIn" />
                     }
-                    @if (Session.Current is AssessmentResult.NotAssessed notAssessed)
+                    @if (current is not null)
                     {
                         <p class="result-question">@Session.CurrentQuestion</p>
+                    }
+                    @if (current is AssessmentResult.NotAssessed notAssessed)
+                    {
                         <NotAssessedPanel Reason="notAssessed.Reason" MaxQuestionLength="Limits.MaxQuestionLength"
-                                          EditQuestion="EditQuestionAsync" TryAgain="TryAgainAsync" StartNew="Session.StartNew" SignIn="SignIn" />
+                                          EditQuestion="() => EditAsync(Session.CurrentQuestion)" TryAgain="() => Session.StartAsync(Session.CurrentQuestion ?? string.Empty)"
+                                          StartNew="Session.StartNew" SignIn="SignIn" />
                     }
-                    else if (Session.Current is { } result)
+                    else if (current is { } result)
                     {
-                        <p class="result-question">@Session.CurrentQuestion</p>
                         <AssessmentView Result="result" Deciding="Session.Deciding" Approve="Session.ApproveAsync" Reject="RejectAsync" />
                         @if (Session.DecisionFailed)
                         {
@@ -85,17 +94,14 @@
     private Task InvestigateAsync() => Session.StartAsync(Session.Draft);
 
     // The question goes back into the box to be changed; nothing runs until the person asks again.
-    private async Task EditQuestionAsync()
+    private async Task EditAsync(string? question)
     {
-        Session.Draft = Session.Notice is null ? Session.CurrentQuestion ?? string.Empty : Session.Draft;
+        Session.Draft = question ?? string.Empty;
         if (_composer is not null)
         {
             await _composer.FocusAsync();
         }
     }
-
-    // A refusal before the run left the question in the box; any other result keeps it as the current question.
-    private Task TryAgainAsync() => Session.StartAsync(Session.Notice is null ? Session.CurrentQuestion ?? string.Empty : Session.Draft);
 
     // A full load goes through sign-in again; the circuit's own sign-in has ended.
     private void SignIn() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true);

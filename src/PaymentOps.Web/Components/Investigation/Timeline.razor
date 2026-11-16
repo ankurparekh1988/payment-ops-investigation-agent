@@ -9,7 +9,7 @@
 <ol class="steps">
     @foreach (var row in rows)
     {
-        <li class="step step-@row.State.ToString().ToLowerInvariant()">
+        <li class="step @StateClass(row.State)">
             <span class="step-marker" aria-hidden="true"></span>
             <span class="visually-hidden">@StateWord(row.State): </span>
             <span class="step-label">@row.Label</span>
@@ -26,13 +26,9 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<InvestigationProgress> Events { get; set; } = [];
 
-    /// <summary>The run is over, so no step is still in progress.</summary>
+    /// <summary>Whether the run is still going, finished, or was cancelled with a step unfinished.</summary>
     [Parameter]
-    public bool Finished { get; set; }
-
-    /// <summary>The run was cancelled, so a step still in progress didn't finish.</summary>
-    [Parameter]
-    public bool Stopped { get; set; }
+    public TimelineRun Run { get; set; }
 
     private enum StepState
     {
@@ -86,16 +82,25 @@
         }
 
         // Only the last row can still be in progress, and none once the run is over; a cancelled run's last step stopped.
-        for (var i = 0; i < rows.Count - (Finished ? 0 : 1); i++)
+        for (var i = 0; i < rows.Count - (Run == TimelineRun.Running ? 1 : 0); i++)
         {
             if (rows[i].State == StepState.Running)
             {
-                rows[i] = rows[i] with { State = Stopped && i == rows.Count - 1 ? StepState.Stopped : StepState.Done };
+                rows[i] = rows[i] with { State = Run == TimelineRun.Stopped && i == rows.Count - 1 ? StepState.Stopped : StepState.Done };
             }
         }
 
         return rows;
     }
+
+    private static string StateClass(StepState state) => state switch
+    {
+        StepState.Running => "step-running",
+        StepState.Done => "step-done",
+        StepState.Failed => "step-failed",
+        StepState.Stopped => "step-stopped",
+        _ => "step-note",
+    };
 
     private static string StateWord(StepState state) => state switch
     {

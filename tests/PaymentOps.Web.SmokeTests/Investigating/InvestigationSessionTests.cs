@@ -238,7 +238,7 @@ public sealed class InvestigationSessionTests
         await session.StartAsync("Second question");
 
         Assert.Single(session.Questions);
-        Assert.Equal(NotAssessedReason.Paused, session.Notice);
+        Assert.Equal(new SessionNotice(NotAssessedReason.Paused, "Second question"), session.Notice);
         Assert.Equal("Second question", session.Draft);
         Assert.Equal(ProposalStatus.Pending, Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!.Status);
         await session.ApproveAsync();

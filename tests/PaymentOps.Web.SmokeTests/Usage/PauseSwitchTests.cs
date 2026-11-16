@@ -19,7 +19,7 @@ public sealed class PauseSwitchTests
 
     private readonly FakeEntityTable _table = new();
     private readonly FakeTimeProvider _time = new(Now);
-    private readonly RecordingLogger _log = new();
+    private readonly RecordingLogger<PauseSwitch> _log = new();
 
     private static TestUser Admin(string id = "00000000-0000-0000-0000-00000000000a") =>
         TestUser.Engineer with { Roles = OpsRoles.Effective([OpsRoles.Admin]), UserId = id };
@@ -231,15 +231,4 @@ public sealed class PauseSwitchTests
             inner.WriteAsync(next, expectedVersion, cancellationToken);
     }
 
-    internal sealed class RecordingLogger : ILogger<PauseSwitch>
-    {
-        public List<(EventId EventId, string Text)> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Entries.Add((eventId, formatter(state, exception) + " " + string.Join(' ', (state as IEnumerable<KeyValuePair<string, object?>>)?.Select(p => p.Value) ?? [])));
-    }
 }

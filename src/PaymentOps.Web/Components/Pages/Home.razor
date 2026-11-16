@@ -151,7 +151,7 @@ else
                 <HomePanel Title="Recent tickets" AddedBy="Engineers and above">
                     @if (tickets.Count == 0)
                     {
-                        <p class="empty-state">No tickets yet. Demo tickets are kept in memory and reset when the app restarts.</p>
+                        <p class="empty-state">No tickets yet.</p>
                     }
                     else
                     {
@@ -166,8 +166,8 @@ else
                                 </li>
                             }
                         </ul>
-                        <p class="row-meta">Demo tickets are kept in memory and reset when the app restarts.</p>
                     }
+                    <p class="row-meta">Demo tickets are kept in memory and reset when the app restarts.</p>
                 </HomePanel>
             }
         </div>
@@ -182,9 +182,12 @@ else
 
     private string FirstName => CurrentUser.DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? CurrentUser.DisplayName;
 
-    // A proposal can be approved only from the investigation that made it, which is this session's latest.
+    // A proposal can be approved only from the investigation that made it, which is this session's latest; the session
+    // already shows an expired one as expired.
     private TicketProposal? Waiting =>
-        Session.Current is AssessmentResult.Assessed { Proposal: { Status: ProposalStatus.Pending } proposal } && Session.IsActionable(proposal) ? proposal : null;
+        Session.Current is AssessmentResult.Assessed { Proposal: { Status: ProposalStatus.Pending } proposal } ? proposal : null;
+
+    private (bool Busy, int Completed, bool Deciding, int Questions) _shown;
 
     protected override async Task OnInitializedAsync()
     {
@@ -208,7 +211,16 @@ else
         ? $"{incident.StartedAt.UtcDateTime.ToString("d MMM HH:mm", CultureInfo.InvariantCulture)} to {resolved.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture)} UTC"
         : $"since {incident.StartedAt.UtcDateTime.ToString("d MMM HH:mm", CultureInfo.InvariantCulture)} UTC";
 
-    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+    // Home shows no steps, so a progress event alone doesn't re-render it.
+    private void OnSessionChanged()
+    {
+        var now = (Session.Busy, Session.Completed, Session.Deciding, Session.Conversation.Questions);
+        if (now != _shown)
+        {
+            _shown = now;
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
 
     public void Dispose() => Session.Changed -= OnSessionChanged;
 }

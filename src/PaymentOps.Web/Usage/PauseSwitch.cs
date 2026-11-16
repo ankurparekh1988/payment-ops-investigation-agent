@@ -11,8 +11,6 @@ internal sealed partial class PauseSwitch(IPauseStore store, IUserContext user, 
 {
     public const int MaxReasonLength = 200;
 
-    public Task<PauseState> GetAsync(CancellationToken cancellationToken) => store.ReadAsync(cancellationToken);
-
     public async Task<PauseResult> SetAsync(bool paused, string? reason, CancellationToken cancellationToken)
     {
         if (!user.IsAuthenticated || !user.IsInRole(OpsRoles.Admin))

@@ -5,6 +5,9 @@ namespace PaymentOps.Web.Investigating;
 /// <summary>A question asked in this tab and what came back.</summary>
 public sealed record SessionTurn(string Question, AssessmentResult Result);
 
+/// <summary>A question refused before its run started, and why.</summary>
+public sealed record SessionNotice(NotAssessedReason Reason, string Question);
+
 /// <summary>
 /// What the Investigate page shows and the run behind it, scoped to the circuit so both survive leaving the page.
 /// It decides nothing the server owns: the conversation stays in <see cref="IInvestigationService"/>, proposals in
@@ -35,7 +38,8 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
         {
             lock (_lock)
             {
-                return [.. _turns.Select(turn => turn with { Result = AsShown(turn.Result) })];
+                // Only the latest turn can hold a pending proposal: a new run supersedes the one before.
+                return _turns.Count == 0 ? [] : [.. _turns.SkipLast(1), _turns[^1] with { Result = AsShown(_turns[^1].Result) }];
             }
         }
     }
@@ -72,7 +76,7 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
     /// A question refused before its run started (paused, over a limit, busy, cancelled while admitted): the server kept
     /// no turn and superseded nothing, so the previous result and its card stay as they were, under this notice.
     /// </summary>
-    public NotAssessedReason? Notice { get; private set; }
+    public SessionNotice? Notice { get; private set; }
 
     public bool Busy { get; private set; }
 
@@ -146,12 +150,11 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
         }
     }
 
-    // Only a run that reached the investigation service has an id; the service superseded the last proposal then.
     private void Record(string question, string? previousQuestion, AssessmentResult result)
     {
-        if (result is AssessmentResult.NotAssessed refused && refused.InvestigationId == Guid.Empty)
+        if (result is AssessmentResult.NotAssessed refused && !ReachedTheService(refused))
         {
-            Notice = refused.Reason;
+            Notice = new SessionNotice(refused.Reason, question);
             Draft = question;
             CurrentQuestion = previousQuestion;
             return;
@@ -160,6 +163,10 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
         SupersedePending();
         _turns.Add(new SessionTurn(question, result));
     }
+
+    // Every run the investigation service starts carries its id, and the service supersedes the last proposal then.
+    // A refusal before that (the usage guard, the one-at-a-time gate) has none, so nothing was superseded or kept.
+    private static bool ReachedTheService(AssessmentResult result) => result.InvestigationId != Guid.Empty;
 
     public void Cancel()
     {
@@ -221,6 +228,8 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
     private async Task DecideAsync(Func<Guid, Task<ApprovalResult>> decide, RejectionReason? reason)
     {
         SessionTurn turn;
+        AssessmentResult.Assessed assessed;
+        TicketProposal proposal;
         lock (_lock)
         {
             if (Deciding || Busy || _turns.Count == 0)
@@ -231,10 +240,12 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
             Notice = null;
 
             turn = _turns[^1];
-            if (turn.Result is not AssessmentResult.Assessed { Proposal: { ProposalId: not null } proposal } || !IsActionable(proposal))
+            if (turn.Result is not AssessmentResult.Assessed { Proposal: { ProposalId: not null } pending } shown || !IsActionable(pending))
             {
                 return;
             }
+
+            (assessed, proposal) = (shown, pending);
 
             Deciding = true;
             DecisionFailed = false;
@@ -243,8 +254,6 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
         Changed?.Invoke();
         try
         {
-            var assessed = (AssessmentResult.Assessed)turn.Result;
-            var proposal = assessed.Proposal!;
             var outcome = await decide(proposal.ProposalId!.Value);
             lock (_lock)
             {

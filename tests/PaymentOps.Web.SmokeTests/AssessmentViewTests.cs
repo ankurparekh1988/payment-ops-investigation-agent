@@ -161,7 +161,7 @@ public sealed class AssessmentViewTests
         ];
 
         var running = await ComponentHtml.RenderAsync<Timeline>(new() { [nameof(Timeline.Events)] = events });
-        var finished = await ComponentHtml.RenderAsync<Timeline>(new() { [nameof(Timeline.Events)] = events, [nameof(Timeline.Finished)] = true });
+        var finished = await ComponentHtml.RenderAsync<Timeline>(new() { [nameof(Timeline.Events)] = events, [nameof(Timeline.Run)] = TimelineRun.Finished });
 
         Assert.Contains("step-running", running, StringComparison.Ordinal);
         Assert.DoesNotContain("step-running", finished, StringComparison.Ordinal);
@@ -176,8 +176,7 @@ public sealed class AssessmentViewTests
         var html = await ComponentHtml.RenderAsync<Timeline>(new()
         {
             [nameof(Timeline.Events)] = events,
-            [nameof(Timeline.Finished)] = true,
-            [nameof(Timeline.Stopped)] = true,
+            [nameof(Timeline.Run)] = TimelineRun.Stopped,
         });
 
         Assert.DoesNotContain("step-done", html, StringComparison.Ordinal);

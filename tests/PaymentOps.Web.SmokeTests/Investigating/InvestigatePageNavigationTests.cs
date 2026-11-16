@@ -130,4 +130,24 @@ public sealed class InvestigatePageNavigationTests : InteractiveTestContext
         Assert.DoesNotContain("A summary to clear.", page.Markup, StringComparison.Ordinal);
         Assert.Equal(1, _investigation.StartNewCalls);
     }
+
+    // A notice and an older refusal both offer Try again; each retries the question it's about.
+    [Fact]
+    public void Each_panel_retries_its_own_question()
+    {
+        _investigation.Answer = q => q == "First question"
+            ? new AssessmentResult.NotAssessed(NotAssessedReason.ModelUnavailable) { InvestigationId = Guid.NewGuid() }
+            : new AssessmentResult.NotAssessed(NotAssessedReason.Busy);
+        var page = Render<Investigate>();
+        Ask(page, "First question");
+        page.WaitForAssertion(() => Assert.NotNull(Session.Current));
+        Ask(page, "Second question");
+        page.WaitForAssertion(() => Assert.NotNull(Session.Notice));
+
+        var retries = page.FindAll("button").Where(b => b.TextContent.Trim() == "Try again").ToList();
+        Assert.Equal(2, retries.Count);
+        retries[1].Click();
+
+        Assert.Equal("First question", _investigation.Asked[^1]);
+    }
 }

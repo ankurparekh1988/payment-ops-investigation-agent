@@ -64,40 +64,18 @@ public sealed class UsageGuardTests : IDisposable
         public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class RecordingLogger : ILogger<UsageGuard>
-    {
-        public List<string> Messages { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Messages.Add(formatter(state, exception) + " " + string.Join(' ', (state as IEnumerable<KeyValuePair<string, object?>>)?.Select(p => p.Value) ?? []));
-    }
-
-    private sealed class Monitor(UsageOptions value) : IOptionsMonitor<UsageOptions>
-    {
-        public UsageOptions CurrentValue => value;
-
-        public UsageOptions Get(string? name) => value;
-
-        public IDisposable? OnChange(Action<UsageOptions, string?> listener) => null;
-    }
-
-    private static (UsageGuard Guard, CountingService Inner, FakeTableClient Table, RecordingLogger Logger) Guard(
+    private static (UsageGuard Guard, CountingService Inner, FakeTableClient Table, RecordingLogger<UsageGuard> Logger) Guard(
         UsageOptions? options = null, FakeTableClient? table = null, TimeProvider? clock = null, Func<AssessmentResult>? answer = null, IPauseStore? pause = null)
     {
         var inner = new CountingService(answer);
         var fake = table ?? new FakeTableClient();
-        var logger = new RecordingLogger();
+        var logger = new RecordingLogger<UsageGuard>();
         var guard = new UsageGuard(
             inner,
             new TableUsageCounter(fake, TableUsageCounter.DefaultMaxAttempts, _ => TimeSpan.Zero),
             pause ?? new InMemoryPauseStore(),
             TestUser.Reader with { UserId = UserSentinel },
-            new Monitor(options ?? new UsageOptions { DailyLimitPerUser = 2, DailyLimitTotal = 10 }),
+            new StaticOptionsMonitor<UsageOptions>(options ?? new UsageOptions { DailyLimitPerUser = 2, DailyLimitTotal = 10 }),
             clock ?? new FakeTimeProvider(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero)),
             logger);
         return (guard, inner, fake, logger);

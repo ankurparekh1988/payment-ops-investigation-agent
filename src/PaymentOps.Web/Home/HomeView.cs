@@ -6,6 +6,7 @@ namespace PaymentOps.Web.Home;
 /// What the home page shows, built for one person by role. A section their role doesn't get is null, not empty, so
 /// the page can't render what the overview never fetched.
 /// </summary>
+/// <param name="Usage">The person's usage today; null when it couldn't be read.</param>
 /// <param name="AsOf">The demo data's "now", which the processor and settlement sections are read against.</param>
 /// <param name="ShowApprovals">Engineers and above: this session's tickets waiting for approval.</param>
 /// <param name="Tickets">Engineers and above: the newest tickets.</param>
@@ -15,7 +16,6 @@ public sealed record HomeView(
     IReadOnlyList<ProcessorIncidentItem> Processors,
     IReadOnlyList<AttentionItem> Attention,
     UsageToday? Usage,
-    bool UsageUnavailable,
     bool ShowApprovals,
     IReadOnlyList<TicketItem>? Tickets,
     OperationsView? Operations,

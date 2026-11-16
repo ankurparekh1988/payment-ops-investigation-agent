@@ -33,9 +33,6 @@ public abstract record PauseResult
 /// <summary>Pauses and resumes investigations for everyone. Authorization is checked here, on every call.</summary>
 public interface IPauseSwitch
 {
-    /// <exception cref="PauseUnavailableException">The pause couldn't be read.</exception>
-    Task<PauseState> GetAsync(CancellationToken cancellationToken);
-
     Task<PauseResult> SetAsync(bool paused, string? reason, CancellationToken cancellationToken);
 }
 

@@ -45,7 +45,7 @@ internal sealed class HomeOverview(
         }
 
         var attention = await AttentionAsync(demoClock.Today, NameAsync, cancellationToken);
-        var (usageToday, totalToday, usageUnavailable) = await UsageAsync(cancellationToken);
+        var (usageToday, totalToday) = await UsageAsync(cancellationToken);
         var limits = usage.CurrentValue;
 
         return new HomeView(
@@ -53,7 +53,6 @@ internal sealed class HomeOverview(
             processorItems,
             attention,
             usageToday,
-            usageUnavailable,
             ShowApprovals: engineer,
             Tickets: engineer ? await RecentTicketsAsync(cancellationToken) : null,
             Operations: admin
@@ -100,21 +99,21 @@ internal sealed class HomeOverview(
     }
 
     // Reads, never reserves. Usage that can't be read is reported as such rather than shown as zero.
-    private async Task<(UsageToday? Usage, int? Total, bool Unavailable)> UsageAsync(CancellationToken cancellationToken)
+    private async Task<(UsageToday? Usage, int? Total)> UsageAsync(CancellationToken cancellationToken)
     {
         if (counter is null)
         {
-            return (null, null, true);
+            return (null, null);
         }
 
         try
         {
             var (mine, total) = await counter.ReadAsync(user.UserId, DateOnly.FromDateTime(wallClock.GetUtcNow().UtcDateTime), cancellationToken);
-            return (new UsageToday(mine, usage.CurrentValue.DailyLimitPerUser), total, false);
+            return (new UsageToday(mine, usage.CurrentValue.DailyLimitPerUser), total);
         }
         catch (UsageUnavailableException)
         {
-            return (null, null, true);
+            return (null, null);
         }
     }
 

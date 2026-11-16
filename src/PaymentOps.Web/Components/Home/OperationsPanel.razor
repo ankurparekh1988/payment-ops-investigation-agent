@@ -117,7 +117,8 @@
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
         var answer = await dialog.Result;
 
-        // The dialog returns focus to whatever had it before; put it back on the button that opened it.
+        // MudBlazor returns focus to whatever last had it, which isn't always the button (a mouse click needn't focus
+        // it), so focus goes back to the button that opened the dialog.
         if (_trigger is not null)
         {
             await _trigger.FocusAsync();
@@ -129,6 +130,7 @@
         }
 
         _changing = true;
+        StateHasChanged();
         try
         {
             var result = await Switch.SetAsync(pausing, answer.Data as string, CancellationToken.None);
@@ -146,5 +148,5 @@
         }
     }
 
-    private double Percent(int total) => View.TotalLimit <= 0 ? 0 : Math.Min(100, 100.0 * total / View.TotalLimit);
+    private double Percent(int total) => Math.Min(100, 100.0 * total / View.TotalLimit);
 }

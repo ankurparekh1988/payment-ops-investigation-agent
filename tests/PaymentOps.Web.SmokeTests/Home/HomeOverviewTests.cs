@@ -22,7 +22,7 @@ public sealed class HomeOverviewTests
 
     private HomeOverview Overview(IUserContext user, UsageOptions? usage = null, UiOptions? ui = null, bool withCounter = true) => new(
         user, _ports, _ports, _ports, _ports, new FakeTimeProvider(WallNow),
-        new Monitor(usage ?? new UsageOptions { DailyLimitPerUser = 25, DailyLimitTotal = 150 }),
+        new StaticOptionsMonitor<UsageOptions>(usage ?? new UsageOptions { DailyLimitPerUser = 25, DailyLimitTotal = 150 }),
         Options.Create(ui ?? new UiOptions()),
         _pause,
         withCounter ? _counter : null);
@@ -148,7 +148,6 @@ public sealed class HomeOverviewTests
         var view = await Overview(Admin, withCounter: false).LoadAsync(CancellationToken.None);
 
         Assert.Null(view.Usage);
-        Assert.True(view.UsageUnavailable);
         Assert.Null(view.Operations!.TotalToday);
     }
 
@@ -173,12 +172,4 @@ public sealed class HomeOverviewTests
             [], null, Guid.NewGuid(), "00000000-0000-0000-0000-000000000002"),
         createdAt);
 
-    private sealed class Monitor(UsageOptions value) : IOptionsMonitor<UsageOptions>
-    {
-        public UsageOptions CurrentValue => value;
-
-        public UsageOptions Get(string? name) => value;
-
-        public IDisposable? OnChange(Action<UsageOptions, string?> listener) => null;
-    }
 }

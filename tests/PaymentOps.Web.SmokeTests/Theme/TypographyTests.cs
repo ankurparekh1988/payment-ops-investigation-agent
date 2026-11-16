@@ -1,5 +1,8 @@
 using System.Text.RegularExpressions;
 
+using MudBlazor;
+using MudBlazor.Utilities;
+
 using PaymentOps.Web.Theme;
 
 namespace PaymentOps.Web.SmokeTests.Theme;
@@ -38,19 +41,37 @@ public sealed partial class TypographyTests(PaymentOpsWebApplicationFactory fact
         Assert.Empty(stray);
     }
 
-    // Static pages never start MudBlazor, so the stylesheet itself switches the palette with the page's mode.
+    // Static pages never start MudBlazor, so the stylesheet switches the palette with the page's mode: every variable it
+    // sets must be the theme's own dark value, and the colours text and status chips use must all be there.
     [Fact]
-    public async Task The_stylesheet_paints_dark_surfaces_without_the_app_running()
+    public async Task The_stylesheet_dark_palette_is_the_themes()
     {
         using var client = factory.CreateClient();
-
         var css = await client.GetStringAsync(new Uri("/app.css", UriKind.Relative));
+        var start = css.IndexOf("html[data-theme=\"dark\"] {", StringComparison.Ordinal);
+        var block = css[start..css.IndexOf('}', start)];
+        var set = DarkVariable().Matches(block).ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value, StringComparer.Ordinal);
+        var dark = ContosoTheme.Theme.PaletteDark;
+        var expected = new Dictionary<string, MudColor>(StringComparer.Ordinal)
+        {
+            ["background"] = dark.Background,
+            ["surface"] = dark.Surface,
+            ["text-primary"] = dark.TextPrimary,
+            ["text-secondary"] = dark.TextSecondary,
+            ["lines-default"] = dark.LinesDefault,
+            ["primary"] = dark.Primary,
+            ["primary-text"] = dark.PrimaryContrastText,
+            ["success"] = dark.Success,
+            ["warning"] = dark.Warning,
+            ["error"] = dark.Error,
+        };
 
-        var dark = css[css.IndexOf("html[data-theme=\"dark\"] {", StringComparison.Ordinal)..];
-        dark = dark[..dark.IndexOf('}', StringComparison.Ordinal)];
-        Assert.Contains("--mud-palette-surface: #111A2E", dark, StringComparison.Ordinal);
-        Assert.Contains("--mud-palette-text-primary: #E2E8F0", dark, StringComparison.Ordinal);
+        Assert.Equal(expected.Keys.Order(StringComparer.Ordinal), set.Keys.Order(StringComparer.Ordinal));
+        Assert.All(expected, pair => Assert.Equal(pair.Value.ToString(MudColorOutputFormats.Hex), set[pair.Key], ignoreCase: true));
     }
+
+    [GeneratedRegex("--mud-palette-([a-z-]+):\\s*(#[0-9A-Fa-f]{6})")]
+    private static partial Regex DarkVariable();
 
     [Fact]
     public void The_theme_sets_inter_and_sentence_case_buttons()

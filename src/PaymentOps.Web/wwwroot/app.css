@@ -12,6 +12,9 @@ html[data-theme="dark"] {
     --mud-palette-lines-default: #1E293B;
     --mud-palette-primary: #60A5FA;
     --mud-palette-primary-text: #0B1220;
+    --mud-palette-success: #4ADE80;
+    --mud-palette-warning: #FBBF24;
+    --mud-palette-error: #F87171;
 }
 
 @font-face {
@@ -220,7 +223,6 @@ h1:focus {
 .chip-success { --po-chip-tone: var(--mud-palette-success); border-color: var(--mud-palette-success); }
 .chip-warning { --po-chip-tone: var(--mud-palette-warning); border-color: var(--mud-palette-warning); }
 .chip-info { --po-chip-tone: var(--mud-palette-primary); border-color: var(--mud-palette-primary); }
-.chip-error { --po-chip-tone: var(--mud-palette-error); border-color: var(--mud-palette-error); }
 
 .evidence-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
 .evidence-chips .chip::before { display: none; }
@@ -321,7 +323,7 @@ h1:focus {
 .starter-question:hover { border-color: var(--mud-palette-primary); }
 
 .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-.home-column { display: grid; gap: 0; }
+.home-column { display: grid; }
 
 @media (max-width: 999px) {
     .home-grid { grid-template-columns: 1fr; }

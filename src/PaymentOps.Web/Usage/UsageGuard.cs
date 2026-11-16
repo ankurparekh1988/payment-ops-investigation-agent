@@ -30,29 +30,21 @@ internal sealed partial class UsageGuard(
             return Refuse(NotAssessedReason.Paused);
         }
 
-        // An Admin's pause, read from the shared row; a row that can't be read refuses, as the counter does.
+        UsageReservation reservation;
         try
         {
+            // An Admin's pause, read from the shared row; a row that can't be read refuses, as the counter does.
             if ((await pause.ReadAsync(cancellationToken)).Paused)
             {
                 return Refuse(NotAssessedReason.Paused);
             }
+
+            reservation = await counter.TryReserveAsync(user.UserId, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime), limits.DailyLimitPerUser, limits.DailyLimitTotal, cancellationToken);
         }
         catch (PauseUnavailableException ex)
         {
             UsageUnavailable(logger, ex.InnerException?.GetType().Name ?? nameof(PauseUnavailableException));
             return Refuse(NotAssessedReason.UsageUnavailable);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // As below: the person's Cancel is a result, and nothing was reserved.
-            return new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled);
-        }
-
-        UsageReservation reservation;
-        try
-        {
-            reservation = await counter.TryReserveAsync(user.UserId, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime), limits.DailyLimitPerUser, limits.DailyLimitTotal, cancellationToken);
         }
         catch (UsageUnavailableException ex)
         {
