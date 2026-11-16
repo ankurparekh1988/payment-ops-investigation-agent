@@ -9,7 +9,8 @@
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="0" Class="app-bar">
+    @* Not fixed, so on a phone the bar can wrap to a second row instead of hiding Sign out. *@
+    <MudAppBar Elevation="0" Fixed="false" Class="app-bar">
         <a href="" class="brand" aria-label="Contoso Payments, Payment Operations home">
             <svg width="28" height="28" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
                 <rect width="36" height="36" rx="9" fill="#1D4ED8"></rect>
@@ -75,12 +76,15 @@
             return;
         }
 
-        await _themeProvider.WatchSystemDarkModeAsync(OnSystemChangedAsync);
-        var systemDark = await _themeProvider.GetSystemDarkModeAsync();
-        if (systemDark != _dark)
+        // The head script already read the OS preference onto the page, before MudBlazor's own check is ready.
+        var pageDark = await JS.InvokeAsync<string>("poTheme.mode") == ThemeCookie.Dark;
+        if (pageDark != _dark)
         {
-            await OnSystemChangedAsync(systemDark);
+            _dark = pageDark;
+            StateHasChanged();
         }
+
+        await _themeProvider.WatchSystemDarkModeAsync(OnSystemChangedAsync);
     }
 
     private async Task OnSystemChangedAsync(bool dark)

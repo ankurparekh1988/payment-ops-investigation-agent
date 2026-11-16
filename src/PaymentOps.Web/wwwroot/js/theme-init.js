@@ -24,6 +24,10 @@
   document.documentElement.setAttribute('data-theme', chosen || system);
 
   window.poTheme = {
+    // The mode painted on the page, for the app to match once it starts.
+    mode: function () {
+      return document.documentElement.getAttribute('data-theme');
+    },
     // The person's explicit choice, from the toggle.
     set: function (mode) {
       write('po-theme', mode);

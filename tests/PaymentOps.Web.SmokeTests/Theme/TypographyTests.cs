@@ -38,6 +38,20 @@ public sealed partial class TypographyTests(PaymentOpsWebApplicationFactory fact
         Assert.Empty(stray);
     }
 
+    // Static pages never start MudBlazor, so the stylesheet itself switches the palette with the page's mode.
+    [Fact]
+    public async Task The_stylesheet_paints_dark_surfaces_without_the_app_running()
+    {
+        using var client = factory.CreateClient();
+
+        var css = await client.GetStringAsync(new Uri("/app.css", UriKind.Relative));
+
+        var dark = css[css.IndexOf("html[data-theme=\"dark\"] {", StringComparison.Ordinal)..];
+        dark = dark[..dark.IndexOf('}', StringComparison.Ordinal)];
+        Assert.Contains("--mud-palette-surface: #111A2E", dark, StringComparison.Ordinal);
+        Assert.Contains("--mud-palette-text-primary: #E2E8F0", dark, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void The_theme_sets_inter_and_sentence_case_buttons()
     {

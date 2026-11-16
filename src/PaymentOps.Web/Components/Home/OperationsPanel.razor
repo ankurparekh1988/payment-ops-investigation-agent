@@ -29,7 +29,7 @@
         </div>
         <div class="ops-item">
             <p class="ops-label">Used today, everyone</p>
-            @if (View.TotalToday is { } total)
+            @if (View.TotalToday is { } total && View.TotalLimit > 0)
             {
                 <p class="ops-value">@total of @View.TotalLimit</p>
                 <MudProgressLinear Value="@Percent(total)" Color="Color.Primary" Class="ops-bar"
@@ -42,7 +42,7 @@
         </div>
         <div class="ops-item">
             <p class="ops-label">Per person, each day</p>
-            <p class="ops-value">@View.PerUserLimit</p>
+            <p class="ops-value ops-per-person">@(View.PerUserLimit > 0 ? View.PerUserLimit.ToString(CultureInfo.InvariantCulture) : "Not set")</p>
         </div>
     </div>
 

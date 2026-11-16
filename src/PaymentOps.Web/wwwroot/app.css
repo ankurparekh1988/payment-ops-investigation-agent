@@ -2,6 +2,18 @@
 html[data-theme="light"], html[data-theme="light"] body { background: #F3F5F8; color: #0F172A; }
 html[data-theme="dark"], html[data-theme="dark"] body { background: #0B1220; color: #E2E8F0; }
 
+/* The dark palette for pages MudBlazor never starts on (the static pages), and for the first paint of the others:
+   the page's mode attribute always matches the mode the app renders. Values are ContosoTheme's dark palette. */
+html[data-theme="dark"] {
+    --mud-palette-background: #0B1220;
+    --mud-palette-surface: #111A2E;
+    --mud-palette-text-primary: #E2E8F0;
+    --mud-palette-text-secondary: #94A3B8;
+    --mud-palette-lines-default: #1E293B;
+    --mud-palette-primary: #60A5FA;
+    --mud-palette-primary-text: #0B1220;
+}
+
 @font-face {
     font-family: Inter;
     font-style: normal;
@@ -26,7 +38,7 @@ body {
     font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
     font-size: var(--po-text-body);
     line-height: 1.5;
-    font-feature-settings: "cv11", "tnum";
+    font-feature-settings: "cv11";
 }
 
 h1:focus {
@@ -42,7 +54,10 @@ h1:focus {
 .app-bar .mud-toolbar {
     gap: 16px;
     padding-inline: 24px;
+    flex-wrap: wrap;
 }
+
+.app-main { padding-top: 0; }
 
 .brand {
     display: flex;
@@ -104,6 +119,16 @@ h1:focus {
     .app-bar .mud-toolbar { padding-inline: 16px; gap: 8px; }
     .app-main main { padding: 16px; }
 }
+
+/* A phone gets the brand and account controls on the first row and the navigation on its own row below. */
+@media (max-width: 599px) {
+    .app-bar .mud-toolbar { height: auto; min-height: 56px; padding-block: 8px; row-gap: 4px; }
+    .app-nav { order: 10; flex-basis: 100%; margin-left: 0; }
+    .brand-name { font-size: var(--po-text-body); }
+    .environment-badge { font-size: 10px; padding: 1px 8px; }
+}
+
+.dialog-text { margin: 0 0 16px; }
 
 .blazor-error-boundary {
     background: var(--mud-palette-error);
@@ -288,6 +313,7 @@ h1:focus {
     color: var(--mud-palette-text-primary);
     font: inherit;
     font-size: var(--po-text-small);
+    text-align: left;
     cursor: pointer;
 }
 
@@ -337,7 +363,9 @@ h1:focus {
 }
 
 .ops-label { margin: 0 0 4px; font-size: var(--po-text-caption); font-weight: 600; color: var(--mud-palette-text-secondary); }
-.ops-value { margin: 0; font-size: var(--po-text-heading); font-weight: 600; }
+.ops-value { margin: 0; font-size: var(--po-text-heading); font-weight: 600; font-variant-numeric: tabular-nums; }
+.pause-control { display: grid; justify-items: start; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--mud-palette-lines-default); }
+.pause-control .row-meta { margin: 0; }
 .ops-bar { margin-top: 8px; }
 .ops-links { display: flex; gap: 16px; margin: 16px 0 0; }
 .ops-links a { color: var(--mud-palette-primary); }
@@ -392,3 +420,12 @@ h1:focus {
 .source-body h2, .source-body h3 { font-size: var(--po-text-heading); font-weight: 600; margin: 24px 0 8px; }
 .source-body a { color: var(--mud-palette-primary); }
 .source-body code { font-size: var(--po-text-small); }
+
+/* People who ask for less motion get none: spinners and progress bars stop animating, transitions end at once. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

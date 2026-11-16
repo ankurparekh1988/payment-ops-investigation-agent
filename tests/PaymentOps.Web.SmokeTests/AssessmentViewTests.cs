@@ -148,4 +148,22 @@ public sealed class AssessmentViewTests
 
         Assert.DoesNotContain("The agent sees", html, StringComparison.Ordinal);
     }
+
+    // Once the run is over nothing is still in progress, even the step that was last reported.
+    [Fact]
+    public async Task A_finished_run_shows_no_step_in_progress()
+    {
+        IReadOnlyList<InvestigationProgress> events =
+        [
+            new InvestigationProgress.ToolStarted("merchant", "Merchant profile"),
+            new InvestigationProgress.ToolFinished("merchant", "Merchant profile", true, 1, null),
+            new InvestigationProgress.Submitting(),
+        ];
+
+        var running = await ComponentHtml.RenderAsync<Timeline>(new() { [nameof(Timeline.Events)] = events });
+        var finished = await ComponentHtml.RenderAsync<Timeline>(new() { [nameof(Timeline.Events)] = events, [nameof(Timeline.Finished)] = true });
+
+        Assert.Contains("step-running", running, StringComparison.Ordinal);
+        Assert.DoesNotContain("step-running", finished, StringComparison.Ordinal);
+    }
 }

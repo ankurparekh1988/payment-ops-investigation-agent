@@ -26,6 +26,10 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<InvestigationProgress> Events { get; set; } = [];
 
+    /// <summary>The run is over, so no step is still in progress.</summary>
+    [Parameter]
+    public bool Finished { get; set; }
+
     private enum StepState
     {
         Running,
@@ -76,8 +80,8 @@
             }
         }
 
-        // Only the last row can still be in progress; an earlier "running" row was overtaken by later events.
-        for (var i = 0; i < rows.Count - 1; i++)
+        // Only the last row can still be in progress, and none once the run is over.
+        for (var i = 0; i < rows.Count - (Finished ? 0 : 1); i++)
         {
             if (rows[i].State == StepState.Running)
             {

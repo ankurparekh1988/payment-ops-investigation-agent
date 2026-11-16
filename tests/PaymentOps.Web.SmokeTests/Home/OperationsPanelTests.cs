@@ -92,4 +92,30 @@ public sealed class OperationsPanelTests : InteractiveTestContext
         Assert.Contains("can't be read", panel.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain(panel.FindAll("button"), b => b.TextContent.Contains("investigations", StringComparison.Ordinal));
     }
+
+    // MudBlazor's dialog gives focus back to whatever had it before; the panel puts it on the button that opened it.
+    [Fact]
+    public void Closing_the_dialog_returns_focus_to_the_pause_button()
+    {
+        var dialogs = Render<MudDialogProvider>();
+        var panel = Render<OperationsPanel>(p => p.Add(o => o.View, View()));
+        var focusesBefore = Context.JSInterop.Invocations.Count(i => i.Identifier.EndsWith("focus", StringComparison.Ordinal));
+
+        panel.FindAll("button").Single(b => b.TextContent.Trim() == "Pause investigations").Click();
+        dialogs.WaitForAssertion(() => Assert.Contains(dialogs.FindAll("button"), b => b.TextContent.Trim() == "Keep running"));
+        dialogs.FindAll("button").Single(b => b.TextContent.Trim() == "Keep running").Click();
+
+        panel.WaitForAssertion(() => Assert.True(
+            Context.JSInterop.Invocations.Count(i => i.Identifier.EndsWith("focus", StringComparison.Ordinal)) > focusesBefore,
+            "focus is moved back after the dialog closes"));
+    }
+
+    // Development without the usage guard has no limits; a zero would read as "nobody may investigate".
+    [Fact]
+    public void Unset_limits_say_so_rather_than_zero()
+    {
+        var panel = Render<OperationsPanel>(p => p.Add(o => o.View, new OperationsView(null, 0, 0, false, PauseState.Running, null, null)));
+
+        Assert.Contains("Not set", panel.Find(".ops-per-person").TextContent, StringComparison.Ordinal);
+    }
 }
