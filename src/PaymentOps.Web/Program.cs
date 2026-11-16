@@ -3,6 +3,7 @@ using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
@@ -25,6 +26,7 @@ using PaymentOps.Tools;
 using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
+using PaymentOps.Web.Investigating;
 using PaymentOps.Web.Security;
 using PaymentOps.Web.Usage;
 
@@ -75,6 +77,8 @@ builder.Services.AddSingleton(sp => new QuestionLimits(sp.GetRequiredService<IOp
 
 builder.Services.AddOptions<UiOptions>().Bind(builder.Configuration.GetSection(UiOptions.SectionName));
 builder.Services.AddMudServices();
+builder.Services.TryAddSingleton(TimeProvider.System);
+builder.Services.AddScoped<InvestigationSession>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 

@@ -11,7 +11,8 @@
         }
         @foreach (var citation in Statement.Citations)
         {
-            <li class="chip chip-source"><a href="@SectionRenderer.SourceUrl(citation.SectionKey)">@citation.Title</a></li>
+            <li class="chip chip-source">@* A new tab, so the investigation's own tab and circuit stay as they are. *@
+                <a href="@SectionRenderer.SourceUrl(citation.SectionKey)" target="_blank" rel="noopener noreferrer">@citation.Title</a></li>
         }
     </ul>
 }

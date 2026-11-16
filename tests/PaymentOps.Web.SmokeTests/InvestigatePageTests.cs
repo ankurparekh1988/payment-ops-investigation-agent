@@ -1,4 +1,5 @@
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Web.Components.Investigation;
 using PaymentOps.Web.Components.Pages;
 
 namespace PaymentOps.Web.SmokeTests;
@@ -6,18 +7,44 @@ namespace PaymentOps.Web.SmokeTests;
 public sealed class InvestigatePageTests(PaymentOpsWebApplicationFactory factory) : IClassFixture<PaymentOpsWebApplicationFactory>
 {
     [Fact]
-    public async Task The_home_page_is_the_investigation_page()
+    public async Task The_investigation_page_hides_retrieval_internals()
     {
         using var client = factory.CreateReaderClient();
 
-        var html = await client.GetStringAsync(new Uri("/", UriKind.Relative));
+        var html = await client.GetStringAsync(new Uri("/investigate", UriKind.Relative));
 
-        Assert.Contains("<h1>Investigate</h1>", html, StringComparison.Ordinal);
+        Assert.Contains("<h1", html, StringComparison.Ordinal);
+        Assert.Contains("Investigate</h1>", html, StringComparison.Ordinal);
         Assert.Contains("<textarea", html, StringComparison.Ordinal);
         foreach (var hidden in new[] { "lexical", "semantic", "knowledge-v1", "semanticFloor", "rerank" })
         {
             Assert.DoesNotContain(hidden, html, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public async Task Citation_links_open_in_a_new_tab_without_opener()
+    {
+        var statement = new Statement("x", [], [new Citation("S1", "payout-delay--abc", "Payout delay", "Payout delay > Batch")]);
+
+        var html = await ComponentHtml.RenderAsync<EvidenceChips>(new() { [nameof(EvidenceChips.Statement)] = statement });
+
+        Assert.Contains("href=\"/sources/payout-delay--abc\"", html, StringComparison.Ordinal);
+        Assert.Contains("target=\"_blank\"", html, StringComparison.Ordinal);
+        Assert.Contains("rel=\"noopener noreferrer\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Opening_a_source_keeps_the_investigation()
+    {
+        using var client = factory.CreateReaderClient();
+
+        // The Source page is static: it starts no circuit, so the investigation's tab and its session are untouched.
+        using var response = await client.GetAsync(new Uri("/sources/missing--key", UriKind.Relative));
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("<html", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Blazor:{\"type\":\"server\"", html, StringComparison.Ordinal);
     }
 
     [Fact]

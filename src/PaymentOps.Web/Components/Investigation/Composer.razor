@@ -1,0 +1,53 @@
+@* The question box and the run controls. The session re-checks every action; disabled buttons are only the visible half. *@
+<MudPaper Class="panel composer" Elevation="0">
+    <form @onsubmit="Submit">
+        <label for="question" class="field-label">Question</label>
+        <textarea id="question" class="question-input" rows="4" maxlength="@MaxLength" disabled="@Busy"
+                  value="@Value" @oninput="OnInput" aria-describedby="question-count"></textarea>
+        <div class="composer-footer">
+            <span id="question-count" class="field-hint">@Value.Length.ToString("N0", CultureInfo.InvariantCulture) / @MaxLength.ToString("N0", CultureInfo.InvariantCulture)</span>
+            <span class="composer-actions">
+                @if (Busy)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="Cancel">Cancel</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="StartNew" Disabled="Deciding">New investigation</MudButton>
+                }
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="!CanSubmit">Investigate</MudButton>
+            </span>
+        </div>
+    </form>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter]
+    public int MaxLength { get; set; }
+
+    [Parameter]
+    public bool Busy { get; set; }
+
+    [Parameter]
+    public bool Deciding { get; set; }
+
+    [Parameter]
+    public bool CanSubmit { get; set; }
+
+    [Parameter]
+    public EventCallback Submit { get; set; }
+
+    [Parameter]
+    public EventCallback Cancel { get; set; }
+
+    [Parameter]
+    public EventCallback StartNew { get; set; }
+
+    private Task OnInput(ChangeEventArgs e) => ValueChanged.InvokeAsync(e.Value as string ?? string.Empty);
+}

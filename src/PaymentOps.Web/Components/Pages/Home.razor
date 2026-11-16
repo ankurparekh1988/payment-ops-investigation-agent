@@ -1,0 +1,22 @@
+@page "/"
+@inject IUserContext CurrentUser
+
+<PageTitle>Home · Contoso Payments</PageTitle>
+
+<h1 class="page-title">Home</h1>
+
+<MudPaper Class="panel" Elevation="0">
+    <p><a href="investigate">Start an investigation</a></p>
+</MudPaper>
+
+<MudPaper Class="panel" Elevation="0">
+    <section aria-labelledby="access-heading">
+        <h2 id="access-heading" class="panel-title">Your access</h2>
+        <dl>
+            <dt>Roles</dt>
+            <dd>@string.Join(", ", CurrentUser.Roles.Order(StringComparer.Ordinal))</dd>
+            <dt>Restricted knowledge</dt>
+            <dd>@(CurrentUser.CanAccessRestrictedKnowledge ? "Yes, through Risk and Compliance" : "No")</dd>
+        </dl>
+    </section>
+</MudPaper>
