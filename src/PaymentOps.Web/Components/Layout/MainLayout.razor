@@ -1,24 +1,102 @@
 @inherits LayoutComponentBase
 @inject IUserContext CurrentUser
+@inject IOptions<UiOptions> Ui
+@inject IJSRuntime JS
 
-<header class="app-header">
-    <span class="app-name">Payment Ops Investigation Agent</span>
-    @if (CurrentUser.IsAuthenticated)
-    {
-        <span class="signed-in-user">@CurrentUser.DisplayName</span>
-        <form method="post" action="account/sign-out">
-            <AntiforgeryToken />
-            <button type="submit">Sign out</button>
-        </form>
-    }
-</header>
+<MudThemeProvider @ref="_themeProvider" Theme="ContosoTheme.Theme" IsDarkMode="_dark" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
-<main>
-    @Body
-</main>
+<MudLayout>
+    <MudAppBar Elevation="0" Class="app-bar">
+        <a href="" class="brand" aria-label="Contoso Payments, Payment Operations home">
+            <svg width="28" height="28" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+                <rect width="36" height="36" rx="9" fill="#1D4ED8"></rect>
+                <path d="M24 12.5a8 8 0 1 0 0 11" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"></path>
+                <circle cx="25" cy="18" r="2.2" fill="#7DD3FC"></circle>
+            </svg>
+            <span class="brand-name">Contoso Payments</span>
+            <span class="brand-module" style="color:@ContosoTheme.AppBarMutedText">Payment Operations</span>
+        </a>
+        @if (CurrentUser.IsAuthenticated)
+        {
+            <NavBar />
+        }
+        <MudSpacer />
+        @if (!string.IsNullOrWhiteSpace(Ui.Value.EnvironmentLabel))
+        {
+            <span class="environment-badge">@Ui.Value.EnvironmentLabel</span>
+        }
+        @if (AssignedRenderMode is not null)
+        {
+            <ThemeToggle IsDark="_dark" IsDarkChanged="OnChosen" />
+        }
+        @if (CurrentUser.IsAuthenticated)
+        {
+            <UserBadge />
+            <form method="post" action="account/sign-out" class="sign-out">
+                <AntiforgeryToken />
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" Color="Color.Inherit">Sign out</MudButton>
+            </form>
+        }
+    </MudAppBar>
+    <MudMainContent Class="app-main">
+        <main>
+            @Body
+        </main>
+    </MudMainContent>
+</MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private MudThemeProvider? _themeProvider;
+    private bool _dark;
+
+    // Set once the person toggles in this circuit; OS changes no longer apply.
+    private bool _chosen;
+
+    [CascadingParameter]
+    private ThemePreference Theme { get; set; } = new(IsDark: false, IsChosen: false);
+
+    protected override void OnInitialized() => _dark = Theme.IsDark;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Until the person chooses, follow the OS, including when it changes while the page is open.
+        if (!firstRender || !RendererInfo.IsInteractive || Theme.IsChosen || _themeProvider is null)
+        {
+            return;
+        }
+
+        await _themeProvider.WatchSystemDarkModeAsync(OnSystemChangedAsync);
+        var systemDark = await _themeProvider.GetSystemDarkModeAsync();
+        if (systemDark != _dark)
+        {
+            await OnSystemChangedAsync(systemDark);
+        }
+    }
+
+    private async Task OnSystemChangedAsync(bool dark)
+    {
+        if (_chosen)
+        {
+            return;
+        }
+
+        _dark = dark;
+        await JS.InvokeVoidAsync("poTheme.system", dark ? ThemeCookie.Dark : ThemeCookie.Light);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnChosen(bool dark)
+    {
+        _chosen = true;
+        _dark = dark;
+    }
+}

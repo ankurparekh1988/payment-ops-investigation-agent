@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
+using MudBlazor.Services;
+
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -71,6 +73,8 @@ builder.Services.AddOptions<ToolOptions>()
     .ValidateOnStart();
 builder.Services.AddSingleton(sp => new QuestionLimits(sp.GetRequiredService<IOptions<InvestigationLimits>>().Value.MaxQuestionLength));
 
+builder.Services.AddOptions<UiOptions>().Bind(builder.Configuration.GetSection(UiOptions.SectionName));
+builder.Services.AddMudServices();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
