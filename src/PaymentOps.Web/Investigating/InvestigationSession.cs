@@ -17,6 +17,9 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
     private readonly List<SessionTurn> _turns = [];
     private CancellationTokenSource? _run;
 
+    // Read when it can change, not on every render: each read projects the conversation's history.
+    private ConversationStatus _conversation = investigation.Conversation;
+
     // Bumped by every start, reset and disposal, so progress from an earlier run is recognised and dropped.
     private int _sequence;
 
@@ -63,7 +66,13 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
         }
     }
 
-    public ConversationStatus Conversation => investigation.Conversation;
+    public ConversationStatus Conversation => _conversation;
+
+    /// <summary>
+    /// A question refused before its run started (paused, over a limit, busy, cancelled while admitted): the server kept
+    /// no turn and superseded nothing, so the previous result and its card stay as they were, under this notice.
+    /// </summary>
+    public NotAssessedReason? Notice { get; private set; }
 
     public bool Busy { get; private set; }
 
@@ -76,7 +85,7 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
     public int Completed { get; private set; }
 
     public bool CanStart(string question) =>
-        !Busy && !Deciding && !string.IsNullOrWhiteSpace(question) && !investigation.Conversation.Ended;
+        !Busy && !Deciding && !string.IsNullOrWhiteSpace(question) && !_conversation.Ended;
 
     /// <summary>Runs one question. The service applies its own timeouts; the session adds only Cancel.</summary>
     public async Task StartAsync(string question)
@@ -89,15 +98,16 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
 
         CancellationTokenSource run;
         int sequence;
+        string? previousQuestion;
         lock (_lock)
         {
-            // The service supersedes the previous proposal when a new turn starts; the card says so too.
-            SupersedePending();
+            previousQuestion = CurrentQuestion;
             _steps.Clear();
             sequence = ++_sequence;
             run = _run = new CancellationTokenSource();
             Busy = true;
             DecisionFailed = false;
+            Notice = null;
             CurrentQuestion = question;
             Draft = string.Empty;
         }
@@ -110,7 +120,7 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
             {
                 if (sequence == _sequence)
                 {
-                    _turns.Add(new SessionTurn(question, result));
+                    Record(question, previousQuestion, result);
                     Completed++;
                 }
             }
@@ -131,8 +141,24 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
             }
 
             run.Dispose();
+            _conversation = investigation.Conversation;
             Changed?.Invoke();
         }
+    }
+
+    // Only a run that reached the investigation service has an id; the service superseded the last proposal then.
+    private void Record(string question, string? previousQuestion, AssessmentResult result)
+    {
+        if (result is AssessmentResult.NotAssessed refused && refused.InvestigationId == Guid.Empty)
+        {
+            Notice = refused.Reason;
+            Draft = question;
+            CurrentQuestion = previousQuestion;
+            return;
+        }
+
+        SupersedePending();
+        _turns.Add(new SessionTurn(question, result));
     }
 
     public void Cancel()
@@ -166,6 +192,8 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
             }
 
             investigation.StartNew();
+            _conversation = investigation.Conversation;
+            Notice = null;
             _sequence++;
             _turns.Clear();
             _steps.Clear();
@@ -200,6 +228,8 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
                 return;
             }
 
+            Notice = null;
+
             turn = _turns[^1];
             if (turn.Result is not AssessmentResult.Assessed { Proposal: { ProposalId: not null } proposal } || !IsActionable(proposal))
             {
@@ -228,6 +258,8 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
                 DecisionFailed = outcome is ApprovalResult.Unavailable;
                 _turns[^1] = turn with { Result = assessed with { Proposal = Decided(proposal, outcome, reason) } };
             }
+
+            _conversation = investigation.Conversation;
         }
         finally
         {

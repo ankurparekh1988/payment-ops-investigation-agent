@@ -248,4 +248,28 @@ public sealed class UsageGuardTests : IDisposable
         Assert.Equal(NotAssessedReason.Paused, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
         Assert.Equal(0, inner.Calls);
     }
+
+    // Cancel while the pause is being read is a cancellation, as it is while usage is counted, not an unhandled error.
+    [Fact]
+    public async Task Cancel_while_the_pause_is_read_is_reported_as_cancelled()
+    {
+        using var cancel = new CancellationTokenSource();
+        await cancel.CancelAsync();
+        var (guard, inner, table, _) = Guard(pause: new CancellingPauseStore());
+
+        var result = await guard.InvestigateAsync("q", null, cancel.Token);
+
+        Assert.Equal(NotAssessedReason.Cancelled, Reason(result));
+        Assert.Equal(0, inner.Calls);
+        Assert.Empty(table.Rows);
+    }
+
+    private sealed class CancellingPauseStore : IPauseStore
+    {
+        public Task<PauseState> ReadAsync(CancellationToken cancellationToken) => Task.FromCanceled<PauseState>(cancellationToken);
+
+        public Task<PauseState> ReadFreshAsync(CancellationToken cancellationToken) => Task.FromCanceled<PauseState>(cancellationToken);
+
+        public Task<PauseWrite> WriteAsync(PauseState next, string? expectedVersion, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
 }

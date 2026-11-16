@@ -113,6 +113,22 @@ public sealed class PauseSwitchTests
         Assert.True((await other.ReadAsync(CancellationToken.None)).Paused);
     }
 
+    // A read that started before a change and finished after it mustn't put the old state back in the cache.
+    [Fact]
+    public async Task A_slow_read_never_overwrites_a_newer_change()
+    {
+        var store = Store();
+        _table.HoldReads = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slow = store.ReadFreshAsync(CancellationToken.None);
+
+        Assert.IsType<PauseWrite.Written>(await store.WriteAsync(PauseState.Running with { Paused = true }, null, CancellationToken.None));
+        _table.HoldReads.SetResult();
+        _table.HoldReads = null;
+        await slow;
+
+        Assert.True((await store.ReadAsync(CancellationToken.None)).Paused);
+    }
+
     [Fact]
     public async Task A_concurrent_change_reports_the_current_state()
     {

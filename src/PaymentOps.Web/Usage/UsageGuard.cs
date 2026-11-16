@@ -43,6 +43,11 @@ internal sealed partial class UsageGuard(
             UsageUnavailable(logger, ex.InnerException?.GetType().Name ?? nameof(PauseUnavailableException));
             return Refuse(NotAssessedReason.UsageUnavailable);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // As below: the person's Cancel is a result, and nothing was reserved.
+            return new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled);
+        }
 
         UsageReservation reservation;
         try

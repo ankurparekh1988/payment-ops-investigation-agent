@@ -20,6 +20,9 @@ internal sealed class FakeEntityTable : TableClient
 
     public int Reads { get; private set; }
 
+    /// <summary>While set, a read takes its snapshot and then waits, as a slow read over the network would.</summary>
+    public TaskCompletionSource? HoldReads { get; set; }
+
     public int Writes { get; private set; }
 
     public TableEntity? Row(string partition, string row)
@@ -40,8 +43,9 @@ internal sealed class FakeEntityTable : TableClient
         }
     }
 
-    public override Task<NullableResponse<T>> GetEntityIfExistsAsync<T>(string partitionKey, string rowKey, IEnumerable<string>? select = null, CancellationToken cancellationToken = default)
+    public override async Task<NullableResponse<T>> GetEntityIfExistsAsync<T>(string partitionKey, string rowKey, IEnumerable<string>? select = null, CancellationToken cancellationToken = default)
     {
+        NullableResponse<T> snapshot;
         lock (_lock)
         {
             Reads++;
@@ -50,10 +54,17 @@ internal sealed class FakeEntityTable : TableClient
                 throw thrown;
             }
 
-            return Task.FromResult<NullableResponse<T>>(_rows.TryGetValue((partitionKey, rowKey), out var entity)
+            snapshot = _rows.TryGetValue((partitionKey, rowKey), out var entity)
                 ? Response.FromValue((T)(object)Copy(entity), null!)
-                : new Missing<T>());
+                : new Missing<T>();
         }
+
+        if (HoldReads is { } hold)
+        {
+            await hold.Task;
+        }
+
+        return snapshot;
     }
 
     public override Task<Response> AddEntityAsync<T>(T entity, CancellationToken cancellationToken = default)

@@ -266,6 +266,7 @@ h1:focus {
 .step-done .step-marker { background: var(--mud-palette-success); border-color: var(--mud-palette-success); }
 .step-failed .step-marker { background: var(--mud-palette-warning); border-color: var(--mud-palette-warning); }
 .step-running .step-marker { border-color: var(--mud-palette-primary); }
+.step-stopped .step-marker { border-style: dashed; border-color: var(--mud-palette-text-secondary); }
 .step-label { grid-column: 2; }
 .step-detail { grid-column: 2; font-size: var(--po-text-caption); color: var(--mud-palette-text-secondary); }
 

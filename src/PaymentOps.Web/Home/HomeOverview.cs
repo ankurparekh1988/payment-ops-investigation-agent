@@ -73,7 +73,8 @@ internal sealed class HomeOverview(
         }
     }
 
-    // Batch dates from seven days before the demo's today up to and including it, as the incident window does; newest first.
+    // Batch dates from seven days before the demo's today through today (eight dates), so a date the incident window
+    // (seven days back from now) reaches is included; newest first.
     private async Task<IReadOnlyList<AttentionItem>> AttentionAsync(DateOnly today, Func<string, Task<string>> name, CancellationToken cancellationToken)
     {
         var (from, to) = (today.AddDays(-(int)Window.TotalDays), today.AddDays(1));

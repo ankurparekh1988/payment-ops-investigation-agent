@@ -23,7 +23,8 @@
             <MudPaper Class="panel" Elevation="0">
                 <section aria-labelledby="timeline-heading">
                     <h2 id="timeline-heading" class="panel-title">Steps</h2>
-                    <Timeline Events="steps" Finished="true" />
+                    <Timeline Events="steps" Finished="true"
+                              Stopped="@(Session.Current is AssessmentResult.NotAssessed { Reason: NotAssessedReason.Cancelled })" />
                 </section>
             </MudPaper>
         }
@@ -34,19 +35,26 @@
         {
             <RunningCard Question="@(Session.CurrentQuestion ?? string.Empty)" Steps="Session.Steps" />
         }
-        else if (Session.Current is { } result)
+        else if (Session.Current is not null || Session.Notice is not null)
         {
             <MudPaper Class="panel" Elevation="0">
                 <section aria-labelledby="result-heading">
                     <h2 id="result-heading" class="panel-title" tabindex="-1" @ref="_resultHeading">Result</h2>
-                    <p class="result-question">@Session.CurrentQuestion</p>
-                    @if (result is AssessmentResult.NotAssessed notAssessed)
+                    @if (Session.Notice is { } notice)
                     {
+                        @* Refused before it ran: the result below, and its ticket card, are still as they were. *@
+                        <NotAssessedPanel Reason="notice" MaxQuestionLength="Limits.MaxQuestionLength"
+                                          EditQuestion="EditQuestionAsync" TryAgain="TryAgainAsync" StartNew="Session.StartNew" SignIn="SignIn" />
+                    }
+                    @if (Session.Current is AssessmentResult.NotAssessed notAssessed)
+                    {
+                        <p class="result-question">@Session.CurrentQuestion</p>
                         <NotAssessedPanel Reason="notAssessed.Reason" MaxQuestionLength="Limits.MaxQuestionLength"
                                           EditQuestion="EditQuestionAsync" TryAgain="TryAgainAsync" StartNew="Session.StartNew" SignIn="SignIn" />
                     }
-                    else
+                    else if (Session.Current is { } result)
                     {
+                        <p class="result-question">@Session.CurrentQuestion</p>
                         <AssessmentView Result="result" Deciding="Session.Deciding" Approve="Session.ApproveAsync" Reject="RejectAsync" />
                         @if (Session.DecisionFailed)
                         {
@@ -79,14 +87,15 @@
     // The question goes back into the box to be changed; nothing runs until the person asks again.
     private async Task EditQuestionAsync()
     {
-        Session.Draft = Session.CurrentQuestion ?? string.Empty;
+        Session.Draft = Session.Notice is null ? Session.CurrentQuestion ?? string.Empty : Session.Draft;
         if (_composer is not null)
         {
             await _composer.FocusAsync();
         }
     }
 
-    private Task TryAgainAsync() => Session.StartAsync(Session.CurrentQuestion ?? string.Empty);
+    // A refusal before the run left the question in the box; any other result keeps it as the current question.
+    private Task TryAgainAsync() => Session.StartAsync(Session.Notice is null ? Session.CurrentQuestion ?? string.Empty : Session.Draft);
 
     // A full load goes through sign-in again; the circuit's own sign-in has ended.
     private void SignIn() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
@@ -98,7 +107,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Session.Completed != _focusedRuns && Session.Current is not null)
+        if (Session.Completed != _focusedRuns && (Session.Current is not null || Session.Notice is not null))
         {
             _focusedRuns = Session.Completed;
             await _resultHeading.FocusAsync();

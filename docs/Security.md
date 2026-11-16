@@ -254,7 +254,7 @@ Usage is bounded in the app and, as a last resort, by a budget-driven cutoff ([A
 | Threat | Control | Residual |
 |---|---|---|
 | Someone signed in runs investigations without end | Daily limits per person and in total, reserved atomically in a table; usage that can't be checked refuses. The pause switch stops everything at once | Within the limits, spending continues until the next UTC day |
-| The usage table holds who asked | Rows are keyed by a hash of the user's object id; the table holds counts only | — |
+| The usage table holds who asked | Count rows are keyed by a hash of the user's object id and hold counts only. The one pause row holds the last Admin's pseudonymous id, display name and optional reason, shown only to Admins | The pause row names the Admin who last changed it |
 | Someone without the Admin role pauses or resumes investigations | The pause switch checks the Admin role on every change, whatever the page shows; a change is decided from a fresh read and written only if the row is unchanged | — |
 | The pause can't be read | New investigations are refused until it can be, as with the counter | A storage outage stops investigations |
 | A pause change leaks who made it or why | The log event (`3301`) holds the new state, the pseudonymous id the usage rows use and the reason's length. The display name and reason are kept only in the pause row, shown to Admins | — |

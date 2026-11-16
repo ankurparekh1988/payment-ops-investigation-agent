@@ -166,4 +166,22 @@ public sealed class AssessmentViewTests
         Assert.Contains("step-running", running, StringComparison.Ordinal);
         Assert.DoesNotContain("step-running", finished, StringComparison.Ordinal);
     }
+
+    // A step that was still running when the person cancelled didn't finish; it mustn't read as done.
+    [Fact]
+    public async Task A_stopped_run_shows_its_unfinished_step_as_stopped()
+    {
+        IReadOnlyList<InvestigationProgress> events = [new InvestigationProgress.ToolStarted("merchant", "Merchant profile")];
+
+        var html = await ComponentHtml.RenderAsync<Timeline>(new()
+        {
+            [nameof(Timeline.Events)] = events,
+            [nameof(Timeline.Finished)] = true,
+            [nameof(Timeline.Stopped)] = true,
+        });
+
+        Assert.DoesNotContain("step-done", html, StringComparison.Ordinal);
+        Assert.Contains("step-stopped", html, StringComparison.Ordinal);
+        Assert.Contains("Stopped: ", html, StringComparison.Ordinal);
+    }
 }

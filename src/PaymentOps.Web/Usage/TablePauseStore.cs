@@ -17,6 +17,9 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
     private readonly Lock _lock = new();
     private (PauseState State, DateTimeOffset ReadAt)? _cache;
 
+    // Counts this instance's writes, so a read that started before one can't put the older state back.
+    private int _writes;
+
     public Task<PauseState> ReadAsync(CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -32,6 +35,12 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
 
     public async Task<PauseState> ReadFreshAsync(CancellationToken cancellationToken)
     {
+        int writesBefore;
+        lock (_lock)
+        {
+            writesBefore = _writes;
+        }
+
         PauseState state;
         try
         {
@@ -44,8 +53,17 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
             throw ex as PauseUnavailableException ?? new PauseUnavailableException("The pause couldn't be read.", ex);
         }
 
-        Remember(state);
-        return state;
+        lock (_lock)
+        {
+            // A write landed while this read was in flight: what it wrote is newer than what was read.
+            if (_writes != writesBefore && _cache is { } newer)
+            {
+                return newer.State;
+            }
+
+            _cache = (state, time.GetUtcNow());
+            return state;
+        }
     }
 
     public async Task<PauseWrite> WriteAsync(PauseState next, string? expectedVersion, CancellationToken cancellationToken)
@@ -89,7 +107,12 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
             return new PauseWrite.Failed();
         }
 
-        Remember(next);
+        lock (_lock)
+        {
+            _writes++;
+            _cache = (next, time.GetUtcNow());
+        }
+
         return new PauseWrite.Written(next);
     }
 
@@ -101,14 +124,6 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
                 Version = entity.ETag == default ? null : entity.ETag.ToString(),
             }
             : throw new PauseUnavailableException("The pause row is malformed.");
-
-    private void Remember(PauseState state)
-    {
-        lock (_lock)
-        {
-            _cache = (state, time.GetUtcNow());
-        }
-    }
 
     private void Forget()
     {

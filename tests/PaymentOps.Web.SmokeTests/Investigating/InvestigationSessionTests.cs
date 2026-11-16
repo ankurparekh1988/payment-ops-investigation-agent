@@ -225,4 +225,57 @@ public sealed class InvestigationSessionTests
         Assert.Empty(_investigation.Asked);
         Assert.Null(session.Current);
     }
+
+    // The server supersedes a proposal only when a run starts; a refusal before that leaves it pending.
+    [Fact]
+    public async Task A_refusal_before_the_run_keeps_the_pending_card_and_shows_a_notice()
+    {
+        await using var session = Session();
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("First question");
+        _investigation.Answer = _ => new AssessmentResult.NotAssessed(NotAssessedReason.Paused);
+
+        await session.StartAsync("Second question");
+
+        Assert.Single(session.Questions);
+        Assert.Equal(NotAssessedReason.Paused, session.Notice);
+        Assert.Equal("Second question", session.Draft);
+        Assert.Equal(ProposalStatus.Pending, Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!.Status);
+        await session.ApproveAsync();
+        Assert.Equal(1, _approvals.Approvals);
+    }
+
+    [Fact]
+    public async Task A_run_that_reaches_the_server_clears_the_notice()
+    {
+        await using var session = Session();
+        _investigation.Answer = _ => new AssessmentResult.NotAssessed(NotAssessedReason.DailyLimitReached);
+        await session.StartAsync("First question");
+        _investigation.Answer = _ => Results.WithPendingTicket();
+
+        await session.StartAsync("Second question");
+
+        Assert.Null(session.Notice);
+        Assert.Single(session.Questions);
+    }
+
+    [Fact]
+    public async Task The_conversation_is_read_when_it_can_change_not_on_every_render()
+    {
+        await using var session = Session();
+        _investigation.Hold = true;
+        var run = session.StartAsync("Why was M-1042 not paid?");
+        var reads = _investigation.ConversationReads;
+
+        for (var i = 0; i < 20; i++)
+        {
+            _investigation.LastProgress!.Report(new InvestigationProgress.Submitting());
+            _ = session.Conversation;
+            _ = session.CanStart("another");
+        }
+
+        Assert.Equal(reads, _investigation.ConversationReads);
+        session.Cancel();
+        await run;
+    }
 }

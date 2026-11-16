@@ -30,12 +30,17 @@
     [Parameter]
     public bool Finished { get; set; }
 
+    /// <summary>The run was cancelled, so a step still in progress didn't finish.</summary>
+    [Parameter]
+    public bool Stopped { get; set; }
+
     private enum StepState
     {
         Running,
         Done,
         Failed,
         Note,
+        Stopped,
     }
 
     private sealed record Row(StepState State, string Label, string? Detail)
@@ -80,12 +85,12 @@
             }
         }
 
-        // Only the last row can still be in progress, and none once the run is over.
+        // Only the last row can still be in progress, and none once the run is over; a cancelled run's last step stopped.
         for (var i = 0; i < rows.Count - (Finished ? 0 : 1); i++)
         {
             if (rows[i].State == StepState.Running)
             {
-                rows[i] = rows[i] with { State = StepState.Done };
+                rows[i] = rows[i] with { State = Stopped && i == rows.Count - 1 ? StepState.Stopped : StepState.Done };
             }
         }
 
@@ -97,6 +102,7 @@
         StepState.Running => "In progress",
         StepState.Done => "Done",
         StepState.Failed => "Couldn't check",
+        StepState.Stopped => "Stopped",
         _ => "Note",
     };
 

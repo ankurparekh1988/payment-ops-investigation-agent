@@ -10,7 +10,8 @@ internal sealed class ScriptedInvestigationService : IInvestigationService
 {
     private TaskCompletionSource<AssessmentResult>? _held;
 
-    public Func<string, AssessmentResult> Answer { get; set; } = _ => new AssessmentResult.NotAssessed(NotAssessedReason.ModelUnavailable);
+    // A result from a run that reached the investigation service carries an id; a refusal before it doesn't.
+    public Func<string, AssessmentResult> Answer { get; set; } = _ => new AssessmentResult.NotAssessed(NotAssessedReason.ModelUnavailable) { InvestigationId = Guid.NewGuid() };
 
     public bool Hold { get; set; }
 
@@ -22,7 +23,16 @@ internal sealed class ScriptedInvestigationService : IInvestigationService
 
     public int StartNewCalls { get; private set; }
 
-    public ConversationStatus Conversation => new(Asked.Count, Asked.Count, false);
+    public int ConversationReads { get; private set; }
+
+    public ConversationStatus Conversation
+    {
+        get
+        {
+            ConversationReads++;
+            return new(Asked.Count, Asked.Count, false);
+        }
+    }
 
     public Task<AssessmentResult> InvestigateAsync(string question, IProgress<InvestigationProgress>? progress, CancellationToken cancellationToken)
     {
@@ -36,7 +46,7 @@ internal sealed class ScriptedInvestigationService : IInvestigationService
 
         _held = new TaskCompletionSource<AssessmentResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var held = _held;
-        cancellationToken.Register(() => held.TrySetResult(new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled)));
+        cancellationToken.Register(() => held.TrySetResult(new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled) { InvestigationId = Guid.NewGuid() }));
         return held.Task;
     }
 
