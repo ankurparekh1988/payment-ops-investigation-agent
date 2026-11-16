@@ -11,4 +11,7 @@ public interface IProcessorData
 
     /// <summary>The processor's incidents that overlap the range, including ones still open.</summary>
     Task<IReadOnlyList<ProcessorIncident>> GetIncidentsAsync(string processorId, DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken);
+
+    /// <summary>Every processor's incidents that overlap the range, for the operations overview; not for investigations.</summary>
+    Task<IReadOnlyList<ProcessorIncident>> GetAllIncidentsAsync(DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken);
 }

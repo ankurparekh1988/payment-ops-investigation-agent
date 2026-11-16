@@ -11,4 +11,7 @@ public interface IIncidentStore
 
     /// <summary>The ticket, or null if there's no ticket with that id.</summary>
     Task<IncidentTicket?> FindAsync(string ticketId, CancellationToken cancellationToken);
+
+    /// <summary>Up to <paramref name="count"/> tickets, newest first.</summary>
+    Task<IReadOnlyList<IncidentTicket>> GetRecentAsync(int count, CancellationToken cancellationToken);
 }

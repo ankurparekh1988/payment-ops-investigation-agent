@@ -9,4 +9,8 @@ internal sealed class FaultInjectingProcessorData(IProcessorData inner, FaultInj
 
     public Task<IReadOnlyList<ProcessorIncident>> GetIncidentsAsync(string processorId, DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken) =>
         faults.RunAsync<IReadOnlyList<ProcessorIncident>>(() => inner.GetIncidentsAsync(processorId, fromInclusive, toExclusive, cancellationToken), [], cancellationToken);
+
+    // Faults target what an investigation reads; the operations overview reads the data as it is.
+    public Task<IReadOnlyList<ProcessorIncident>> GetAllIncidentsAsync(DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken) =>
+        inner.GetAllIncidentsAsync(fromInclusive, toExclusive, cancellationToken);
 }

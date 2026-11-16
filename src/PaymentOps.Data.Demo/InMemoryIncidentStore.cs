@@ -46,4 +46,17 @@ internal sealed class InMemoryIncidentStore(TimeProvider time, int maxTickets = 
             return Task.FromResult(_byId.GetValueOrDefault(ticketId));
         }
     }
+
+    public Task<IReadOnlyList<IncidentTicket>> GetRecentAsync(int count, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
+
+        // Ids are sequential, so the id breaks a tie between tickets created in the same instant.
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<IncidentTicket>>([.. _byId.Values
+                .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id, StringComparer.Ordinal)
+                .Take(count)]);
+        }
+    }
 }

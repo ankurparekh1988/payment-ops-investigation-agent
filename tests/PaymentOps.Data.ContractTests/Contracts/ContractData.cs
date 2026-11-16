@@ -50,6 +50,7 @@ public sealed class ContractData
             [new("M-1", ["PAY-1"], 10m, "USD"), new("M-2", ["PAY-4"], 40m, "USD")]),
         new("SF-B1", "p-b", new(2026, 11, 3), Utc(2026, 11, 4, 3, 0), SettlementFileStatus.Accepted, [new("M-1", ["PAY-3"], 30m, "GBP")]),
         new("SF-A3", "p-a", new(2026, 11, 4), Utc(2026, 11, 5, 7, 0), SettlementFileStatus.Accepted, [new("M-1", ["PAY-6"], 60m, "USD")]),
+        new("SF-A4", "p-a", new(2026, 11, 5), Utc(2026, 11, 6, 7, 0), SettlementFileStatus.Rejected, []),
     ];
 
     public IReadOnlyList<Payout> Payouts { get; } =
@@ -59,6 +60,7 @@ public sealed class ContractData
         new("PO-2", "M-1", "p-a", new(2026, 11, 3), ["SF-A2"], new(2026, 11, 5), 20m, "USD", PayoutStatus.Paid, Utc(2026, 11, 5, 12, 0)),
         new("PO-5", "M-1", "p-a", new(2026, 11, 4), ["SF-A3"], new(2026, 11, 5), 60m, "USD", PayoutStatus.Paid, Utc(2026, 11, 5, 12, 0)),
         new("PO-4", "M-2", "p-a", new(2026, 11, 2), ["SF-A1"], new(2026, 11, 3), 40m, "USD", PayoutStatus.Paid, Utc(2026, 11, 3, 12, 0)),
+        new("PO-6", "M-2", "p-a", new(2026, 11, 2), ["SF-A1"], new(2026, 11, 6), 40m, "USD", PayoutStatus.Held, null),
     ];
 
     public IReadOnlyList<ProcessorIncident> Incidents { get; } =

@@ -41,6 +41,16 @@ internal sealed class FakePorts(DateTimeOffset now) : IMerchantData, ISettlement
     public Task<IReadOnlyList<Payout>> GetPayoutsAsync(string merchantId, DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<Payout>>([]);
 
+    // The tools never read the operations overview; calling it here fails the test.
+    public Task<IReadOnlyList<ProcessorIncident>> GetAllIncidentsAsync(DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Tools don't read the operations overview.");
+
+    public Task<IReadOnlyList<Payout>> GetHeldPayoutsAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Tools don't read the operations overview.");
+
+    public Task<IReadOnlyList<SettlementFile>> GetRejectedFilesAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Tools don't read the operations overview.");
+
     // Weekends only; enough for these cases.
     public Task<IReadOnlyList<SettlementDay>> GetCalendarAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<SettlementDay>>([.. Enumerable.Range(0, toExclusive.DayNumber - fromInclusive.DayNumber)

@@ -77,4 +77,22 @@ public abstract class ProcessorDataContract
     [Fact]
     public async Task A_cancelled_token_throws() =>
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Port.GetIncidentsAsync("p-a", Utc(2026, 11, 1, 0, 0), Utc(2026, 11, 7, 0, 0), Cancelled()));
+
+    // The home page's overview: every processor's incidents in the window, by the same overlap rule.
+    [Fact]
+    public async Task All_incidents_overlapping_a_window_come_from_every_processor_in_start_order()
+    {
+        var incidents = await Port.GetAllIncidentsAsync(Utc(2026, 11, 3, 0, 0), Utc(2026, 11, 3, 10, 0), CancellationToken.None);
+
+        // INC-2 starts exactly at the window's end, so it doesn't overlap.
+        Assert.Equal(["INC-1", "INC-4"], incidents.Select(i => i.Id));
+    }
+
+    [Fact]
+    public async Task All_incidents_in_a_quiet_window_is_empty() =>
+        Assert.Empty(await Port.GetAllIncidentsAsync(Utc(2026, 10, 1, 0, 0), Utc(2026, 10, 2, 0, 0), CancellationToken.None));
+
+    [Fact]
+    public async Task All_incidents_needs_a_window_that_moves_forward() =>
+        await Assert.ThrowsAsync<ArgumentException>(() => Port.GetAllIncidentsAsync(Utc(2026, 11, 3, 0, 0), Utc(2026, 11, 3, 0, 0), CancellationToken.None));
 }

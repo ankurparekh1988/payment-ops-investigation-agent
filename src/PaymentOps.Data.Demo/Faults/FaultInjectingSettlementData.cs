@@ -13,6 +13,13 @@ internal sealed class FaultInjectingSettlementData(ISettlementData inner, FaultI
     public Task<IReadOnlyList<Payout>> GetPayoutsAsync(string merchantId, DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
         faults.RunAsync<IReadOnlyList<Payout>>(() => inner.GetPayoutsAsync(merchantId, fromInclusive, toExclusive, cancellationToken), [], cancellationToken);
 
+    // Faults target what an investigation reads; the operations overview reads the data as it is.
+    public Task<IReadOnlyList<Payout>> GetHeldPayoutsAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
+        inner.GetHeldPayoutsAsync(fromInclusive, toExclusive, cancellationToken);
+
+    public Task<IReadOnlyList<SettlementFile>> GetRejectedFilesAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
+        inner.GetRejectedFilesAsync(fromInclusive, toExclusive, cancellationToken);
+
     public Task<IReadOnlyList<SettlementDay>> GetCalendarAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken) =>
         faults.RunAsync<IReadOnlyList<SettlementDay>>(() => inner.GetCalendarAsync(fromInclusive, toExclusive, cancellationToken), [], cancellationToken);
 }
