@@ -27,7 +27,9 @@
         AssessmentResult.Assessed { Outcome: AssessmentOutcome.Refused } => "Refused",
         AssessmentResult.Assessed { Outcome: AssessmentOutcome.Incomplete } => "Incomplete",
         AssessmentResult.Assessed => "Assessed",
-        AssessmentResult.NotAssessed { Reason: NotAssessedReason.Cancelled } => "Cancelled",
+        // The conversation doesn't carry these into the next question, so the list doesn't pretend it does.
+        AssessmentResult.NotAssessed { Reason: NotAssessedReason.Cancelled } => "Cancelled · not kept",
+        AssessmentResult.NotAssessed { Reason: NotAssessedReason.InvalidQuestion or NotAssessedReason.NotAuthorized } => "Not assessed · not kept",
         _ => "Not assessed",
     };
 }

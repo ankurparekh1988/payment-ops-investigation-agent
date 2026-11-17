@@ -11,7 +11,7 @@ AppTraces
 | order by TimeGenerated asc
 ```
 
-The relevant events: `3001` assessed, `3002` not assessed, `3005` untrusted values screened and withheld (counts per tool), `3006` blocked by the content filter (prompt or completion side), `3007` a question not investigated by the question screen (harmful, self-harm, attack or unavailable), `3008` a merchant the user never named refused, `3009` the decision record, `3101` an approval decision, `3301` a pause or resume.
+The relevant events: `3001` assessed, `3002` not assessed, `3005` untrusted values screened and withheld (counts per tool), `3006` blocked by the content filter (prompt or completion side), `3007` a question not investigated by the question screen (harmful, self-harm, attack or unavailable), `3008` a merchant the user never named refused, `3009` the decision record, `3101` an approval decision, `3301` a pause or resume, `3401` an investigation or ticket decision that failed unexpectedly on the page (the exception type only; the person sees "The investigation service isn't responding" or "The ticket couldn't be created").
 
 **Explaining an answer.** The decision record (`3009`) says what the investigation did: its outcome, the tools it called and how each ended, the evidence and sections it cited, the screen verdicts, and what it used. Its operation id finds the rest of the trace, the screens, searches, tool calls and model calls in order:
 

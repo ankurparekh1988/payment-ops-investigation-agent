@@ -113,6 +113,39 @@ public sealed class PauseSwitchTests
         Assert.True((await other.ReadAsync(CancellationToken.None)).Paused);
     }
 
+    // The lifetime is measured on the monotonic clock: setting the wall clock back mustn't keep a stale state.
+    [Fact]
+    public async Task The_cache_expires_by_elapsed_time_when_the_wall_clock_goes_back()
+    {
+        var clock = new SteppingClock(Now);
+        var mine = new TablePauseStore(_table, clock);
+        var other = new TablePauseStore(_table, clock);
+        Assert.False((await other.ReadAsync(CancellationToken.None)).Paused);
+
+        await Switch(Admin(), mine).SetAsync(true, null, CancellationToken.None);
+        clock.Step(wallClock: TimeSpan.FromHours(-1), elapsed: TablePauseStore.CacheLifetime);
+
+        Assert.True((await other.ReadAsync(CancellationToken.None)).Paused);
+    }
+
+    private sealed class SteppingClock(DateTimeOffset start) : TimeProvider
+    {
+        private DateTimeOffset _now = start;
+        private long _ticks;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public override long GetTimestamp() => _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public void Step(TimeSpan wallClock, TimeSpan elapsed)
+        {
+            _now += wallClock;
+            _ticks += elapsed.Ticks;
+        }
+    }
+
     // A read that started before a change and finished after it mustn't put the old state back in the cache.
     [Fact]
     public async Task A_slow_read_never_overwrites_a_newer_change()

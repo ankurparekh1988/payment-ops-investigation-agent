@@ -107,6 +107,26 @@ public sealed class InvestigatePageNavigationTests : InteractiveTestContext
     }
 
     [Fact]
+    public async Task A_failure_survives_leaving_and_returning_with_the_earlier_result_under_its_own_question()
+    {
+        _investigation.Answer = _ => Results.WithPendingTicket("The Fabrikam Pay file for 9 November is missing.");
+        var page = Render<Investigate>();
+        Ask(page, "Why was M-1042 not paid?");
+        page.WaitForAssertion(() => Assert.NotNull(Session.Current));
+        _investigation.Throw = new InvalidOperationException("boom");
+        Ask(page, "Why is M-2001 held?");
+        page.WaitForAssertion(() => Assert.NotNull(Session.Notice));
+
+        await Context.DisposeComponentsAsync();
+        var back = Render<Investigate>();
+
+        Assert.Contains("The investigation service isn't responding right now.", back.Markup, StringComparison.Ordinal);
+        Assert.Equal("Why was M-1042 not paid?", back.Find(".result-question").TextContent);
+        Assert.Contains("The Fabrikam Pay file for 9 November is missing.", back.Markup, StringComparison.Ordinal);
+        Assert.Equal(2, _investigation.Asked.Count);
+    }
+
+    [Fact]
     public void A_draft_from_home_is_filled_not_run()
     {
         Session.Draft = "Why is M-1042's payout held?";

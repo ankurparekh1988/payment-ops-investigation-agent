@@ -15,7 +15,8 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
     public static readonly TimeSpan CacheLifetime = TimeSpan.FromSeconds(10);
 
     private readonly Lock _lock = new();
-    private (PauseState State, DateTimeOffset ReadAt)? _cache;
+    // Timestamped on the monotonic clock, so setting the wall clock back can't stretch the lifetime.
+    private (PauseState State, long ReadAt)? _cache;
 
     // Counts this instance's writes, so a read that started before one can't put the older state back.
     private int _writes;
@@ -24,7 +25,7 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
     {
         lock (_lock)
         {
-            if (_cache is { } cached && time.GetUtcNow() - cached.ReadAt < CacheLifetime)
+            if (_cache is { } cached && time.GetElapsedTime(cached.ReadAt) < CacheLifetime)
             {
                 return Task.FromResult(cached.State);
             }
@@ -61,7 +62,7 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
                 return newer.State;
             }
 
-            _cache = (state, time.GetUtcNow());
+            _cache = (state, time.GetTimestamp());
             return state;
         }
     }
@@ -110,7 +111,7 @@ internal sealed class TablePauseStore(TableClient table, TimeProvider time) : IP
         lock (_lock)
         {
             _writes++;
-            _cache = (next, time.GetUtcNow());
+            _cache = (next, time.GetTimestamp());
         }
 
         return new PauseWrite.Written(next);

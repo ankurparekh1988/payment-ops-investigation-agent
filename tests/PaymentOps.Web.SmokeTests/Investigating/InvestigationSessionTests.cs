@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
 using PaymentOps.Agent.Contracts;
@@ -15,7 +16,122 @@ public sealed class InvestigationSessionTests
     private readonly CountingApprovalService _approvals = new(new ApprovalResult.Created("INC-0042"));
     private readonly FakeTimeProvider _time = new(Results.Now);
 
-    private InvestigationSession Session() => new(_investigation, _approvals, _time);
+    private readonly RecordingLogger<InvestigationSession> _log = new();
+
+    private InvestigationSession Session() => new(_investigation, _approvals, _time, _log);
+
+    // A failure is shown like a refusal before the run: the earlier result stays under its own question.
+    private static void AssertFailedOver(InvestigationSession session, string failed, string previous, AssessmentResult previousResult)
+    {
+        Assert.False(session.Busy);
+        Assert.Equal(new SessionNotice(NotAssessedReason.ModelUnavailable, failed), session.Notice);
+        Assert.Equal(previous, session.CurrentQuestion);
+        Assert.Equal(previousResult, session.Current);
+        Assert.Equal(failed, session.Draft);
+        Assert.Equal(previous, Assert.Single(session.Questions).Question);
+    }
+
+    [Fact]
+    public async Task A_failure_before_the_run_suspends_is_shown_as_unavailable()
+    {
+        await using var session = Session();
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+        var previous = session.Current!;
+
+        _investigation.Throw = new InvalidOperationException("boom");
+        await session.StartAsync("Why is M-2001 held?");
+
+        AssertFailedOver(session, "Why is M-2001 held?", "Why was M-1042 not paid?", previous);
+    }
+
+    [Fact]
+    public async Task A_failure_after_the_run_suspends_is_shown_as_unavailable()
+    {
+        await using var session = Session();
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+        var previous = session.Current!;
+
+        _investigation.Hold = true;
+        var run = session.StartAsync("Why is M-2001 held?");
+        Assert.True(session.Busy);
+        _investigation.Fail(new InvalidOperationException("boom"));
+        await run;
+
+        AssertFailedOver(session, "Why is M-2001 held?", "Why was M-1042 not paid?", previous);
+    }
+
+    [Fact]
+    public async Task A_cancel_that_throws_is_shown_as_cancelled()
+    {
+        await using var session = Session();
+        _investigation.Hold = true;
+        _investigation.CancelThrows = true;
+
+        var run = session.StartAsync("Why was M-1042 not paid?");
+        session.Cancel();
+        await run;
+
+        Assert.False(session.Busy);
+        Assert.Equal(NotAssessedReason.Cancelled, session.Notice?.Reason);
+        Assert.Empty(_log.Entries);
+    }
+
+    [Fact]
+    public async Task A_failure_is_logged_by_type_without_the_question_or_message()
+    {
+        await using var session = Session();
+        _investigation.Throw = new InvalidOperationException("secret detail");
+
+        await session.StartAsync("Why was M-1042 not paid?");
+
+        var entry = Assert.Single(_log.Entries);
+        Assert.Contains("InvalidOperationException", entry.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret detail", entry.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("M-1042", entry.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_session_runs_again_after_a_failure_without_retrying_on_its_own()
+    {
+        await using var session = Session();
+        _investigation.Throw = new InvalidOperationException("boom");
+        await session.StartAsync("Why was M-1042 not paid?");
+        Assert.Single(_investigation.Asked);
+
+        _investigation.Throw = null;
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+
+        Assert.Equal(2, _investigation.Asked.Count);
+        Assert.Null(session.Notice);
+        Assert.IsType<AssessmentResult.Assessed>(session.Current);
+    }
+
+    [Fact]
+    public async Task A_failed_decision_leaves_the_proposal_pending_and_can_be_tried_again()
+    {
+        await using var session = Session();
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+
+        _approvals.Throw = new TaskCanceledException("store timed out");
+        await session.ApproveAsync();
+
+        Assert.False(session.Deciding);
+        Assert.True(session.DecisionFailed);
+        var pending = Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!;
+        Assert.True(session.IsActionable(pending));
+        Assert.Contains("TaskCanceledException", Assert.Single(_log.Entries).Text, StringComparison.Ordinal);
+
+        _approvals.Throw = null;
+        await session.ApproveAsync();
+
+        Assert.False(session.DecisionFailed);
+        Assert.Equal(ProposalStatus.Approved, Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!.Status);
+        Assert.Equal(2, _approvals.Approvals);
+    }
 
     [Fact]
     public async Task A_finished_run_becomes_the_current_result_and_a_turn()
@@ -205,7 +321,7 @@ public sealed class InvestigationSessionTests
     public async Task A_failed_decision_leaves_the_card_pending_and_says_so()
     {
         var approvals = new CountingApprovalService(new ApprovalResult.Unavailable());
-        await using var session = new InvestigationSession(_investigation, approvals, _time);
+        await using var session = new InvestigationSession(_investigation, approvals, _time, NullLogger<InvestigationSession>.Instance);
         _investigation.Answer = _ => Results.WithPendingTicket();
         await session.StartAsync("Why was M-1042 not paid?");
 

@@ -15,6 +15,12 @@ internal sealed class ScriptedInvestigationService : IInvestigationService
 
     public bool Hold { get; set; }
 
+    /// <summary>Thrown before the run suspends, as a failure inside the call itself would be.</summary>
+    public Exception? Throw { get; set; }
+
+    /// <summary>A held run that's cancelled throws this instead of answering Cancelled.</summary>
+    public bool CancelThrows { get; set; }
+
     public List<string> Asked { get; } = [];
 
     public IProgress<InvestigationProgress>? LastProgress { get; private set; }
@@ -39,6 +45,11 @@ internal sealed class ScriptedInvestigationService : IInvestigationService
         Asked.Add(question);
         LastProgress = progress;
         LastToken = cancellationToken;
+        if (Throw is { } failure)
+        {
+            throw failure;
+        }
+
         if (!Hold)
         {
             return Task.FromResult(Answer(question));
@@ -46,11 +57,25 @@ internal sealed class ScriptedInvestigationService : IInvestigationService
 
         _held = new TaskCompletionSource<AssessmentResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var held = _held;
-        cancellationToken.Register(() => held.TrySetResult(new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled) { InvestigationId = Guid.NewGuid() }));
+        var cancelThrows = CancelThrows;
+        cancellationToken.Register(() =>
+        {
+            if (cancelThrows)
+            {
+                held.TrySetCanceled(cancellationToken);
+            }
+            else
+            {
+                held.TrySetResult(new AssessmentResult.NotAssessed(NotAssessedReason.Cancelled) { InvestigationId = Guid.NewGuid() });
+            }
+        });
         return held.Task;
     }
 
     public void Complete(AssessmentResult result) => _held!.TrySetResult(result);
+
+    /// <summary>Fails the held run after it suspended.</summary>
+    public void Fail(Exception failure) => _held!.TrySetException(failure);
 
     public void StartNew()
     {
@@ -69,16 +94,19 @@ internal sealed class CountingApprovalService(ApprovalResult answer) : IApproval
 
     public int Rejections { get; private set; }
 
+    /// <summary>Thrown by the next decisions instead of answering.</summary>
+    public Exception? Throw { get; set; }
+
     public Task<ApprovalResult> ApproveAsync(Guid proposalId, CancellationToken cancellationToken)
     {
         Approvals++;
-        return Task.FromResult(answer);
+        return Throw is { } failure ? Task.FromException<ApprovalResult>(failure) : Task.FromResult(answer);
     }
 
     public Task<ApprovalResult> RejectAsync(Guid proposalId, RejectionReason reason, string? note, CancellationToken cancellationToken)
     {
         Rejections++;
-        return Task.FromResult(answer);
+        return Throw is { } failure ? Task.FromException<ApprovalResult>(failure) : Task.FromResult(answer);
     }
 }
 

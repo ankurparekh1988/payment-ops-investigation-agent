@@ -13,7 +13,8 @@ public sealed record SessionNotice(NotAssessedReason Reason, string Question);
 /// It decides nothing the server owns: the conversation stays in <see cref="IInvestigationService"/>, proposals in
 /// the approval service, and a card shows only what the server answered.
 /// </summary>
-public sealed class InvestigationSession(IInvestigationService investigation, IApprovalService approvals, TimeProvider time) : IAsyncDisposable
+public sealed partial class InvestigationSession(
+    IInvestigationService investigation, IApprovalService approvals, TimeProvider time, ILogger<InvestigationSession> logger) : IAsyncDisposable
 {
     private readonly Lock _lock = new();
     private readonly List<InvestigationProgress> _steps = [];
@@ -129,6 +130,25 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
                 }
             }
         }
+        catch (Exception ex)
+        {
+            // Shown like a refusal before the run: the service kept no turn, and the earlier result stays under its own
+            // question. Nothing is retried; Try again is the person's call.
+            var cancelled = ex is OperationCanceledException && run.IsCancellationRequested;
+            if (!cancelled)
+            {
+                Failed(logger, "investigation", ex.GetType().Name);
+            }
+
+            lock (_lock)
+            {
+                if (sequence == _sequence)
+                {
+                    Refuse(new SessionNotice(cancelled ? NotAssessedReason.Cancelled : NotAssessedReason.ModelUnavailable, question), previousQuestion);
+                    Completed++;
+                }
+            }
+        }
         finally
         {
             lock (_lock)
@@ -154,14 +174,19 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
     {
         if (result is AssessmentResult.NotAssessed refused && !ReachedTheService(refused))
         {
-            Notice = new SessionNotice(refused.Reason, question);
-            Draft = question;
-            CurrentQuestion = previousQuestion;
+            Refuse(new SessionNotice(refused.Reason, question), previousQuestion);
             return;
         }
 
         SupersedePending();
         _turns.Add(new SessionTurn(question, result));
+    }
+
+    private void Refuse(SessionNotice notice, string? previousQuestion)
+    {
+        Notice = notice;
+        Draft = notice.Question;
+        CurrentQuestion = previousQuestion;
     }
 
     // Every run the investigation service starts carries its id, and the service supersedes the last proposal then.
@@ -270,12 +295,26 @@ public sealed class InvestigationSession(IInvestigationService investigation, IA
 
             _conversation = investigation.Conversation;
         }
+        catch (Exception ex)
+        {
+            // The approval service puts a failed claim back to pending, and a ticket is keyed by its proposal, so trying
+            // again can't make a second one.
+            Failed(logger, "decision", ex.GetType().Name);
+            lock (_lock)
+            {
+                DecisionFailed = _turns.Count > 0 && ReferenceEquals(_turns[^1], turn);
+            }
+        }
         finally
         {
             Deciding = false;
             Changed?.Invoke();
         }
     }
+
+    // The type only: a message can carry the question, tool output or a store's details.
+    [LoggerMessage(EventId = 3401, Level = LogLevel.Error, Message = "Investigation page: the {Operation} failed unexpectedly ({ExceptionType})")]
+    private static partial void Failed(ILogger logger, string operation, string exceptionType);
 
     private static TicketProposal Decided(TicketProposal proposal, ApprovalResult outcome, RejectionReason? reason) => outcome switch
     {
