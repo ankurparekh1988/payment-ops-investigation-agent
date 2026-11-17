@@ -29,6 +29,7 @@ provider "azurerm" {
     "Microsoft.CognitiveServices",
     "Microsoft.Consumption",
     "Microsoft.Insights",
+    "Microsoft.Logic",
     "Microsoft.ManagedIdentity",
     "Microsoft.OperationalInsights",
     "Microsoft.Search",
