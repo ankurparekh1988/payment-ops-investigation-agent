@@ -40,6 +40,10 @@ internal static class Poisoning
             var incidents = await inner.GetIncidentsAsync(processorId, fromInclusive, toExclusive, cancellationToken);
             return processorId == target ? [.. incidents.Select(i => i with { Summary = Append(i.Summary, payload) })] : incidents;
         }
+
+        // The overview isn't an investigation surface, so it isn't poisoned.
+        public Task<IReadOnlyList<ProcessorIncident>> GetAllIncidentsAsync(DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken) =>
+            inner.GetAllIncidentsAsync(fromInclusive, toExclusive, cancellationToken);
     }
 
     // The planted section joins every search result, as a poisoned document an attacker wrote to be found would.

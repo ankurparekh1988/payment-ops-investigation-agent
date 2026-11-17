@@ -1,0 +1,19 @@
+@using PaymentOps.Agent.Contracts
+
+@* Shown while a run is in progress, with its live steps. The question is the person's own text, bound as text. *@
+<MudPaper Class="panel running-card" Elevation="0">
+    <div class="running-header">
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" aria-hidden="true" />
+        <h2 class="panel-title">Investigating</h2>
+    </div>
+    <p class="running-question">@Question</p>
+    <Timeline Events="Steps" />
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Question { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<InvestigationProgress> Steps { get; set; } = [];
+}

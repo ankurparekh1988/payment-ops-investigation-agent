@@ -42,6 +42,26 @@ internal sealed class DemoSettlementData(DemoDataset dataset) : ISettlementData
             .OrderBy(p => p.BatchDate).ThenBy(p => p.Id, StringComparer.Ordinal));
     }
 
+    public Task<IReadOnlyList<Payout>> GetHeldPayoutsAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken)
+    {
+        HalfOpenRange.Require(fromInclusive, toExclusive);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Result(dataset.Payouts
+            .Where(p => p.Status == PayoutStatus.Held && HalfOpenRange.Contains(p.BatchDate, fromInclusive, toExclusive))
+            .OrderBy(p => p.BatchDate).ThenBy(p => p.Id, StringComparer.Ordinal));
+    }
+
+    public Task<IReadOnlyList<SettlementFile>> GetRejectedFilesAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken)
+    {
+        HalfOpenRange.Require(fromInclusive, toExclusive);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Result(dataset.Files
+            .Where(f => f.Status == SettlementFileStatus.Rejected && HalfOpenRange.Contains(f.BatchDate, fromInclusive, toExclusive))
+            .OrderBy(f => f.BatchDate).ThenBy(f => f.Id, StringComparer.Ordinal));
+    }
+
     // Weekends are computed and closure days come from the dataset, so any range is answered in full.
     public Task<IReadOnlyList<SettlementDay>> GetCalendarAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken)
     {

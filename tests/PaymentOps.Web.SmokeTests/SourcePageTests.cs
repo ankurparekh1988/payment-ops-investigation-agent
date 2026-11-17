@@ -24,6 +24,8 @@ public sealed class SourcePageTests(PaymentOpsWebApplicationFactory factory) : I
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("Doc A &gt; One", html, StringComparison.Ordinal);
         Assert.Contains("<strong>text</strong>", html, StringComparison.Ordinal);
+        Assert.Contains("<article class=\"source-body\">", html, StringComparison.Ordinal);
+        Assert.Contains("Doc A</h1>", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -35,7 +37,7 @@ public sealed class SourcePageTests(PaymentOpsWebApplicationFactory factory) : I
 
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("<base href=\"/\"", html, StringComparison.Ordinal);
-        Assert.Contains("<title>Source</title>", html, StringComparison.Ordinal);
+        Assert.Contains("<title>Doc A · Contoso Payments</title>", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,7 +49,7 @@ public sealed class SourcePageTests(PaymentOpsWebApplicationFactory factory) : I
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
-        Assert.Contains("the content you are looking for does not exist", html, StringComparison.Ordinal);
+        Assert.Contains("Page not found</h1>", html, StringComparison.Ordinal);
         Assert.DoesNotContain("Restricted", html, StringComparison.OrdinalIgnoreCase);
     }
 

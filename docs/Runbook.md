@@ -11,7 +11,7 @@ AppTraces
 | order by TimeGenerated asc
 ```
 
-The relevant events: `3001` assessed, `3002` not assessed, `3005` untrusted values screened and withheld (counts per tool), `3006` blocked by the content filter (prompt or completion side), `3007` a question not investigated by the question screen (harmful, self-harm, attack or unavailable), `3008` a merchant the user never named refused, `3009` the decision record, `3101` an approval decision.
+The relevant events: `3001` assessed, `3002` not assessed, `3005` untrusted values screened and withheld (counts per tool), `3006` blocked by the content filter (prompt or completion side), `3007` a question not investigated by the question screen (harmful, self-harm, attack or unavailable), `3008` a merchant the user never named refused, `3009` the decision record, `3101` an approval decision, `3301` a pause or resume, `3401` an investigation or ticket decision that failed unexpectedly on the page (the exception type only; the person sees "The investigation service isn't responding" or "The ticket couldn't be created").
 
 **Explaining an answer.** The decision record (`3009`) says what the investigation did: its outcome, the tools it called and how each ended, the evidence and sections it cited, the screen verdicts, and what it used. Its operation id finds the rest of the trace, the screens, searches, tool calls and model calls in order:
 
@@ -50,10 +50,15 @@ Signs: a General user sees Restricted knowledge; a ticket's title or summary car
 
 Investigations can be stopped without a deployment, and how many can run in a day is bounded ([ADR 0021](adr/0021-bounded-usage-and-observable-cost.md)).
 
-- **Pause.** Set the web app's `PaymentOps__Usage__Paused` setting to `true`; the app restarts and every question gets "Investigations are paused." Nothing is investigated or counted. Set it back to `false`, or remove it, to resume. Terraform's `investigations_paused` variable sets the same value at the next deployment, so change it there too or the deployment undoes the pause.
+- **Pause from the app.** An Admin uses **Pause investigations** in the Operations section of the home page, with an optional reason. New investigations get "Investigations are paused." within 10 seconds on every instance; running ones finish. **Resume investigations** undoes it. The section shows who last changed it, when and why, and each change is logged as event `3301` with a pseudonymous id and the reason's length; the workbook's Operations section lists them.
+- **Pause by configuration.** Set the web app's `PaymentOps__Usage__Paused` setting to `true`; the app restarts and every question gets "Investigations are paused." Nothing is investigated or counted, whatever the switch says, and the home page shows "Paused by configuration". Set it back to `false`, or remove it, to resume. Terraform's `investigations_paused` variable sets the same value at the next deployment, so change it there too or the deployment undoes the pause.
 - **Daily limits.** `PaymentOps__Usage__DailyLimitPerUser` and `PaymentOps__Usage__DailyLimitTotal` bound how many investigations one person and everyone together may start in a UTC day. Counts reset at 00:00 UTC. Only admitted investigations count; a refused one consumes nothing.
-- **"Investigations can't start right now."** The usage table couldn't be read or written, so nothing was admitted (event `3201` names the cause's type). Check the web app identity's *Storage Table Data Contributor* assignment on the `usage` table (not the account) and the storage account's health.
+- **"Investigations can't start right now."** The usage table, or the pause row in it, couldn't be read or written, so nothing was admitted (event `3201` names the cause's type). Check the web app identity's *Storage Table Data Contributor* assignment on the `usage` table (not the account) and the storage account's health.
 - **Who's refused, and why.** Refusals before an investigation starts are counted by reason in the `paymentops.investigations.rejected` metric (`busy`, `paused`, `daily_limit`, `usage_unavailable`); they have no trace.
+
+## Deployments
+
+**Apply fails with "Artifact not found for name: platform-plan".** CD keeps the encrypted plan for one day, so a stale plan can never be applied; an Apply approved later finds nothing and stops before Terraform runs, leaving the environment as it was. Use **Re-run all jobs** on the CD run, not *Re-run failed jobs*, which looks for the same expired plan, and approve the new Apply within 24 hours of its plan.
 
 ## Alerts
 

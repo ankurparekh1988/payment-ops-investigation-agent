@@ -122,4 +122,26 @@ public abstract class SettlementDataContract
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Port.GetPaymentsAsync("M-1", Utc(2026, 11, 1, 0, 0), Utc(2026, 11, 7, 0, 0), Cancelled()));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Port.GetCalendarAsync(Nov2, Nov4, Cancelled()));
     }
+
+    // The home page's overview: what needs attention across every merchant and processor.
+    [Fact]
+    public async Task Held_payouts_are_those_held_with_a_batch_date_in_the_window()
+    {
+        Assert.Equal(["PO-6"], (await Port.GetHeldPayoutsAsync(new(2026, 11, 1), new(2026, 11, 3), CancellationToken.None)).Select(p => p.Id));
+        Assert.Empty(await Port.GetHeldPayoutsAsync(new(2026, 11, 3), new(2026, 11, 10), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Rejected_files_are_those_rejected_with_a_batch_date_in_the_window()
+    {
+        Assert.Equal(["SF-A4"], (await Port.GetRejectedFilesAsync(new(2026, 11, 1), new(2026, 11, 6), CancellationToken.None)).Select(f => f.Id));
+        Assert.Empty(await Port.GetRejectedFilesAsync(new(2026, 11, 1), new(2026, 11, 5), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Overview_queries_need_a_window_that_moves_forward()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => Port.GetHeldPayoutsAsync(new(2026, 11, 3), new(2026, 11, 3), CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => Port.GetRejectedFilesAsync(new(2026, 11, 3), new(2026, 11, 2), CancellationToken.None));
+    }
 }

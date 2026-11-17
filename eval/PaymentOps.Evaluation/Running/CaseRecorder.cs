@@ -301,5 +301,7 @@ internal sealed class CaseRecorder
         }
 
         public Task<IncidentTicket?> FindAsync(string ticketId, CancellationToken cancellationToken) => inner.FindAsync(ticketId, cancellationToken);
+
+        public Task<IReadOnlyList<IncidentTicket>> GetRecentAsync(int count, CancellationToken cancellationToken) => inner.GetRecentAsync(count, cancellationToken);
     }
 }

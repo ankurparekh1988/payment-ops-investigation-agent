@@ -8,7 +8,7 @@
 |---|---|
 | Solution structure | ✅ Projects and allowed dependency directions in place |
 | Architecture tests | ✅ Dependency rules enforced in `PaymentOps.ArchitectureTests` |
-| Web host | ✅ Blazor host with the investigation page, source pages and health endpoints |
+| Web host | ✅ Blazor host with the Contoso Payments shell, a role-based home page, the Investigate page, source pages and health endpoints ([below](#ui-shell)) |
 | Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
 | Azure platform | ✅ Defined in Terraform, with a model preflight. Deployed only by the deployment pipeline, after approval |
 | Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry and queries the knowledge index with its managed identity) |
@@ -20,7 +20,8 @@
 | Knowledge retrieval | ✅ The server retrieves only what the user may see, for the agent's knowledge search and for source pages ([below](#knowledge-retrieval)). The grounded-answer path that answered from knowledge alone was retired when the investigation view replaced it |
 | Structured data | ✅ Merchants, payments, settlement files, payouts, the settlement calendar, processor configuration and incidents, and error events behind four domain ports, served from a validated synthetic dataset built into the app ([below](#structured-data)) |
 | Investigation agent | ✅ One agent with five read-only tools, limits enforced in our own code, and an assessment shown only after every statement checks out against what this investigation's tools returned ([below](#investigation-agent)) |
-| Investigation view | ✅ The home page: a live timeline of tool calls written by the server, the validated assessment with each statement's support, cancel, and follow-up questions within an application-owned budget ([below](#investigation-view)) |
+| Home page | ✅ What each role needs at a glance, layered by role, with the Admin's pause switch ([below](#home-page)) |
+| Investigation view | ✅ The Investigate page: a live timeline of tool calls written by the server, the validated assessment with each statement's support, cancel, and follow-up questions within an application-owned budget ([below](#investigation-view)) |
 | Ticket approvals | ✅ The agent can propose an incident ticket; the server stores it for the Engineer who ran the investigation, and creates the ticket only when they approve, once ([below](#proposals-and-approval)) |
 | Evaluation suite | ✅ `eval/PaymentOps.Evaluation` runs labelled cases through the app's own registration, observing the model, tools, knowledge and ticket store from outside; deterministic metrics over three runs, recorded judge scores and a fixed-workflow challenger ([Evaluation](Evaluation.md#release-gate)). Thresholds are frozen from the measured spread of a ten-run baseline of `main` ([ADR 0018](adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md)). The `AI evaluation` workflow gates pull requests against them when they ask for it, keyless, against a dedicated evaluation index, and a monthly run of `main` records its results in Log Analytics ([Running in CI](Evaluation.md#running-in-ci)) |
 
@@ -254,25 +255,56 @@ One log event per investigation, `3009`, is its decision record: the outcome, th
 
 Everything goes to Application Insights through the app's managed identity; the KQL to follow one investigation is in the [Runbook](Runbook.md).
 
+## UI shell
+
+The UI is Blazor with MudBlazor, under a custom Contoso Payments theme ([ADR 0022](adr/0022-enterprise-ui-on-mudblazor.md)).
+
+- **One circuit across pages.** Every page is interactive on the server except Source, Signed out, No access, Not found and Error, which stay static to set a status code or post a plain form.
+- **The shell.** The app bar shows the company and module, Home and Investigate (for someone with a role), an environment badge when one is configured, the theme toggle, the person's name, their highest role and Risk and Compliance membership, and Sign out. On a phone it wraps so nothing is hidden.
+- **One theme.** A palette per mode, one type scale in Inter (served by the app) and fixed radii. Tests check the contrast of every text colour on every background it's used on, in both modes, and that the stylesheet uses no colour the theme doesn't define.
+- **Light or dark without a flash.** A chosen mode is a cookie the server reads when it renders. Otherwise a script in the page head records the OS preference for the next request and marks the page, so the background and, on static pages, the whole palette are right before the app starts; the app then follows the mark and any later OS change.
+
+## Home page
+
+Built on the server for the signed-in person by `HomeOverview`, layered by role: each role gets everything the one below it gets, plus its own sections, and a section a role doesn't get is never fetched.
+
+| Section | Who | Content |
+|---|---|---|
+| Question box | Everyone | Hands a question to Investigate, filled in but not run; three fixed example questions |
+| Your conversation | Everyone | This session's questions and outcomes, a running investigation with a link back, and today's count against the person's daily limit |
+| Processor incidents | Everyone | Incidents overlapping the last seven days, open or resolved |
+| Settlements needing attention | Everyone | Held payouts and rejected settlement files from the last seven days, newest first; Investigate fills a fixed question built from the record |
+| Waiting for your approval | Engineers and above | The pending ticket from this session's latest investigation, with its expiry |
+| Recent tickets | Engineers and above | The newest five tickets |
+| Operations | Admins | Running or paused, the pause switch and its last change, today's total against the daily limit, the per-person limit, links to the workbook and alert rules |
+| Restricted knowledge | Risk and Compliance | That their investigations can use restricted runbooks and policies |
+
+- **Real data only.** The demo sections read the data ports' overview queries (every processor's incidents in a window, held payouts, rejected files, recent tickets), which the agent and its tools never call; an architecture test checks that. They're read as of the demo clock, so the page agrees with what an investigation finds, and the page says what date the data is as of. Usage is read from the counter without reserving anything; if it can't be read, the page says so rather than showing zero.
+- **The pause switch.** Admins only, checked by the switch on every change. Pausing asks first, with an optional reason. The state is one row in the usage table, cached for 10 seconds per instance and replaced at once on the instance that changed it; a change is decided from a fresh read and written only if the row hasn't changed since, so a second Admin's change is reported rather than overwritten. A row that can't be read refuses investigations. The deployment's `Paused` setting still overrides it ([Runbook](Runbook.md#pausing-and-limits)).
+
 ## Investigation view
 
-The home page is the investigation. It talks only to `IInvestigationService` and `IApprovalService`, and the agent's text never reaches the page as markup.
+The Investigate page talks only to `IInvestigationService` and `IApprovalService` through a circuit-scoped `InvestigationSession`, and the agent's text never reaches the page as markup.
 
 ```mermaid
 flowchart LR
-  P["Investigate page"] -->|"question, IProgress, cancel"| S["IInvestigationService<br/>one at a time per page"]
+  P["Investigate page"] --> I["InvestigationSession<br/>(this circuit)"]
+  I -->|"question, IProgress, cancel"| S["IInvestigationService<br/>one at a time per page"]
   S --> C["Conversation<br/>(this page)"]
   S --> R["Agent runner"]
-  R -- "ToolStarted, ToolFinished,<br/>CorrectionRequested,<br/>LimitReached, Submitting" --> P
+  R -- "ToolStarted, ToolFinished,<br/>CorrectionRequested,<br/>LimitReached, Submitting" --> I
   R --> V["Validated assessment"]
-  V --> P
-  P -->|"Approve / Reject"| A["IApprovalService"]
+  V --> I
+  I -->|"Approve / Reject"| A["IApprovalService"]
 ```
 
 - **A timeline written by the server.** The tool guard reports each call as it starts and finishes, with a label built from the parsed request: the tool's name and only the ids and dates that pass validation, never a search query or anything else the model wrote. A rejected submission, a reached limit and the submission itself are events too. The model's text isn't streamed: the answer is a tool call, and streaming it would show unvalidated text.
 - **The assessment.** Each statement shows the records, computed facts (marked as computed) and knowledge sections behind it, with sections linking to their source pages. The root cause is labelled *Assessment* or *Hypothesis*, gaps are shown in their fixed words, and an incomplete or escalated outcome says so first. Model-written text is bound as text, never as Markdown or HTML.
-- **Cancel.** The page owns the cancellation, so Cancel or closing the tab stops the investigation. A cancelled question is reported as cancelled, distinct from the 60 s limit, and nothing from it is kept: no turn in the conversation, no proposal.
-- **Framing.** The page can approve tickets, so it's served with `frame-ancestors 'none'`.
+- **The session.** It holds what the page shows and the running investigation, so going Home and back keeps a running investigation, its result and a pending ticket card. Progress lands in the session, never in a page, and progress from an earlier run is dropped. A card offers Approve only while the stored proposal is pending and unexpired. A question refused before its run starts (paused, over a limit, busy) is shown as a notice above the previous result, whose card stays as it was, because the server neither kept the turn nor replaced the proposal. A refresh, sign-out or the circuit ending clears it; nothing is persisted.
+- **Results that aren't assessments** are grouped by what the person can do: fix the question, try again shortly, a limit or policy, cancelled, or signed out, each with at most one action. The self-harm notice is plain, with no alarm colour and nothing to retry.
+- **Sources open in a new tab,** so following a citation leaves the investigation as it was.
+- **Cancel.** The session owns the cancellation, so Cancel, or closing the tab and so ending the circuit, stops the investigation; leaving for another page doesn't. A cancelled question is reported as cancelled, distinct from the 60 s limit, and nothing from it is kept: no turn in the conversation, no proposal.
+- **Framing.** Pages can approve tickets and pause investigations, so interactive pages are served with `frame-ancestors 'none'`.
 
 ## Conversation
 

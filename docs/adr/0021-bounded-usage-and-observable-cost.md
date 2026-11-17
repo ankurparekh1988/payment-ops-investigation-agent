@@ -1,6 +1,6 @@
 # 0021. Bounded usage and observable cost
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [0022](0022-enterprise-ui-on-mudblazor.md) (Admins pause from the app)
 - **Date:** 2026-11-14
 
 ## Context

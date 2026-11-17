@@ -7,6 +7,8 @@ namespace PaymentOps.Web.Security;
 /// <summary>Named authorization policies. Higher roles satisfy lower ones.</summary>
 internal static class AuthorizationPolicies
 {
+    /// <summary>Any app role. Interactive pages state it themselves: navigation inside a circuit isn't an HTTP request.</summary>
+    public const string Investigate = nameof(Investigate);
     public const string ApproveActions = nameof(ApproveActions);
     public const string Administer = nameof(Administer);
 
@@ -18,6 +20,7 @@ internal static class AuthorizationPolicies
             .RequireRole(OpsRoles.AtLeast(OpsRoles.Reader))
             .Build();
 
+        options.AddPolicy(Investigate, policy => policy.RequireAuthenticatedUser().RequireRole(OpsRoles.AtLeast(OpsRoles.Reader)));
         options.AddPolicy(ApproveActions, policy => policy.RequireRole(OpsRoles.AtLeast(OpsRoles.Engineer)));
         options.AddPolicy(Administer, policy => policy.RequireRole(OpsRoles.AtLeast(OpsRoles.Admin)));
     }

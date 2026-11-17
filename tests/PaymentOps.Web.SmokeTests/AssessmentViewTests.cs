@@ -70,6 +70,50 @@ public sealed class AssessmentViewTests
     }
 
     [Fact]
+    public async Task Model_text_with_markup_is_rendered_as_text()
+    {
+        const string Hostile = "<img src=x onerror=alert(1)><b>bold</b>";
+        var hostile = new AssessmentResult.Assessed(
+            AssessmentOutcome.Assessed,
+            new Statement("summary " + Hostile, [], []),
+            [new Statement("claim " + Hostile, [], [])],
+            new RootCause(new Statement("root " + Hostile, [], []), RootCauseLabel.Assessment),
+            Confidence.High,
+            [new Statement("step " + Hostile, [], [])],
+            [])
+        {
+            Proposal = new TicketProposal(null, ProposalStatus.Draft, "fabrikam-pay", ["M-1042"], new DateOnly(2026, 11, 9), new DateOnly(2026, 11, 9),
+                "title " + Hostile, "ticket summary " + Hostile, [], [], null, null, null),
+        };
+
+        var html = await Render(hostile);
+
+        Assert.DoesNotContain("<img", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<b>", html, StringComparison.Ordinal);
+        foreach (var field in new[] { "summary", "claim", "root", "step", "title", "ticket summary" })
+        {
+            Assert.Contains($"{field} &lt;img src=x onerror=alert(1)&gt;&lt;b&gt;bold&lt;/b&gt;", html, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Outcome_and_confidence_are_stated_in_words()
+    {
+        var html = await Render(Assessed(AssessmentOutcome.Incomplete));
+
+        Assert.Contains(">Incomplete<", html, StringComparison.Ordinal);
+        Assert.Contains(">Medium confidence<", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_summary_is_the_result_heading()
+    {
+        var html = await Render(Assessed());
+
+        Assert.Matches("<h3 class=\"result-summary\"[^>]*>The 9 November Fabrikam file never arrived.</h3>", html);
+    }
+
+    [Fact]
     public async Task Timeline_renders_labels_in_order_with_one_live_summary()
     {
         InvestigationProgress[] events =
@@ -103,5 +147,40 @@ public sealed class AssessmentViewTests
         var html = await ComponentHtml.RenderAsync<ConversationNotice>(new() { [nameof(ConversationNotice.Status)] = new ConversationStatus(2, 2, false) });
 
         Assert.DoesNotContain("The agent sees", html, StringComparison.Ordinal);
+    }
+
+    // Once the run is over nothing is still in progress, even the step that was last reported.
+    [Fact]
+    public async Task A_finished_run_shows_no_step_in_progress()
+    {
+        IReadOnlyList<InvestigationProgress> events =
+        [
+            new InvestigationProgress.ToolStarted("merchant", "Merchant profile"),
+            new InvestigationProgress.ToolFinished("merchant", "Merchant profile", true, 1, null),
+            new InvestigationProgress.Submitting(),
+        ];
+
+        var running = await ComponentHtml.RenderAsync<Timeline>(new() { [nameof(Timeline.Events)] = events });
+        var finished = await ComponentHtml.RenderAsync<Timeline>(new() { [nameof(Timeline.Events)] = events, [nameof(Timeline.Run)] = TimelineRun.Finished });
+
+        Assert.Contains("step-running", running, StringComparison.Ordinal);
+        Assert.DoesNotContain("step-running", finished, StringComparison.Ordinal);
+    }
+
+    // A step that was still running when the person cancelled didn't finish; it mustn't read as done.
+    [Fact]
+    public async Task A_stopped_run_shows_its_unfinished_step_as_stopped()
+    {
+        IReadOnlyList<InvestigationProgress> events = [new InvestigationProgress.ToolStarted("merchant", "Merchant profile")];
+
+        var html = await ComponentHtml.RenderAsync<Timeline>(new()
+        {
+            [nameof(Timeline.Events)] = events,
+            [nameof(Timeline.Run)] = TimelineRun.Stopped,
+        });
+
+        Assert.DoesNotContain("step-done", html, StringComparison.Ordinal);
+        Assert.Contains("step-stopped", html, StringComparison.Ordinal);
+        Assert.Contains("Stopped: ", html, StringComparison.Ordinal);
     }
 }

@@ -1,0 +1,228 @@
+@page "/"
+@attribute [Authorize(Policy = AuthorizationPolicies.Investigate)]
+@using PaymentOps.Web.Security
+@implements IDisposable
+@using PaymentOps.Agent.Contracts
+@using PaymentOps.Web.Components.Home
+@using PaymentOps.Web.Components.Investigation
+@using PaymentOps.Web.Home
+@using PaymentOps.Web.Investigating
+@inject HomeOverview Overview
+@inject InvestigationSession Session
+@inject IUserContext CurrentUser
+@inject NavigationManager Navigation
+@inject TimeProvider Clock
+@inject QuestionLimits Limits
+
+<PageTitle>Home · Contoso Payments</PageTitle>
+
+<div class="home-header">
+    <h1 class="page-title">Welcome, @FirstName</h1>
+    <span class="home-date">@Clock.GetUtcNow().ToString("dddd d MMMM yyyy", CultureInfo.InvariantCulture)</span>
+</div>
+
+<MudPaper Class="panel home-ask" Elevation="0">
+    <label for="home-question" class="field-label">What do you want to investigate?</label>
+    <textarea id="home-question" class="field-input question-input" rows="2" maxlength="@Limits.MaxQuestionLength"
+              value="@_question" @oninput="e => _question = e.Value as string ?? string.Empty"></textarea>
+    <div class="home-ask-footer">
+        <div class="starter-list" aria-label="Example questions">
+            @foreach (var starter in StarterQuestions.All)
+            {
+                <button type="button" class="starter-question" @onclick="() => _question = starter">@starter</button>
+            }
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => HandOver(_question)"
+                   Disabled="string.IsNullOrWhiteSpace(_question)">Continue in Investigate</MudButton>
+    </div>
+</MudPaper>
+
+@if (_view is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Loading" />
+}
+else
+{
+    @if (_view.Operations is { } operations)
+    {
+        <OperationsPanel View="operations" />
+    }
+
+    <div class="home-grid">
+        <div class="home-column">
+            <HomePanel Title="Your conversation">
+                @if (Session.Busy)
+                {
+                    <p class="notice notice-info">Investigation running: @Session.CurrentQuestion <a href="investigate">Open</a></p>
+                }
+                @if (Session.Questions is { Count: > 0 } turns)
+                {
+                    <ConversationList Turns="turns" />
+                }
+                else if (!Session.Busy)
+                {
+                    <p class="empty-state">No questions in this conversation yet.</p>
+                }
+                <p class="usage-line">
+                    @if (_view.Usage is { } usage)
+                    {
+                        @($"{usage.Used} of your {usage.Limit} investigations today")
+                    }
+                    else
+                    {
+                        @("Today's usage isn't available right now.")
+                    }
+                </p>
+            </HomePanel>
+
+            @if (_view.ShowApprovals)
+            {
+                <HomePanel Title="Waiting for your approval" AddedBy="Engineers and above">
+                    @if (Waiting is { } proposal)
+                    {
+                        <div class="list-row">
+                            <div>
+                                <p class="row-title">@proposal.Title</p>
+                                <p class="row-meta">@proposal.ProcessorId · expires @proposal.ExpiresAt?.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) UTC</p>
+                            </div>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="investigate">Review</MudButton>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="empty-state">Nothing is waiting for your approval.</p>
+                    }
+                </HomePanel>
+            }
+
+            @if (_view.RestrictedKnowledge)
+            {
+                <HomePanel Title="Restricted knowledge" AddedBy="Risk and Compliance">
+                    <p>Your investigations can draw on restricted runbooks and policies.</p>
+                </HomePanel>
+            }
+        </div>
+
+        <div class="home-column">
+            <HomePanel Title="Processor incidents">
+                @if (_view.Processors.Count == 0)
+                {
+                    <p class="empty-state">No processor incidents in the last 7 days.</p>
+                }
+                else
+                {
+                    <ul class="plain-list">
+                        @foreach (var incident in _view.Processors)
+                        {
+                            <li class="list-row">
+                                <div>
+                                    <p class="row-title">@incident.ProcessorName</p>
+                                    <p class="row-meta">@incident.Summary · @Window(incident)</p>
+                                </div>
+                                <span class="chip @(incident.ResolvedAt is null ? "chip-warning" : "chip-neutral")">@(incident.ResolvedAt is null ? "Open" : "Resolved")</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </HomePanel>
+
+            <HomePanel Title="Settlements needing attention">
+                @if (_view.Attention.Count == 0)
+                {
+                    <p class="empty-state">No held payouts or rejected files in the last 7 days.</p>
+                }
+                else
+                {
+                    <ul class="plain-list">
+                        @foreach (var item in _view.Attention)
+                        {
+                            <li class="list-row attention-row">
+                                <div>
+                                    <p class="row-title">@(item.Kind == AttentionKind.HeldPayout ? $"{item.Subject} payout held" : $"{item.ProcessorName} file rejected")</p>
+                                    <p class="row-meta">@item.ProcessorName · batch @item.BatchDate.ToString("d MMM", CultureInfo.InvariantCulture)</p>
+                                </div>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => HandOver(item.Question)">Investigate</MudButton>
+                            </li>
+                        }
+                    </ul>
+                }
+            </HomePanel>
+
+            @if (_view.Tickets is { } tickets)
+            {
+                <HomePanel Title="Recent tickets" AddedBy="Engineers and above">
+                    @if (tickets.Count == 0)
+                    {
+                        <p class="empty-state">No tickets yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="plain-list">
+                            @foreach (var ticket in tickets)
+                            {
+                                <li class="list-row">
+                                    <div>
+                                        <p class="row-title">@ticket.Id</p>
+                                        <p class="row-meta">@ticket.ProcessorId · @string.Join(", ", ticket.MerchantIds) · @ticket.CreatedAt.UtcDateTime.ToString("d MMM HH:mm", CultureInfo.InvariantCulture) UTC</p>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    <p class="row-meta">Demo tickets are kept in memory and reset when the app restarts.</p>
+                </HomePanel>
+            }
+        </div>
+    </div>
+
+    <p class="data-note">Data as of @_view.AsOf.UtcDateTime.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC · synthetic demo data</p>
+}
+
+@code {
+    private HomeView? _view;
+    private string _question = string.Empty;
+
+    private string FirstName => CurrentUser.DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? CurrentUser.DisplayName;
+
+    // A proposal can be approved only from the investigation that made it, which is this session's latest; the session
+    // already shows an expired one as expired.
+    private TicketProposal? Waiting =>
+        Session.Current is AssessmentResult.Assessed { Proposal: { Status: ProposalStatus.Pending } proposal } ? proposal : null;
+
+    private (bool Busy, int Completed, bool Deciding, int Questions) _shown;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += OnSessionChanged;
+        _view = await Overview.LoadAsync(CancellationToken.None);
+    }
+
+    // The question is filled in on Investigate, never run from here.
+    private void HandOver(string question)
+    {
+        if (string.IsNullOrWhiteSpace(question))
+        {
+            return;
+        }
+
+        Session.Draft = question;
+        Navigation.NavigateTo("investigate");
+    }
+
+    private static string Window(ProcessorIncidentItem incident) => incident.ResolvedAt is { } resolved
+        ? $"{incident.StartedAt.UtcDateTime.ToString("d MMM HH:mm", CultureInfo.InvariantCulture)} to {resolved.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture)} UTC"
+        : $"since {incident.StartedAt.UtcDateTime.ToString("d MMM HH:mm", CultureInfo.InvariantCulture)} UTC";
+
+    // Home shows no steps, so a progress event alone doesn't re-render it.
+    private void OnSessionChanged()
+    {
+        var now = (Session.Busy, Session.Completed, Session.Deciding, Session.Conversation.Questions);
+        if (now != _shown)
+        {
+            _shown = now;
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+}

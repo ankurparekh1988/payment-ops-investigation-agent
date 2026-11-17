@@ -15,6 +15,12 @@ public interface ISettlementData
     /// <summary>The merchant's payouts with a batch date in the range.</summary>
     Task<IReadOnlyList<Payout>> GetPayoutsAsync(string merchantId, DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken);
 
+    /// <summary>Every merchant's held payouts with a batch date in the range, for the operations overview.</summary>
+    Task<IReadOnlyList<Payout>> GetHeldPayoutsAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken);
+
+    /// <summary>Every processor's rejected settlement files with a batch date in the range, for the operations overview.</summary>
+    Task<IReadOnlyList<SettlementFile>> GetRejectedFilesAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken);
+
     /// <summary>Every date in the range, saying whether it's a settlement day.</summary>
     Task<IReadOnlyList<SettlementDay>> GetCalendarAsync(DateOnly fromInclusive, DateOnly toExclusive, CancellationToken cancellationToken);
 }

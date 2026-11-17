@@ -57,8 +57,8 @@ public sealed class HostSmokeTests(PaymentOpsWebApplicationFactory factory) : IC
         var html = await client.GetStringAsync(new Uri("/", UriKind.Relative));
 
         Assert.Contains("Riley Reader", html, StringComparison.Ordinal);
-        Assert.Contains(OpsRoles.Reader, html, StringComparison.Ordinal);
-        Assert.DoesNotContain(OpsRoles.Engineer, html, StringComparison.Ordinal);
+        Assert.Contains("<span class=\"user-role\">Reader</span>", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<span class=\"user-role\">Engineer</span>", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -69,7 +69,8 @@ public sealed class HostSmokeTests(PaymentOpsWebApplicationFactory factory) : IC
 
         var html = await client.GetStringAsync(new Uri("/", UriKind.Relative));
 
-        Assert.Contains("Yes, through Risk and Compliance", html, StringComparison.Ordinal);
+        Assert.Contains("Restricted knowledge", html, StringComparison.Ordinal);
+        Assert.Contains("<span class=\"user-group\">Risk and Compliance</span>", html, StringComparison.Ordinal);
     }
 
     [Fact]

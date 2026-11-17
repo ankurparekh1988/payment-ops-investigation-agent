@@ -1,59 +1,115 @@
 @using System.Globalization
 @using PaymentOps.Agent.Contracts
 
-@* Server-written events only. One polite live line announces the latest step, not every row. *@
+@* Server-written events only. Each row says its state in words as well as by marker; one polite live line announces
+   the latest step, not every row. *@
 @{
     var rows = Rows();
 }
-<ol class="timeline">
+<ol class="steps">
     @foreach (var row in rows)
     {
-        <li>@row</li>
+        <li class="step @StateClass(row.State)">
+            <span class="step-marker" aria-hidden="true"></span>
+            <span class="visually-hidden">@StateWord(row.State): </span>
+            <span class="step-label">@row.Label</span>
+            @if (row.Detail is { } detail)
+            {
+                <span class="step-detail">@detail</span>
+            }
+        </li>
     }
 </ol>
-<p class="visually-hidden" aria-live="polite">@rows.LastOrDefault()</p>
+<p class="visually-hidden" aria-live="polite">@(rows.Count > 0 ? rows[^1].Text : string.Empty)</p>
 
 @code {
     [Parameter, EditorRequired]
     public IReadOnlyList<InvestigationProgress> Events { get; set; } = [];
 
-    // A finished call replaces the row its start opened, so each call is one line.
-    private List<string> Rows()
+    /// <summary>Whether the run is still going, finished, or was cancelled with a step unfinished.</summary>
+    [Parameter]
+    public TimelineRun Run { get; set; }
+
+    private enum StepState
     {
-        var rows = new List<string>();
+        Running,
+        Done,
+        Failed,
+        Note,
+        Stopped,
+    }
+
+    private sealed record Row(StepState State, string Label, string? Detail)
+    {
+        public string Text => Detail is null ? Label : $"{Label} · {Detail}";
+    }
+
+    // A finished call replaces the row its start opened, so each call is one line.
+    private List<Row> Rows()
+    {
+        var rows = new List<Row>();
         foreach (var e in Events)
         {
             switch (e)
             {
                 case InvestigationProgress.ToolStarted started:
-                    rows.Add($"{started.Label} …");
+                    rows.Add(new Row(StepState.Running, started.Label, null));
                     break;
                 case InvestigationProgress.ToolFinished finished:
-                    var text = finished.Succeeded ? $"{finished.Label} · {Records(finished.Records)}" : $"{finished.Label} · {finished.Gap ?? "failed"}";
-                    if (rows.Count > 0 && rows[^1] == $"{finished.Label} …")
+                    var row = finished.Succeeded
+                        ? new Row(StepState.Done, finished.Label, Records(finished.Records))
+                        : new Row(StepState.Failed, finished.Label, finished.Gap ?? "failed");
+                    if (rows.Count > 0 && rows[^1] is { State: StepState.Running } open && open.Label == finished.Label)
                     {
-                        rows[^1] = text;
+                        rows[^1] = row;
                     }
                     else
                     {
-                        rows.Add(text);
+                        rows.Add(row);
                     }
 
                     break;
                 case InvestigationProgress.CorrectionRequested:
-                    rows.Add("The assessment didn't check out; the agent is correcting it");
+                    rows.Add(new Row(StepState.Note, "The assessment didn't check out; the agent is correcting it", null));
                     break;
                 case InvestigationProgress.LimitReached:
-                    rows.Add("The investigation reached its limit");
+                    rows.Add(new Row(StepState.Failed, "The investigation reached its limit", null));
                     break;
                 case InvestigationProgress.Submitting:
-                    rows.Add("Checking the assessment against the evidence");
+                    rows.Add(new Row(StepState.Running, "Checking the assessment against the evidence", null));
                     break;
+            }
+        }
+
+        // Only the last row can still be in progress, and none once the run is over; a cancelled run's last step stopped.
+        for (var i = 0; i < rows.Count - (Run == TimelineRun.Running ? 1 : 0); i++)
+        {
+            if (rows[i].State == StepState.Running)
+            {
+                rows[i] = rows[i] with { State = Run == TimelineRun.Stopped && i == rows.Count - 1 ? StepState.Stopped : StepState.Done };
             }
         }
 
         return rows;
     }
+
+    private static string StateClass(StepState state) => state switch
+    {
+        StepState.Running => "step-running",
+        StepState.Done => "step-done",
+        StepState.Failed => "step-failed",
+        StepState.Stopped => "step-stopped",
+        _ => "step-note",
+    };
+
+    private static string StateWord(StepState state) => state switch
+    {
+        StepState.Running => "In progress",
+        StepState.Done => "Done",
+        StepState.Failed => "Couldn't check",
+        StepState.Stopped => "Stopped",
+        _ => "Note",
+    };
 
     private static string Records(int count) =>
         string.Create(CultureInfo.InvariantCulture, $"{count} {(count == 1 ? "record" : "records")}");

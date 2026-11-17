@@ -1,0 +1,23 @@
+@inject IJSRuntime JS
+
+<MudIconButton Icon="@(IsDark ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
+               Color="Color.Inherit"
+               aria-label="@(IsDark ? "Switch to light theme" : "Switch to dark theme")"
+               OnClick="ToggleAsync" />
+
+@code {
+    [Parameter]
+    public bool IsDark { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsDarkChanged { get; set; }
+
+    private async Task ToggleAsync()
+    {
+        var dark = !IsDark;
+
+        // The cookie lets the server prerender the chosen mode on the next request.
+        await JS.InvokeVoidAsync("poTheme.set", dark ? ThemeCookie.Dark : ThemeCookie.Light);
+        await IsDarkChanged.InvokeAsync(dark);
+    }
+}

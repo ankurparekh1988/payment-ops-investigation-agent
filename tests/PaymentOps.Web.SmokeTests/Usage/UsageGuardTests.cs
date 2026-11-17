@@ -64,39 +64,18 @@ public sealed class UsageGuardTests : IDisposable
         public Task<SourceResult> GetSourceAsync(string sectionKey, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class RecordingLogger : ILogger<UsageGuard>
-    {
-        public List<string> Messages { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Messages.Add(formatter(state, exception) + " " + string.Join(' ', (state as IEnumerable<KeyValuePair<string, object?>>)?.Select(p => p.Value) ?? []));
-    }
-
-    private sealed class Monitor(UsageOptions value) : IOptionsMonitor<UsageOptions>
-    {
-        public UsageOptions CurrentValue => value;
-
-        public UsageOptions Get(string? name) => value;
-
-        public IDisposable? OnChange(Action<UsageOptions, string?> listener) => null;
-    }
-
-    private static (UsageGuard Guard, CountingService Inner, FakeTableClient Table, RecordingLogger Logger) Guard(
-        UsageOptions? options = null, FakeTableClient? table = null, TimeProvider? clock = null, Func<AssessmentResult>? answer = null)
+    private static (UsageGuard Guard, CountingService Inner, FakeTableClient Table, RecordingLogger<UsageGuard> Logger) Guard(
+        UsageOptions? options = null, FakeTableClient? table = null, TimeProvider? clock = null, Func<AssessmentResult>? answer = null, IPauseStore? pause = null)
     {
         var inner = new CountingService(answer);
         var fake = table ?? new FakeTableClient();
-        var logger = new RecordingLogger();
+        var logger = new RecordingLogger<UsageGuard>();
         var guard = new UsageGuard(
             inner,
             new TableUsageCounter(fake, TableUsageCounter.DefaultMaxAttempts, _ => TimeSpan.Zero),
+            pause ?? new InMemoryPauseStore(),
             TestUser.Reader with { UserId = UserSentinel },
-            new Monitor(options ?? new UsageOptions { DailyLimitPerUser = 2, DailyLimitTotal = 10 }),
+            new StaticOptionsMonitor<UsageOptions>(options ?? new UsageOptions { DailyLimitPerUser = 2, DailyLimitTotal = 10 }),
             clock ?? new FakeTimeProvider(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero)),
             logger);
         return (guard, inner, fake, logger);
@@ -213,4 +192,62 @@ public sealed class UsageGuardTests : IDisposable
     [InlineData(NotAssessedReason.UsageUnavailable, "Investigations can't start right now. Please try again shortly.")]
     public void Each_refusal_has_its_own_text(NotAssessedReason reason, string text) =>
         Assert.Equal(text, NotAssessedText.For(reason, 2000));
+
+    [Fact]
+    public async Task A_paused_switch_refuses_new_investigations()
+    {
+        var pause = new InMemoryPauseStore();
+        await pause.WriteAsync(new PauseState(true, "u-admin", "Ada", DateTimeOffset.UnixEpoch, null), null, CancellationToken.None);
+        var (guard, inner, table, _) = Guard(pause: pause);
+
+        Assert.Equal(NotAssessedReason.Paused, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
+
+        Assert.Equal(0, inner.Calls);
+        Assert.Empty(table.Rows);
+    }
+
+    [Fact]
+    public async Task An_unreadable_pause_row_refuses_as_usage_unavailable()
+    {
+        var pauseTable = new FakeEntityTable { ReadsThrow = new Azure.RequestFailedException(503, "unavailable") };
+        var (guard, inner, table, _) = Guard(pause: new TablePauseStore(pauseTable, TimeProvider.System));
+
+        Assert.Equal(NotAssessedReason.UsageUnavailable, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
+
+        Assert.Equal(0, inner.Calls);
+        Assert.Empty(table.Rows);
+    }
+
+    [Fact]
+    public async Task Configuration_pause_wins_over_a_running_switch()
+    {
+        var (guard, inner, _, _) = Guard(new UsageOptions { Paused = true, DailyLimitPerUser = 2, DailyLimitTotal = 10 }, pause: new InMemoryPauseStore());
+
+        Assert.Equal(NotAssessedReason.Paused, Reason(await guard.InvestigateAsync("q", null, CancellationToken.None)));
+        Assert.Equal(0, inner.Calls);
+    }
+
+    // Cancel while the pause is being read is a cancellation, as it is while usage is counted, not an unhandled error.
+    [Fact]
+    public async Task Cancel_while_the_pause_is_read_is_reported_as_cancelled()
+    {
+        using var cancel = new CancellationTokenSource();
+        await cancel.CancelAsync();
+        var (guard, inner, table, _) = Guard(pause: new CancellingPauseStore());
+
+        var result = await guard.InvestigateAsync("q", null, cancel.Token);
+
+        Assert.Equal(NotAssessedReason.Cancelled, Reason(result));
+        Assert.Equal(0, inner.Calls);
+        Assert.Empty(table.Rows);
+    }
+
+    private sealed class CancellingPauseStore : IPauseStore
+    {
+        public Task<PauseState> ReadAsync(CancellationToken cancellationToken) => Task.FromCanceled<PauseState>(cancellationToken);
+
+        public Task<PauseState> ReadFreshAsync(CancellationToken cancellationToken) => Task.FromCanceled<PauseState>(cancellationToken);
+
+        public Task<PauseWrite> WriteAsync(PauseState next, string? expectedVersion, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
 }

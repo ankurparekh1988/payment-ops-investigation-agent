@@ -1,6 +1,12 @@
 ﻿@page "/not-found"
+@attribute [ExcludeFromInteractiveRouting]
 @attribute [AllowAnonymous]
 @layout MainLayout
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<PageTitle>Page not found · Contoso Payments</PageTitle>
+
+@* Also what a missing or unauthorised source gets, so the wording never says which it was. *@
+<StatusCard Title="Page not found">
+    <p class="status-text">The page you asked for doesn't exist.</p>
+    <a href="/" class="status-action">Go to Home</a>
+</StatusCard>

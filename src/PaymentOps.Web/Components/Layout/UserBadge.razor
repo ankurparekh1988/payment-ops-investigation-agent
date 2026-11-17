@@ -1,0 +1,19 @@
+@inject IUserContext CurrentUser
+
+<span class="user-badge">
+    <span class="user-name">@CurrentUser.DisplayName</span>
+    <span class="user-role">@HighestRole</span>
+    @if (CurrentUser.CanAccessRestrictedKnowledge)
+    {
+        <span class="user-group">Risk and Compliance</span>
+    }
+</span>
+
+@code {
+    // Roles are cumulative, so the highest one says everything the person can do.
+    private string HighestRole =>
+        CurrentUser.IsInRole(OpsRoles.Admin) ? "Admin"
+        : CurrentUser.IsInRole(OpsRoles.Engineer) ? "Engineer"
+        : CurrentUser.IsInRole(OpsRoles.Reader) ? "Reader"
+        : "No role";
+}

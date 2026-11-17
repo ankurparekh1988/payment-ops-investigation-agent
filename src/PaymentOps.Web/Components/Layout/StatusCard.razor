@@ -1,0 +1,15 @@
+@* The app's own pages outside the signed-in experience: one centred card, a heading and what to do next. *@
+<div class="status-page">
+    <section class="status-card" aria-labelledby="status-heading">
+        <h1 id="status-heading" class="status-title">@Title</h1>
+        @ChildContent
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

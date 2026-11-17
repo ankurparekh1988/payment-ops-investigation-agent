@@ -262,4 +262,51 @@ public sealed class UsageCounterTests
 
         Assert.Equal(5, results.Count(r => r == UsageReservation.Admitted));
     }
+
+    [Fact]
+    public async Task Reading_usage_counts_the_person_and_the_day_without_reserving()
+    {
+        var table = new FakeTableClient();
+        var counter = Counter(table);
+        await counter.TryReserveAsync("user-a", Day, 10, 100, CancellationToken.None);
+        await counter.TryReserveAsync("user-b", Day, 10, 100, CancellationToken.None);
+        var transactions = table.Transactions;
+
+        var usage = await counter.ReadAsync("user-a", Day, CancellationToken.None);
+
+        Assert.Equal((1, 2), usage);
+        Assert.Equal(transactions, table.Transactions);
+    }
+
+    [Fact]
+    public async Task Reading_a_day_with_no_usage_is_zero() =>
+        Assert.Equal((0, 0), await Counter(new FakeTableClient()).ReadAsync("user-a", Day, CancellationToken.None));
+
+    [Fact]
+    public async Task Reading_a_malformed_row_fails_closed()
+    {
+        var table = new FakeTableClient();
+        table.Plant(new TableEntity(Partition, TableUsageCounter.TotalRow) { ["Count"] = "many" });
+
+        await Assert.ThrowsAsync<UsageUnavailableException>(() => Counter(table).ReadAsync("user-a", Day, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Reading_unreachable_storage_fails_closed()
+    {
+        var table = new FakeTableClient { ReadsThrow = new RequestFailedException(503, "unavailable") };
+
+        await Assert.ThrowsAsync<UsageUnavailableException>(() => Counter(table).ReadAsync("user-a", Day, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task The_in_memory_counter_reads_the_same_way()
+    {
+        var counter = new InMemoryUsageCounter();
+        await counter.TryReserveAsync("user-a", Day, 10, 100, CancellationToken.None);
+        await counter.TryReserveAsync("user-b", Day, 10, 100, CancellationToken.None);
+
+        Assert.Equal((1, 2), await counter.ReadAsync("user-a", Day, CancellationToken.None));
+        Assert.Equal((1, 2), await counter.ReadAsync("user-a", Day, CancellationToken.None));
+    }
 }

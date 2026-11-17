@@ -1,0 +1,38 @@
+@* Confirms a pause or resume. A pause can carry a short reason, kept as plain text. *@
+<MudDialog>
+    <DialogContent>
+        @if (Pausing)
+        {
+            <p class="dialog-text">New investigations stop within 10 seconds. Investigations already running will finish.</p>
+            <label for="pause-reason" class="field-label">Reason (optional)</label>
+            <textarea id="pause-reason" class="field-input" rows="2" maxlength="@MaxReasonLength"
+                      value="@_reason" @oninput="e => _reason = e.Value as string"></textarea>
+            <span class="field-hint">Shown to other Admins with the change.</span>
+        }
+        else
+        {
+            <p class="dialog-text">New investigations can start again within 10 seconds.</p>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="Cancel">@(Pausing ? "Keep running" : "Keep paused")</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(Pausing ? Color.Warning : Color.Primary)" OnClick="Confirm">@(Pausing ? "Pause investigations" : "Resume investigations")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private string? _reason;
+
+    [CascadingParameter]
+    private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter]
+    public bool Pausing { get; set; }
+
+    [Parameter]
+    public int MaxReasonLength { get; set; }
+
+    private void Cancel() => Dialog.Cancel();
+
+    private void Confirm() => Dialog.Close(DialogResult.Ok(_reason));
+}

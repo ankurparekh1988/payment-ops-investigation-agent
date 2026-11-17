@@ -25,4 +25,14 @@ internal sealed class DemoProcessorData(DemoDataset dataset) : IProcessorData
             .Where(i => i.ProcessorId == processorId && i.StartedAt < toExclusive && (i.ResolvedAt is null || i.ResolvedAt > fromInclusive))
             .OrderBy(i => i.StartedAt).ThenBy(i => i.Id, StringComparer.Ordinal)]);
     }
+
+    public Task<IReadOnlyList<ProcessorIncident>> GetAllIncidentsAsync(DateTimeOffset fromInclusive, DateTimeOffset toExclusive, CancellationToken cancellationToken)
+    {
+        HalfOpenRange.Require(fromInclusive, toExclusive);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Task.FromResult<IReadOnlyList<ProcessorIncident>>([.. dataset.Incidents
+            .Where(i => i.StartedAt < toExclusive && (i.ResolvedAt is null || i.ResolvedAt > fromInclusive))
+            .OrderBy(i => i.StartedAt).ThenBy(i => i.Id, StringComparer.Ordinal)]);
+    }
 }

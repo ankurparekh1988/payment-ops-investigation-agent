@@ -1,8 +1,10 @@
 @page "/signed-out"
+@attribute [ExcludeFromInteractiveRouting]
 @attribute [AllowAnonymous]
 
-<PageTitle>Signed out</PageTitle>
+<PageTitle>Signed out · Contoso Payments</PageTitle>
 
-<h1>You're signed out</h1>
-
-<p><a href="/">Sign in again</a></p>
+@* Signing in again goes through company sign-in from any page that needs it. *@
+<StatusCard Title="You're signed out">
+    <a href="/" class="status-action">Sign in</a>
+</StatusCard>

@@ -29,4 +29,19 @@ public sealed class DomainSourceRulesTests
 
         Assert.Empty(violations);
     }
+
+    // The overview queries serve the home page only: the agent's tools stay scoped to one merchant or processor.
+    [Theory]
+    [InlineData("PaymentOps.Tools")]
+    [InlineData("PaymentOps.Agent")]
+    public void The_agent_and_its_tools_never_call_the_overview_queries(string project)
+    {
+        string[] overview = ["GetAllIncidentsAsync", "GetHeldPayoutsAsync", "GetRejectedFilesAsync", "GetRecentAsync"];
+        var callers = Directory.EnumerateFiles(Path.Combine(RepositoryRoot.FullPath, "src", project), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(f => overview.Any(name => File.ReadAllText(f).Contains(name, StringComparison.Ordinal)))
+            .Select(f => Path.GetRelativePath(RepositoryRoot.FullPath, f));
+
+        Assert.Empty(callers);
+    }
 }

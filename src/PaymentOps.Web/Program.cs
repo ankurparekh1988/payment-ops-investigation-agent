@@ -3,8 +3,11 @@ using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+
+using MudBlazor.Services;
 
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -23,6 +26,8 @@ using PaymentOps.Tools;
 using PaymentOps.Web;
 using PaymentOps.Web.Components;
 using PaymentOps.Web.Health;
+using PaymentOps.Web.Home;
+using PaymentOps.Web.Investigating;
 using PaymentOps.Web.Security;
 using PaymentOps.Web.Usage;
 
@@ -71,6 +76,11 @@ builder.Services.AddOptions<ToolOptions>()
     .ValidateOnStart();
 builder.Services.AddSingleton(sp => new QuestionLimits(sp.GetRequiredService<IOptions<InvestigationLimits>>().Value.MaxQuestionLength));
 
+builder.Services.AddOptions<UiOptions>().Bind(builder.Configuration.GetSection(UiOptions.SectionName));
+builder.Services.AddMudServices();
+builder.Services.TryAddSingleton(TimeProvider.System);
+builder.Services.AddScoped<InvestigationSession>();
+builder.Services.AddScoped<HomeOverview>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -121,6 +131,10 @@ else
     builder.Services.AddScoped<IInvestigationService, UnconfiguredInvestigationService>();
     builder.Services.AddScoped<IApprovalService, UnconfiguredApprovalService>();
 }
+
+// The Admin's pause is checked on every change; without the usage guard (Development) it's kept in memory.
+builder.Services.TryAddSingleton<IPauseStore, InMemoryPauseStore>();
+builder.Services.AddScoped<IPauseSwitch, PauseSwitch>();
 
 // Readiness depends on Foundry once an endpoint is configured; locally and in tests it isn't.
 if (foundry?.Endpoint is { } foundryEndpoint)

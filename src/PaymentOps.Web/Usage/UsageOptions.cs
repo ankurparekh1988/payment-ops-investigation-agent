@@ -33,4 +33,8 @@ internal interface IUsageCounter
 {
     /// <exception cref="UsageUnavailableException">The counts couldn't be read or written.</exception>
     Task<UsageReservation> TryReserveAsync(string userId, DateOnly day, int perUserLimit, int totalLimit, CancellationToken cancellationToken);
+
+    /// <summary>The person's and everyone's count for the day, reserving nothing.</summary>
+    /// <exception cref="UsageUnavailableException">The counts couldn't be read.</exception>
+    Task<(int User, int Total)> ReadAsync(string userId, DateOnly day, CancellationToken cancellationToken);
 }

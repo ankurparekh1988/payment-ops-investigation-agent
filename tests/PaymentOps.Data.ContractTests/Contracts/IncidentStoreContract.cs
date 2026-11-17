@@ -69,4 +69,27 @@ public abstract class IncidentStoreContract
     [Fact]
     public async Task An_unknown_id_is_not_found() =>
         Assert.Null(await Create(1000).FindAsync("INC-9999", CancellationToken.None));
+
+    [Fact]
+    public async Task Recent_tickets_come_newest_first_up_to_the_count()
+    {
+        var store = Create(1000);
+        foreach (var key in new[] { "key-1", "key-2", "key-3" })
+        {
+            await store.CreateAsync(key, Content(), CancellationToken.None);
+            Time.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        var recent = await store.GetRecentAsync(2, CancellationToken.None);
+
+        Assert.Equal(["INC-0003", "INC-0002"], recent.Select(t => t.Id));
+    }
+
+    [Fact]
+    public async Task An_empty_store_has_no_recent_tickets() =>
+        Assert.Empty(await Create(1000).GetRecentAsync(5, CancellationToken.None));
+
+    [Fact]
+    public async Task Recent_tickets_need_a_positive_count() =>
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Create(1000).GetRecentAsync(0, CancellationToken.None));
 }
