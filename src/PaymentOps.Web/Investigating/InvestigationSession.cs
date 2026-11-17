@@ -133,7 +133,8 @@ public sealed partial class InvestigationSession(
         catch (Exception ex)
         {
             // Shown like a refusal before the run: the service kept no turn, and the earlier result stays under its own
-            // question. Nothing is retried; Try again is the person's call.
+            // question. Nothing is retried; Try again is the person's call. Whether the run got far enough to supersede
+            // the earlier proposal isn't known, so it's no longer offered for a decision either way.
             var cancelled = ex is OperationCanceledException && run.IsCancellationRequested;
             if (!cancelled)
             {
@@ -145,6 +146,7 @@ public sealed partial class InvestigationSession(
                 if (sequence == _sequence)
                 {
                     Refuse(new SessionNotice(cancelled ? NotAssessedReason.Cancelled : NotAssessedReason.ModelUnavailable, question), previousQuestion);
+                    EndPending(ProposalStatus.Unavailable);
                     Completed++;
                 }
             }
@@ -178,7 +180,7 @@ public sealed partial class InvestigationSession(
             return;
         }
 
-        SupersedePending();
+        EndPending(ProposalStatus.Superseded);
         _turns.Add(new SessionTurn(question, result));
     }
 
@@ -328,11 +330,11 @@ public sealed partial class InvestigationSession(
         _ => proposal with { Status = ProposalStatus.Unavailable },
     };
 
-    private void SupersedePending()
+    private void EndPending(ProposalStatus status)
     {
         if (_turns.Count > 0 && _turns[^1].Result is AssessmentResult.Assessed { Proposal.Status: ProposalStatus.Pending } assessed)
         {
-            _turns[^1] = _turns[^1] with { Result = assessed with { Proposal = assessed.Proposal! with { Status = ProposalStatus.Superseded } } };
+            _turns[^1] = _turns[^1] with { Result = assessed with { Proposal = assessed.Proposal! with { Status = status } } };
         }
     }
 

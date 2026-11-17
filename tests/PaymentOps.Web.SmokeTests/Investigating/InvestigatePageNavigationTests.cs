@@ -123,6 +123,8 @@ public sealed class InvestigatePageNavigationTests : InteractiveTestContext
         Assert.Contains("The investigation service isn't responding right now.", back.Markup, StringComparison.Ordinal);
         Assert.Equal("Why was M-1042 not paid?", back.Find(".result-question").TextContent);
         Assert.Contains("The Fabrikam Pay file for 9 November is missing.", back.Markup, StringComparison.Ordinal);
+        Assert.Contains("This proposal can't be approved right now.", back.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain(back.FindAll("button"), b => b.TextContent.Trim() == "Approve");
         Assert.Equal(2, _investigation.Asked.Count);
     }
 

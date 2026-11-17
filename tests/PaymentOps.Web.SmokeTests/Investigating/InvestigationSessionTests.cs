@@ -20,15 +20,22 @@ public sealed class InvestigationSessionTests
 
     private InvestigationSession Session() => new(_investigation, _approvals, _time, _log);
 
-    // A failure is shown like a refusal before the run: the earlier result stays under its own question.
-    private static void AssertFailedOver(InvestigationSession session, string failed, string previous, AssessmentResult previousResult)
+    // A failure is shown like a refusal before the run: the earlier result stays under its own question. Whether the
+    // failed run got far enough to supersede the earlier proposal isn't known, so it's no longer offered for a decision.
+    private void AssertFailedOver(InvestigationSession session, string failed, string previous, AssessmentResult.Assessed previousResult)
     {
         Assert.False(session.Busy);
         Assert.Equal(new SessionNotice(NotAssessedReason.ModelUnavailable, failed), session.Notice);
         Assert.Equal(previous, session.CurrentQuestion);
-        Assert.Equal(previousResult, session.Current);
         Assert.Equal(failed, session.Draft);
         Assert.Equal(previous, Assert.Single(session.Questions).Question);
+
+        var shown = Assert.IsType<AssessmentResult.Assessed>(session.Current);
+        Assert.Equal(previousResult.Summary, shown.Summary);
+        Assert.Equal(ProposalStatus.Unavailable, shown.Proposal!.Status);
+        Assert.Equal(previousResult.Proposal!.ProposalId, shown.Proposal.ProposalId);
+        Assert.False(session.IsActionable(shown.Proposal));
+        Assert.Equal(0, _approvals.Approvals);
     }
 
     [Fact]
@@ -37,12 +44,29 @@ public sealed class InvestigationSessionTests
         await using var session = Session();
         _investigation.Answer = _ => Results.WithPendingTicket();
         await session.StartAsync("Why was M-1042 not paid?");
-        var previous = session.Current!;
+        var previous = Assert.IsType<AssessmentResult.Assessed>(session.Current);
 
         _investigation.Throw = new InvalidOperationException("boom");
         await session.StartAsync("Why is M-2001 held?");
 
         AssertFailedOver(session, "Why is M-2001 held?", "Why was M-1042 not paid?", previous);
+    }
+
+    // The session never decides for the server: a failure, wherever it happened, makes no approval or reset call.
+    [Fact]
+    public async Task A_failure_changes_nothing_on_the_server()
+    {
+        await using var session = Session();
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+
+        _investigation.Throw = new InvalidOperationException("boom");
+        await session.StartAsync("Why is M-2001 held?");
+        await session.ApproveAsync();
+
+        Assert.Equal(0, _approvals.Approvals);
+        Assert.Equal(0, _approvals.Rejections);
+        Assert.Equal(0, _investigation.StartNewCalls);
     }
 
     [Fact]
@@ -51,7 +75,7 @@ public sealed class InvestigationSessionTests
         await using var session = Session();
         _investigation.Answer = _ => Results.WithPendingTicket();
         await session.StartAsync("Why was M-1042 not paid?");
-        var previous = session.Current!;
+        var previous = Assert.IsType<AssessmentResult.Assessed>(session.Current);
 
         _investigation.Hold = true;
         var run = session.StartAsync("Why is M-2001 held?");
