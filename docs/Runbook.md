@@ -56,6 +56,10 @@ Investigations can be stopped without a deployment, and how many can run in a da
 - **"Investigations can't start right now."** The usage table, or the pause row in it, couldn't be read or written, so nothing was admitted (event `3201` names the cause's type). Check the web app identity's *Storage Table Data Contributor* assignment on the `usage` table (not the account) and the storage account's health.
 - **Who's refused, and why.** Refusals before an investigation starts are counted by reason in the `paymentops.investigations.rejected` metric (`busy`, `paused`, `daily_limit`, `usage_unavailable`); they have no trace.
 
+## Deployments
+
+**Apply fails with "Artifact not found for name: platform-plan".** CD keeps the encrypted plan for one day, so a stale plan can never be applied; an Apply approved later finds nothing and stops before Terraform runs, leaving the environment as it was. Use **Re-run all jobs** on the CD run, not *Re-run failed jobs*, which looks for the same expired plan, and approve the new Apply within 24 hours of its plan.
+
 ## Alerts
 
 Every alert emails the environment's action group. The workbook *`<prefix>-<environment>` operations* in the resource group shows the same signals over the last week: requests, server errors, latency, throttling and availability; outcomes, screen blocks and refusals; tokens, Content Safety records and estimated cost.
