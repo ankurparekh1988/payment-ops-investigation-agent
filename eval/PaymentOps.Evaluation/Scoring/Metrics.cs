@@ -76,7 +76,7 @@ internal static class Metrics
         var allowed = c.AllowedOutcomes.Contains(r.Outcome);
         yield return (MetricNames.AllowedOutcomeRate, allowed ? 1 : 0, allowed);
 
-        var called = r.Calls.Select(call => call.Tool).ToHashSet(StringComparer.Ordinal);
+        var called = r.AnsweringCalls.Select(call => call.Tool).ToHashSet(StringComparer.Ordinal);
         var required = c.RequiredTools.Distinct().ToList();
         if (required.Count > 0)
         {
@@ -86,7 +86,7 @@ internal static class Metrics
 
         if (c.ToolArguments.Count > 0)
         {
-            var met = c.ToolArguments.Count(label => r.Calls.Any(call => call.Tool == label.Tool && label.Constraints.All(k => Satisfies(call, k))));
+            var met = c.ToolArguments.Count(label => r.AnsweringCalls.Any(call => call.Tool == label.Tool && label.Constraints.All(k => Satisfies(call, k))));
             yield return (MetricNames.ToolArgumentAccuracy, met, met == c.ToolArguments.Count);
         }
 

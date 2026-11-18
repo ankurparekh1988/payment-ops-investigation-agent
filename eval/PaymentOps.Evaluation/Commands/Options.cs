@@ -77,16 +77,26 @@ internal sealed class Options
 
     /// <summary>
     /// The release from --ai, reading the index --index names: live by default, or the release's evaluation index,
-    /// so every reader measures the change's own corpus.
+    /// so every reader measures the change's own corpus; --routing overrides its routing mode for the run.
     /// </summary>
     public AiRelease Release()
     {
         var release = AiReleaseLoader.Load(new DirectoryAiReleaseSource(One("ai")));
-        return Optional("index") switch
+        release = Optional("index") switch
         {
             null or "live" => release,
             "evaluation" => release with { KnowledgeIndex = release.EvaluationIndex },
             _ => throw new UsageException("--index must be live or evaluation."),
+        };
+
+        // For this run only: a measurement of a routing mode the release doesn't ship. The app has no such switch.
+        return Optional("routing") switch
+        {
+            null => release,
+            "off" => release with { RoutingMode = RoutingMode.Off },
+            "cascade" when release.SmallDeployment is not null => release with { RoutingMode = RoutingMode.Cascade },
+            "cascade" => throw new UsageException("--routing cascade needs a release with models.small."),
+            _ => throw new UsageException("--routing must be off or cascade."),
         };
     }
 }

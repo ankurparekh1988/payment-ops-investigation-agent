@@ -12,6 +12,36 @@
       "effectiveDate": "2026-03-01",
       "retrieved": "2026-10-23",
       "source": "https://prices.azure.com/api/retail/prices?$filter=productName%20eq%20'Azure%20OpenAI%20GPT5'%20and%20contains(meterName,'5.4%20mini')"
+    },
+    {
+      "model": "gpt-5.4-nano",
+      "version": "2026-03-17",
+      "deploymentType": "GlobalStandard",
+      "currency": "USD",
+      "inputPerMillion": 0.20,
+      "cachedInputPerMillion": 0.02,
+      "outputPerMillion": 1.25,
+      "effectiveDate": "2026-03-01",
+      "retrieved": "2026-11-18",
+      "source": "https://prices.azure.com/api/retail/prices?$filter=productName%20eq%20'Azure%20OpenAI%20GPT5'%20and%20contains(meterName,'5.4%20nano')"
+    }
+  ],
+  "contentSafety": [
+    {
+      "service": "prompt_shields",
+      "currency": "USD",
+      "perThousandRecords": 0.375,
+      "effectiveDate": "2025-09-01",
+      "retrieved": "2026-11-18",
+      "source": "https://prices.azure.com/api/retail/prices?$filter=productName%20eq%20'Content%20Safety'%20and%20meterName%20eq%20'Standard%20Text%20Records'%20and%20armRegionName%20eq%20'canadaeast'"
+    },
+    {
+      "service": "text_analysis",
+      "currency": "USD",
+      "perThousandRecords": 0.375,
+      "effectiveDate": "2025-09-01",
+      "retrieved": "2026-11-18",
+      "source": "https://prices.azure.com/api/retail/prices?$filter=productName%20eq%20'Content%20Safety'%20and%20meterName%20eq%20'Standard%20Text%20Records'%20and%20armRegionName%20eq%20'canadaeast'"
     }
   ]
 }

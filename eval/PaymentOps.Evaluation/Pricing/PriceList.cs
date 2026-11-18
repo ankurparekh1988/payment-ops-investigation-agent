@@ -25,26 +25,38 @@ internal sealed record Price(
     string Retrieved,
     string Source);
 
+/// <summary>A Content Safety service's price per 1,000 text records, as billed.</summary>
+/// <param name="Service">As the app's usage names it: <c>prompt_shields</c> or <c>text_analysis</c>.</param>
+internal sealed record ContentSafetyPrice(
+    string Service,
+    string Currency,
+    decimal PerThousandRecords,
+    string EffectiveDate,
+    string Retrieved,
+    string Source);
+
 /// <summary>
 /// Dated, sourced prices for the models the reports use. Never fetched during a run; a model with no entry is
 /// "not priced", never free. Cost is informational and gates nothing.
 /// </summary>
-internal sealed class PriceList(IReadOnlyList<Price> prices)
+internal sealed class PriceList(IReadOnlyList<Price> prices, IReadOnlyList<ContentSafetyPrice>? contentSafety = null)
 {
     public const int SupportedSchemaVersion = 1;
 
     public IReadOnlyList<Price> Prices { get; } = prices;
 
+    public IReadOnlyList<ContentSafetyPrice> ContentSafety { get; } = contentSafety ?? [];
+
     public static PriceList Load(string path)
     {
         var file = StrictFiles.Read<PriceFile>(path, StrictFiles.CamelCase);
-        var problems = file.Prices.SelectMany(Check).ToList();
+        var problems = file.Prices.SelectMany(Check).Concat(file.ContentSafety.SelectMany(Check)).ToList();
         if (file.SchemaVersion != SupportedSchemaVersion)
         {
             problems.Add($"schema version {file.SchemaVersion}; this build reads {SupportedSchemaVersion}.");
         }
 
-        return problems.Count == 0 ? new PriceList(file.Prices) : throw new InvalidDataException($"{path}: {string.Join(' ', problems)}");
+        return problems.Count == 0 ? new PriceList(file.Prices, file.ContentSafety) : throw new InvalidDataException($"{path}: {string.Join(' ', problems)}");
     }
 
     public Price? Find(DeploymentIdentity deployment)
@@ -52,6 +64,9 @@ internal sealed class PriceList(IReadOnlyList<Price> prices)
         ArgumentNullException.ThrowIfNull(deployment);
         return Prices.FirstOrDefault(p => p.Model == deployment.Model && p.Version == deployment.Version && p.DeploymentType == deployment.DeploymentType);
     }
+
+    public ContentSafetyPrice? ContentSafetyFor(string service) =>
+        ContentSafety.FirstOrDefault(p => string.Equals(p.Service, service, StringComparison.Ordinal));
 
     /// <summary>The estimated cost, or null when the deployment has no price.</summary>
     public decimal? Cost(DeploymentIdentity deployment, TokenUse use)
@@ -93,5 +108,28 @@ internal sealed class PriceList(IReadOnlyList<Price> prices)
         }
     }
 
-    private sealed record PriceFile(int SchemaVersion, IReadOnlyList<Price> Prices);
+    private static IEnumerable<string> Check(ContentSafetyPrice p)
+    {
+        if (string.IsNullOrWhiteSpace(p.Service) || string.IsNullOrWhiteSpace(p.Currency))
+        {
+            yield return $"Content Safety {p.Service}: service and currency are required.";
+        }
+
+        if (!Uri.TryCreate(p.Source, UriKind.Absolute, out var source) || source.Scheme != Uri.UriSchemeHttps)
+        {
+            yield return $"Content Safety {p.Service}: source must be the https address the price was read from.";
+        }
+
+        if (!ToolArguments.TryDate(p.EffectiveDate, out _) || !ToolArguments.TryDate(p.Retrieved, out _))
+        {
+            yield return $"Content Safety {p.Service}: effectiveDate and retrieved must be dates written YYYY-MM-DD.";
+        }
+
+        if (p.PerThousandRecords < 0)
+        {
+            yield return $"Content Safety {p.Service}: prices can't be negative.";
+        }
+    }
+
+    private sealed record PriceFile(int SchemaVersion, IReadOnlyList<Price> Prices, IReadOnlyList<ContentSafetyPrice> ContentSafety);
 }

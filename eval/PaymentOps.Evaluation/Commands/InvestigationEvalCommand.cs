@@ -30,7 +30,8 @@ internal sealed record InvestigationEvalSettings(
     bool Judge,
     string Out,
     string Summary,
-    AiRelease Release);
+    AiRelease Release,
+    string Ai);
 
 /// <summary>
 /// investigation-eval: the labelled cases, N times, against the deployed model and index, signed in as whoever
@@ -40,9 +41,9 @@ internal static class InvestigationEvalCommand
 {
     public const string Usage =
         "investigation-eval --foundry <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> [--dataset <file>] " +
-        "--runs <n> --system agent|fixed-workflow --pricing <file> --content-safety <url> [--thresholds <file>] [--index live|evaluation] [--no-judge] --out <file> --summary <file>";
+        "--runs <n> --system agent|fixed-workflow --pricing <file> --content-safety <url> [--thresholds <file>] [--index live|evaluation] [--routing off|cascade] [--no-judge] --out <file> --summary <file>";
 
-    private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "index", "content-safety", "out", "summary"];
+    private static readonly string[] Valued = ["foundry", "search", "scope", "ai", "sources", "dataset", "runs", "system", "pricing", "thresholds", "index", "routing", "content-safety", "out", "summary"];
     private static readonly string[] Flags = ["no-judge"];
 
     public static Task<int> RunAsync(string[] args) => RunAsync(args, null, null, TimeSpan.FromMinutes(1));
@@ -50,11 +51,13 @@ internal static class InvestigationEvalCommand
     /// <param name="runners">Tests only: the system under evaluation; by default the agent or the fixed workflow, live.</param>
     /// <param name="judges">Tests only: the judge; by default the release's pinned judge deployment.</param>
     /// <param name="retryDelay">How long to wait before repeating a case the environment spoiled.</param>
+    /// <param name="indexes">Tests only: the index read back for the report's fingerprint; by default Search, unless the runner is substituted.</param>
     public static Task<int> RunAsync(
         string[] args,
         Func<AiRelease, InvestigationEvalSettings, ICaseRunner>? runners,
         Func<AiRelease, Judge?>? judges,
-        TimeSpan retryDelay) => ExitCodes.GuardAsync("Investigation evaluation", Usage, async () =>
+        TimeSpan retryDelay,
+        Func<AiRelease, IKnowledgeIndexClient?>? indexes = null) => ExitCodes.GuardAsync("Investigation evaluation", Usage, async () =>
     {
         var settings = Parse(args);
         var release = settings.Release;
@@ -82,7 +85,15 @@ internal static class InvestigationEvalCommand
             judge is null ? null : ModelInfo.From(release, release.JudgeDeployment),
             judge is null ? null : Judge.Prompt.Version,
             DateTimeOffset.UtcNow,
-            release.KnowledgeIndex);
+            release.KnowledgeIndex)
+        {
+            Source = ReportSource.Current(),
+            Deployments = release.Deployments,
+        };
+
+        // The index is read whole before and after, so a report vouches for the corpus it measured.
+        var index = indexes is not null ? indexes(release) : runners is null ? SearchKnowledgeIndexClient.Create(settings.Endpoints.SearchEndpoint, release.KnowledgeIndex, credential) : null;
+        var indexAtStart = await IndexFingerprint.ReadAsync(release.KnowledgeIndex, index, CancellationToken.None);
 
         IReadOnlyList<RunOutcome> runs;
         try
@@ -101,6 +112,9 @@ internal static class InvestigationEvalCommand
             await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish("Investigation evaluation", $"The evaluation stopped on an unexpected {ex.GetType().Name}.", diagnostics.Snapshot()));
             throw;
         }
+
+        var indexAtEnd = await IndexFingerprint.ReadAsync(release.KnowledgeIndex, index, CancellationToken.None);
+        context = context with { Inputs = ReportInputs.From(release, settings.Ai, settings.Datasets, indexAtStart.Ended(indexAtEnd)) };
 
         var byId = cases.Cases.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var judged = new List<IReadOnlyDictionary<string, JudgeScore>>();
@@ -152,7 +166,8 @@ internal static class InvestigationEvalCommand
             !options.Flag("no-judge"),
             options.OutputFile("out"),
             options.OutputFile("summary"),
-            options.Release());
+            options.Release(),
+            options.One("ai"));
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.
@@ -195,7 +210,8 @@ internal static class RepositoryCommit
     /// <summary>A full commit sha with nothing uncommitted: the only kind a baseline may come from.</summary>
     public static bool IsClean(string commit) => commit.Length == 40 && commit.All(Uri.IsHexDigit);
 
-    private static string? Git(string arguments)
+    /// <summary>Git's trimmed output, or null when git isn't there or the command failed.</summary>
+    internal static string? Git(string arguments)
     {
         try
         {

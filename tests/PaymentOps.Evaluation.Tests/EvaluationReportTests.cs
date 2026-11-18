@@ -160,10 +160,10 @@ public sealed class EvaluationReportTests
     }
 
     [Fact]
-    public void A_report_from_before_the_screen_was_recorded_is_refused()
+    public void Older_schema_is_refused_by_the_new_reader()
     {
         var path = Path.GetTempFileName();
-        File.WriteAllText(path, Report(Run()).ToJson().Replace("\"schema_version\": 2", "\"schema_version\": 1", StringComparison.Ordinal));
+        File.WriteAllText(path, Report(Run()).ToJson().Replace("\"schema_version\": 3", "\"schema_version\": 2", StringComparison.Ordinal));
 
         Assert.Throws<InvalidDataException>(() => EvaluationReport.Load(path));
     }

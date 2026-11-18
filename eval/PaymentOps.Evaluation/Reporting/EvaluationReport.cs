@@ -38,7 +38,15 @@ internal sealed record ReportContext(
     ModelInfo? Judge,
     string? JudgePromptVersion,
     DateTimeOffset StartedAt,
-    string KnowledgeIndex);
+    string KnowledgeIndex)
+{
+    public ReportSource? Source { get; init; }
+
+    public ReportInputs? Inputs { get; init; }
+
+    /// <summary>The release's deployments by name, to price what each case's usage names.</summary>
+    public IReadOnlyDictionary<string, DeploymentIdentity> Deployments { get; init; } = new Dictionary<string, DeploymentIdentity>();
+}
 
 /// <param name="Judge">Case id to its judge score in this run; empty when the judge didn't run.</param>
 internal sealed record RunReport(
@@ -81,7 +89,16 @@ internal sealed record CostReport(
     int ValidatedResults,
     TokenUse ChatTokens,
     TokenUse JudgeTokens,
-    string? PriceSource);
+    string? PriceSource)
+{
+    /// <summary>Every call the system made, classifier and Content Safety included; null unless <see cref="AllInStatus"/> is priced.</summary>
+    public decimal? AllIn { get; init; }
+
+    public decimal? AllInPerValidatedInvestigation { get; init; }
+
+    /// <summary><c>priced</c>, or the first reason the all-in cost couldn't be: missing or incomplete usage, an unpriced part, mixed currencies, no validated results.</summary>
+    public string AllInStatus { get; init; } = AllInCost.UsageMissing;
+}
 
 internal sealed record GateReport(string Verdict, IReadOnlyList<string> Failures, string? ThresholdsFile, IReadOnlyDictionary<string, double> Thresholds)
 {
@@ -117,7 +134,13 @@ internal sealed record EvaluationReport(
     IReadOnlyList<CaseRun> RetrievalCases,
     ScreeningDiagnostics? Diagnostics = null)
 {
-    public const int SupportedSchemaVersion = 2;
+    public const int SupportedSchemaVersion = 3;
+
+    /// <summary>What was checked out; null only in a report no command wrote.</summary>
+    public ReportSource? Source { get; init; }
+
+    /// <summary>What the run read that decides its results.</summary>
+    public ReportInputs? Inputs { get; init; }
     public const string AgentSystem = "agent";
     public const string FixedWorkflowSystem = "fixed-workflow";
     public const string RetrievalSystem = "retrieval";
@@ -191,7 +214,7 @@ internal sealed record EvaluationReport(
             Percentiles.Of(results.Where(r => r.TtfpMs is not null).Select(r => r.TtfpMs!.Value)),
             CostOf(context, results, judgeScores, prices),
             GateFor(metrics, summary, thresholds, thresholdsFile, Applicable(n)),
-            []);
+            []) { Source = context.Source, Inputs = context.Inputs };
     }
 
     /// <summary>The safety cases over N runs, gated by <see cref="SafetyGate"/>, never by the investigation thresholds.</summary>
@@ -240,7 +263,7 @@ internal sealed record EvaluationReport(
             Percentiles.Of(results.Where(r => r.TtfpMs is not null).Select(r => r.TtfpMs!.Value)),
             CostOf(context, results, [], prices),
             new GateReport(!verdict.Passed ? GateReport.Failed : verdict.ReportOnly ? GateReport.ReportOnly : GateReport.Passed, verdict.Failures, thresholdsFile, shown),
-            []);
+            []) { Source = context.Source, Inputs = context.Inputs };
     }
 
     public static EvaluationReport ForRetrieval(ReportContext context, RetrievalResult result, Thresholds? thresholds, string? thresholdsFile)
@@ -269,7 +292,7 @@ internal sealed record EvaluationReport(
             Percentiles.Of([]),
             new CostReport(null, null, null, null, 0, TokenUse.Zero, TokenUse.Zero, null),
             GateFor([result.Metrics], summary, thresholds, thresholdsFile, Applicable(n)),
-            result.Cases);
+            result.Cases) { Source = context.Source, Inputs = context.Inputs };
     }
 
     public static EvaluationReport Load(string path)
@@ -289,6 +312,7 @@ internal sealed record EvaluationReport(
         var price = context.Chat is { } chat ? prices.Find(chat.Identity) : null;
         var chatCost = price is null ? null : (decimal?)PriceList.Cost(price, chatTokens);
         var validated = results.Count(r => InvestigationCase.AssessedOutcomes.Contains(r.Outcome));
+        var allIn = AllInCost.Of(results, context.Deployments, prices);
         return new CostReport(
             price?.Currency,
             chatCost,
@@ -297,7 +321,12 @@ internal sealed record EvaluationReport(
             validated,
             chatTokens,
             judgeTokens,
-            price?.Source);
+            price?.Source)
+        {
+            AllIn = allIn.Total,
+            AllInPerValidatedInvestigation = allIn.PerValidatedInvestigation,
+            AllInStatus = allIn.Status,
+        };
     }
 
     private static GateReport GateFor(IReadOnlyList<RunMetrics> runs, IReadOnlyDictionary<string, MetricSummary> summary, Thresholds? thresholds, string? file, IReadOnlySet<string> applicable)

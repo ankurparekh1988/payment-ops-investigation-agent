@@ -6,6 +6,7 @@ using Microsoft.Extensions.AI;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Security;
 using PaymentOps.Evaluation.Cases;
@@ -18,9 +19,11 @@ namespace PaymentOps.Evaluation.Running;
 /// <summary>
 /// Everything one case's investigation did, observed from outside the app: model requests and tool calls, the
 /// sections Search returned, the typed data behind each evidence id, the tickets created, and any failure of the
-/// environment, including one the app absorbed into an ordinary result.
+/// environment, including one the app absorbed into an ordinary result. What the case used comes from the app's own
+/// usage snapshot alone, so nothing is counted twice.
 /// </summary>
-internal sealed class CaseRecorder
+/// <param name="screenDeployment">The classifier's deployment, left out of the case's investigation tokens.</param>
+internal sealed class CaseRecorder(string? screenDeployment = null) : IInvestigationUsageSink
 {
     // The judge reads one record or fact, not a whole tool result; a bound keeps one large list from crowding the rest.
     private const int MaxFactChars = 4000;
@@ -36,9 +39,8 @@ internal sealed class CaseRecorder
     private int _requests;
     private int _flagged;
     private int _harmful;
-    private long _inputTokens;
-    private long _cachedInputTokens;
-    private long _outputTokens;
+    private UsageSnapshot? _usage;
+    private string? _lastDeployment;
     private string? _failure;
 
     public int Tickets
@@ -52,7 +54,7 @@ internal sealed class CaseRecorder
         }
     }
 
-    public IChatClient Observe(IChatClient model) => new RecordingChatClient(model, this);
+    public IChatClient Observe(IChatClient model) => new RecordingChatClient(model, this, model.GetService<ChatClientMetadata>()?.DefaultModelId);
 
     public IKnowledgeLookup Observe(IKnowledgeLookup knowledge) => new RecordingKnowledgeLookup(knowledge, this);
 
@@ -61,6 +63,14 @@ internal sealed class CaseRecorder
     public IIncidentStore Observe(IIncidentStore store) => new CountingIncidentStore(store, this);
 
     public IUntrustedTextScreen Observe(IUntrustedTextScreen screen) => new RecordingScreen(screen, this);
+
+    public void Completed(Guid investigationId, UsageSnapshot usage)
+    {
+        lock (_lock)
+        {
+            _usage = usage;
+        }
+    }
 
     public void Fail(string failure)
     {
@@ -107,9 +117,18 @@ internal sealed class CaseRecorder
                 LatencyMs = latencyMs,
                 TtfpMs = ttfpMs,
                 ModelRequests = _requests,
-                InputTokens = _inputTokens,
-                CachedInputTokens = _cachedInputTokens,
-                OutputTokens = _outputTokens,
+                AnsweringDeployment = _lastDeployment,
+                InputTokens = Investigation().Sum(d => d.InputTokens),
+                CachedInputTokens = Investigation().Sum(d => d.CachedInputTokens),
+                OutputTokens = Investigation().Sum(d => d.OutputTokens),
+                Usage = _usage is null ? null : new CaseUsage(
+                    _usage.Deployments.ToDictionary(d => d.Key, d => new DeploymentTokens(d.Value.LogicalCalls, d.Value.HttpAttempts, d.Value.InputTokens, d.Value.CachedInputTokens, d.Value.OutputTokens), StringComparer.Ordinal),
+                    _usage.ContentSafetyRecords.ToDictionary(StringComparer.Ordinal),
+                    [.. _usage.Incomplete],
+                    _usage.EstimateExceeded),
+                Attempts = [.. _usage?.Attempts.Select(a => new AttemptSummary(ToolJson.Word(a.Tier), a.Failure is { } f ? ToolJson.Word(f) : null)) ?? []],
+                Escalation = _usage?.Escalation,
+                ReusedReads = _usage?.ReusedReads ?? 0,
                 AssessmentText = assessmentText,
                 UserVisibleText = proposal is null ? assessmentText : $"{assessmentText}\n{proposal.Title}\n{proposal.Summary}",
                 CitedEvidenceFacts = evidence.Where(_facts.ContainsKey).ToDictionary(id => id, id => _facts[id], StringComparer.Ordinal),
@@ -118,18 +137,20 @@ internal sealed class CaseRecorder
         }
     }
 
+    // The investigation's own model use, from the snapshot: every deployment but the classifier's.
+    private IEnumerable<DeploymentUsage> Investigation() =>
+        _usage?.Deployments.Where(d => d.Key != screenDeployment).Select(d => d.Value) ?? [];
+
     // Calls the model made, and calls it was shown that it didn't make (a fixed workflow's), each once by call id.
-    private void Exchange(IEnumerable<ChatMessage> sent, ChatResponse response)
+    private void Exchange(IEnumerable<ChatMessage> sent, ChatResponse response, string? deployment)
     {
         lock (_lock)
         {
             _requests++;
-            _inputTokens += response.Usage?.InputTokenCount ?? 0;
-            _cachedInputTokens += response.Usage?.CachedInputTokenCount ?? 0;
-            _outputTokens += response.Usage?.OutputTokenCount ?? 0;
+            _lastDeployment = deployment;
             foreach (var call in sent.Concat(response.Messages).SelectMany(m => m.Contents).OfType<FunctionCallContent>().Where(call => _callIds.Add(call.CallId)))
             {
-                _calls.Add(Record(call));
+                _calls.Add(Record(call) with { Deployment = deployment });
                 if (call.Name == ToolNames.KnowledgeSearch && call.Arguments is { } arguments && arguments.TryGetValue("query", out var query) && Text(query) is { } text)
                 {
                     _queries.Add(text);
@@ -215,13 +236,13 @@ internal sealed class CaseRecorder
         }
     }
 
-    private sealed class RecordingChatClient(IChatClient inner, CaseRecorder recorder) : DelegatingChatClient(inner)
+    private sealed class RecordingChatClient(IChatClient inner, CaseRecorder recorder, string? deployment) : DelegatingChatClient(inner)
     {
         public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             var sent = messages.ToList();
             var response = await base.GetResponseAsync(sent, options, cancellationToken);
-            recorder.Exchange(sent, response);
+            recorder.Exchange(sent, response, deployment);
             return response;
         }
     }
