@@ -32,7 +32,8 @@ public sealed class JudgeTests
     {
         var score = await new Judge(Model(_ => Text(Verdict))).ScoreAsync(Eligible, Creditable, CancellationToken.None);
 
-        Assert.Equal(new JudgeScore(4, 5, 3, JudgeScore.Scored, null) { InputTokens = 0, OutputTokens = 0 }, score);
+        // The judge keeps the usage its model reported.
+        Assert.Equal(new JudgeScore(4, 5, 3, JudgeScore.Scored, null) { InputTokens = 1_000, OutputTokens = 100 }, score);
     }
 
     [Fact]

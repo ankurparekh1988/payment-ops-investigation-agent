@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using PaymentOps.Agent;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Safety;
+using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Security;
@@ -67,6 +68,7 @@ internal static class EvaluationServices
         services.AddSingleton<IConfiguration>(configuration);
         services.AddDemoData(configuration);
         services.AddInvestigation(endpoints, model => recorder.Observe(substituteModel?.Invoke(model) ?? model));
+        services.AddSingleton<IInvestigationUsageSink>(recorder);
 
         if (substituteKnowledge is not null)
         {

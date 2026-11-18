@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Investigating;
+using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Safety;
 using PaymentOps.Agent.Telemetry;
 using PaymentOps.Data.Demo;
@@ -42,13 +43,16 @@ internal sealed class AgentFixture : IDisposable
             .BuildServiceProvider();
     }
 
-    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null, IUntrustedTextScreen? screen = null, IQuestionScreen? questionScreen = null) => new(
-        model,
+    public InvestigationAgentRunner Runner(IChatClient model, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null, IUntrustedTextScreen? screen = null, IQuestionScreen? questionScreen = null) =>
+        Runner(new ModelRouting(RoutingMode.Off, model, null), user, time, logger, screen, questionScreen);
+
+    public InvestigationAgentRunner Runner(ModelRouting models, IUserContext? user = null, TimeProvider? time = null, ILogger<InvestigationAgentRunner>? logger = null, IUntrustedTextScreen? screen = null, IQuestionScreen? questionScreen = null, InvestigationLimits? limits = null) => new(
+        models,
         _provider.GetServices<IInvestigationTool>(),
         FixedPrompt,
         _provider.GetRequiredService<IInvestigationClock>(),
         user ?? TestUser.Reader,
-        Options.Create(new InvestigationLimits()),
+        Options.Create(limits ?? new InvestigationLimits()),
         time ?? TimeProvider.System,
         screen ?? ScriptedScreen.AllClean,
         questionScreen ?? ScriptedQuestionScreen.AllClean,

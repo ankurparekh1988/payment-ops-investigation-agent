@@ -7,6 +7,9 @@ public sealed class DeploymentPrice
 
     public decimal InputPerMillion { get; set; }
 
+    /// <summary>Input served from the prompt cache; without it, cached input is priced as input, an upper bound.</summary>
+    public decimal? CachedInputPerMillion { get; set; }
+
     public decimal OutputPerMillion { get; set; }
 }
 
@@ -32,7 +35,9 @@ public sealed class CostEstimateOptions
 /// </summary>
 public sealed record CostEstimate(decimal? Amount, string? Currency, bool Complete, string? Unavailable)
 {
-    internal static CostEstimate From(TurnUsage usage, CostEstimateOptions options)
+    internal static CostEstimate From(TurnUsage usage, CostEstimateOptions options) => From(usage.Snapshot(), options);
+
+    internal static CostEstimate From(UsageSnapshot usage, CostEstimateOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.Currency))
         {
@@ -45,17 +50,26 @@ public sealed record CostEstimate(decimal? Amount, string? Currency, bool Comple
         }
 
         var amount = 0m;
-        foreach (var (deployment, tokens) in usage.Tokens)
+        foreach (var (deployment, used) in usage.Deployments)
         {
+            if (used.InputTokens == 0 && used.OutputTokens == 0)
+            {
+                continue;
+            }
+
             if (options.Deployments.Find(p => string.Equals(p.Deployment, deployment, StringComparison.Ordinal)) is not { } price)
             {
                 return new(null, options.Currency, true, $"unpriced deployment {deployment}");
             }
 
-            amount += (tokens.Input * price.InputPerMillion + tokens.Output * price.OutputPerMillion) / 1_000_000m;
+            // Reported input includes the cached part, which is billed at its own rate.
+            var cached = Math.Min(used.CachedInputTokens, used.InputTokens);
+            amount += ((used.InputTokens - cached) * price.InputPerMillion
+                + cached * (price.CachedInputPerMillion ?? price.InputPerMillion)
+                + used.OutputTokens * price.OutputPerMillion) / 1_000_000m;
         }
 
-        var records = usage.Records.Values.Sum();
+        var records = usage.ContentSafetyRecords.Values.Sum();
         if (records > 0)
         {
             if (options.ContentSafetyPerThousandRecords is not { } perThousand)

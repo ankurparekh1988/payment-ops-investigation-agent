@@ -71,7 +71,7 @@ internal abstract class CaseRunner(
     // Fresh services for every ask, so nothing from an earlier ask carries into this one.
     private async Task<CaseAttempt> AskAsync(InvestigationCase c, CancellationToken cancellationToken)
     {
-        var recorder = new CaseRecorder();
+        var recorder = new CaseRecorder(release.ScreenDeployment);
         var (runCache, runHarmCache) = (_runScreenCache, _runHarmCache);
         void Configure(IServiceCollection services)
         {

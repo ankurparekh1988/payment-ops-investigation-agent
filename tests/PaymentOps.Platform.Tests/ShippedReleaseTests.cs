@@ -54,4 +54,14 @@ public sealed class ShippedReleaseTests
     {
         Assert.Equal(["harm-screen", "investigation-agent", "tool-text-harm-screen"], AiReleaseLoader.Load(new EmbeddedAiReleaseSource()).Prompts.Keys.Order(StringComparer.Ordinal));
     }
+
+    [Fact]
+    public void The_shipped_release_routes_off_with_nano_as_the_small_model()
+    {
+        var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+
+        Assert.Equal(RoutingMode.Off, release.RoutingMode);
+        Assert.Equal("chat-small", release.SmallDeployment);
+        Assert.Equal(new DeploymentIdentity("gpt-5.4-nano", "2026-03-17", "GlobalStandard", "strict"), release.Deployments["chat-small"]);
+    }
 }

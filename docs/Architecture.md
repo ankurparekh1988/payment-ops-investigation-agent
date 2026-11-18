@@ -19,7 +19,7 @@
 | Knowledge index | ✅ Every deployment publishes the corpus to `knowledge-v1` on a keyless Free-tier search service, one document per section, and verifies every stored field ([below](#knowledge-index)) |
 | Knowledge retrieval | ✅ The server retrieves only what the user may see, for the agent's knowledge search and for source pages ([below](#knowledge-retrieval)). The grounded-answer path that answered from knowledge alone was retired when the investigation view replaced it |
 | Structured data | ✅ Merchants, payments, settlement files, payouts, the settlement calendar, processor configuration and incidents, and error events behind four domain ports, served from a validated synthetic dataset built into the app ([below](#structured-data)) |
-| Investigation agent | ✅ One agent with five read-only tools, limits enforced in our own code, and an assessment shown only after every statement checks out against what this investigation's tools returned ([below](#investigation-agent)) |
+| Investigation agent | ✅ One agent with five read-only tools, limits enforced in our own code, and an assessment shown only after every statement checks out against what this investigation's tools returned ([below](#investigation-agent)). A small model can make the first attempt, with chat stepping in only when the server rejects its work; built, and off until a pre-registered measurement adopts it ([below](#model-routing)) |
 | Home page | ✅ What each role needs at a glance, layered by role, with the Admin's pause switch ([below](#home-page)) |
 | Investigation view | ✅ The Investigate page: a live timeline of tool calls written by the server, the validated assessment with each statement's support, cancel, and follow-up questions within an application-owned budget ([below](#investigation-view)) |
 | Ticket approvals | ✅ The agent can propose an incident ticket; the server stores it for the Engineer who ran the investigation, and creates the ticket only when they approve, once ([below](#proposals-and-approval)) |
@@ -34,7 +34,7 @@ flowchart LR
   U["Ops users<br/>(browser)"] -->|HTTPS, session cookie| APP["Web app<br/>App Service, Linux, .NET 10"]
   U -->|sign in| E["Microsoft Entra ID<br/>app roles, groups"]
   E -->|"authorization code,<br/>redeemed as the app's managed identity"| APP
-  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>screen: strict filter<br/>embedding: no filter<br/>judge: default filter"]
+  APP -->|"Entra token<br/>OpenAI User"| F["Microsoft Foundry<br/>chat: strict filter<br/>small: strict filter<br/>screen: strict filter<br/>embedding: no filter<br/>judge: default filter"]
   APP -->|"Entra token<br/>Search Index Data Reader"| S
   APP -->|"Entra token<br/>Metrics Publisher"| AI["Application Insights"]
   AI --> LA[("Log Analytics")]
@@ -73,7 +73,7 @@ flowchart LR
 - **Access.** Code reads prompts through `IPromptProvider`. Placeholders are `{{name}}`, filled in one pass.
 - **Visibility.** At startup the app logs its schema version, deployment names and each prompt's id, version and hash, never prompt text.
 
-*As of 2026-11-01.* The manifest holds three prompts, `investigation-agent` 1.1.0, `harm-screen` 1.0.0 and `tool-text-harm-screen` 1.0.0, and the retrieval settings: the index, the mode and an optional semantic floor. Each further prompt is added with the feature that first uses it, and a prompt the code no longer uses is removed with that code.
+*As of 2026-11-01.* The manifest holds three prompts, `investigation-agent` 1.1.0, `harm-screen` 1.0.0 and `tool-text-harm-screen` 1.0.0, the retrieval settings (the index, the mode and an optional semantic floor), and the routing mode, `off` ([below](#model-routing)). Each further prompt is added with the feature that first uses it, and a prompt the code no longer uses is removed with that code.
 
 ## Knowledge corpus
 
@@ -215,8 +215,19 @@ A guard around every tool enforces these in our code; the framework's own iterat
 | Time per investigation | 60 s |
 | The same call with the same arguments | Twice; a third stops the investigation |
 | Calls with invalid arguments | Two corrections; a third stops it |
+| Model calls per investigation | 16 across every attempt, checked before each call; the SDK's retries of one call aren't counted |
+| Tokens per investigation | 120,000, an estimated allowance checked before each model call ([below](#model-routing)) |
 
 Tool calls run one at a time. An unexpected exception, or a call to a tool that doesn't exist, ends the loop at once, with no exception text sent to the model and no retry.
+
+### Model routing
+
+The release's `routing.mode` decides which model an investigation starts on ([ADR 0023](adr/0023-route-to-a-small-model-first-by-a-pre-registered-rule.md)). With `off`, the shipped setting, every investigation runs on the chat deployment. With `cascade`, the first attempt runs on the `small` deployment (`gpt-5.4-nano`), and one attempt on chat follows only when the small model couldn't produce a submission the server accepts: rejected again after its correction, or no accepted submission after the required request. A valid incomplete result, a refusal, a block, an outage, a limit or a cancellation never escalates. There's no difficulty classifier: the validator already decides whether an answer is acceptable, and only that decides.
+
+- **One budget.** Both attempts share the 60 s deadline, the ten read-tool calls, 16 logical model calls and the token allowance. Before each model call, the tokens used so far, an estimate of the call's input and its output limit must fit 120,000. An attempt's first call is estimated from the request itself, its UTF-8 bytes plus framing, which bounds its tokens from above; a later call from the previous call's measured input plus what was added since. A request that can't be estimated isn't sent. The second attempt starts only with at least 20 s, 2 tool calls, 8 model calls and 60,000 tokens left, and only if its first call fits; otherwise the small model's result stands.
+- **Fresh evidence, reused reads.** The chat attempt gets a new evidence registry and a new conversation, so it never sees the small model's submission, evidence ids or citations. A read the small model made that succeeded is served from a cache that lives for the investigation instead of calling the source again, but only its raw output: it's screened again and registered as the chat attempt's own evidence, so every id chat cites was issued to it.
+- **One investigation.** Whatever the attempts, there's one investigation id, question screen, usage reservation, trace, conversation turn, proposal and decision record.
+- **Measured first.** The evaluation can run `cascade` against the deployed small model without the app ever doing so, and `routing-decision` applies the ADR's rule to the result ([Evaluation](Evaluation.md#model-routing)).
 
 ### Screening tool text
 
@@ -247,11 +258,11 @@ Every question gets a server-generated `InvestigationId`. It's on the result's f
 
 ### Telemetry
 
-Each investigation that runs is one trace: an `investigation` span with children for the question screen, each tool call, each knowledge search, the screening of what tools returned, and each model call (OpenTelemetry's `gen_ai` conventions, without message content). The `investigation` span names the prompt version and chat deployment it ran under, a search names its index, and screening what a tool returned names the kind of source (a knowledge section or a record), how many values were screened, their verdict (`mixed` when they differ) and the cache hits that served them. The span ends tagged with the outcome, the tokens used, the Content Safety records billed, the requests sent and, when it can be estimated, the cost.
+Each investigation that runs is one trace: an `investigation` span with children for the question screen, each model attempt (an `attempt` span naming its tier, deployment and how it ended), each tool call, each knowledge search, the screening of what tools returned, and each model call (OpenTelemetry's `gen_ai` conventions, without message content). The `investigation` span names the prompt version and chat deployment it ran under, a search names its index, and screening what a tool returned names the kind of source (a knowledge section or a record), how many values were screened, their verdict (`mixed` when they differ) and the cache hits that served them. The span ends tagged with the outcome, the tokens used, the Content Safety records billed, the requests sent and, when it can be estimated, the cost.
 
 What a turn used is kept apart by what it is, because each is billed differently: requests sent, retries and failures included; Content Safety text records, one per started 1,000 characters of each text it answered; model tokens per deployment, the classifier's included; and screening verdicts served from a cache, which sent nothing. A cost is estimated only from complete usage and prices configured per deployment (`PaymentOps:CostEstimate`); when either is missing the cost is reported as unavailable and the counts still stand. The estimate uses list prices, so it's an upper bound.
 
-One log event per investigation, `3009`, is its decision record: the outcome, the tools called and how each ended, the evidence and sections the answer cited, screen verdicts by kind, and the usage counts. It holds identifiers and counts, never the question, the answer, tool output or who asked. Metrics count investigations by outcome, screen blocks by kind, tokens, requests, records and cache hits. A request refused before an investigation starts (another one already running) is only counted, by reason.
+One log event per investigation, `3009`, is its decision record: the outcome, the tools called and how each ended, the evidence and sections the answer cited, screen verdicts by kind, the routing mode, each attempt's tier and how it ended, the escalation decision, reads reused, and per deployment the logical calls, HTTP attempts and input, cached input and output tokens. Event `3010` records a small-model failure and whether it escalated or which bound refused it. The usage is frozen once, when the investigation ends, and the decision record, the cost estimate and the evaluation all read that one snapshot. It holds identifiers and counts, never the question, the answer, tool output or who asked. Metrics count investigations by outcome, screen blocks by kind, tokens, requests, records and cache hits. A request refused before an investigation starts (another one already running) is only counted, by reason.
 
 Everything goes to Application Insights through the app's managed identity; the KQL to follow one investigation is in the [Runbook](Runbook.md).
 

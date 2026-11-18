@@ -183,6 +183,34 @@
         "resourceType": "microsoft.insights/components",
         "visualization": "table"
       }
+    },
+    {
+      "type": 3,
+      "name": "attempts",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Model attempts by tier and how they ended (none: a validated result)",
+        "query": "dependencies\n| where name == 'attempt'\n| summarize Attempts = count() by Tier = tostring(customDimensions['paymentops.attempt.tier']), Failure = tostring(customDimensions['paymentops.attempt.failure'])",
+        "size": 0,
+        "timeContext": { "durationMs": 2592000000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "escalations",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Small-model failures: escalated, or refused and the bound that refused them",
+        "query": "traces\n| where tostring(customDimensions.EventId) == '3010'\n| summarize Count = count() by Decision = tostring(customDimensions.Decision), Failure = tostring(customDimensions.Failure)",
+        "size": 0,
+        "timeContext": { "durationMs": 2592000000 },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      }
     }
   ],
   "fallbackResourceIds": ["${application_insights_id}"],

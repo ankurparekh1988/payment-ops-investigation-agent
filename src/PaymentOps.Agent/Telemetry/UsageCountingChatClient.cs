@@ -9,6 +9,7 @@ internal sealed class UsageCountingChatClient(IChatClient inner, string deployme
 {
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
+        TurnUsage.RecordModelCall(deployment);
         ChatResponse response;
         try
         {
@@ -27,6 +28,7 @@ internal sealed class UsageCountingChatClient(IChatClient inner, string deployme
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        TurnUsage.RecordModelCall(deployment);
         UsageDetails? usage = null;
         await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken))
         {
@@ -39,7 +41,7 @@ internal sealed class UsageCountingChatClient(IChatClient inner, string deployme
 
     private void Record(UsageDetails? usage)
     {
-        TurnUsage.RecordTokens(deployment, usage?.InputTokenCount ?? 0, usage?.OutputTokenCount ?? 0);
+        TurnUsage.RecordTokens(deployment, usage?.InputTokenCount ?? 0, usage?.OutputTokenCount ?? 0, usage?.CachedInputTokenCount ?? 0);
         if (usage?.InputTokenCount is null || usage.OutputTokenCount is null)
         {
             TurnUsage.RecordIncomplete("model usage missing");

@@ -1,0 +1,44 @@
+# 0023. Route investigations through a small model first, by a pre-registered rule
+
+- **Status:** Accepted
+- **Date:** 2026-11-18
+
+## Context
+
+Every investigation runs on one deployment, `gpt-5.4-mini`. At the volume an operations team works at, sending every question to one general-purpose model makes cost scale with traffic whatever the question needs. A smaller model, `gpt-5.4-nano`, may answer the simpler ones; the open question is whether it does so without losing quality, and whether its failures, which then also cost a mini attempt, eat the saving.
+
+The server already has deterministic judgement of a model's work: an assessment must cite only evidence this investigation's tools returned, and a submission that fails that check is sent back once for correction. That check says whether an answer is *valid*, not whether a question is *hard*: a valid incomplete result can be the right answer when evidence is missing, and a refusal can be right too.
+
+## Decision
+
+1. **A two-tier cascade, off by default.** With `routing.mode: cascade` in the AI release manifest, an investigation's first attempt runs on the small deployment; only an eligible failure (below) starts one attempt on the chat deployment. With `routing.mode: off`, the only mode the app runs until this rule says otherwise, every investigation runs on the chat deployment as before. There is no classifier.
+2. **Only two capability failures escalate**, carried as a typed attempt failure, not read back from the broad `AssessmentUnverified` result:
+   - the submission was still rejected by the validator after its one correction;
+   - the model made no accepted submission after the required submission request.
+
+   Nothing else escalates: any validated result, including incomplete, escalated and refused outcomes; a call to an unknown tool; content-filter blocks and other policy or safety outcomes; authorization failures; an unavailable or out-of-time screen; model or service outages; unexpected aborts; cancellation; an exhausted limit.
+3. **One investigation.** One investigation id, one usage reservation, one question screen, one trace, one conversation turn, one proposal lifecycle and one decision record, whatever the number of attempts. The 60-second deadline and the ten read-tool calls are shared by both attempts, never renewed. The escalated attempt starts with a fresh evidence registry: the small model's submission, evidence ids and citations are discarded and never shown. A read the small model already made, authorized and returned successfully, is served to the escalated attempt from a cache scoped to the investigation instead of calling the data source again. The cache holds the raw output only, never a screening verdict, so its text passes through the same screening again (an attack or harm verdict comes from the verdict cache; an unavailable one is never cached and is screened afresh) and registers evidence and knowledge sections in the new registry, so every id the escalated attempt cites was issued to it.
+4. **Bounded.** At most two attempts, sharing the 60-second deadline, the ten read-tool calls and the existing per-call output-token limit. Across both attempts, an investigation makes at most 16 *logical* model calls (one per request the agent makes; the SDK's HTTP retries of a call aren't extra calls, and are recorded apart), and each call is admitted only if a pre-call projection of the tokens it could use fits a 120,000-token allowance. The projection is the tokens used so far, plus an estimate of this call's input, plus the output limit. An attempt's first call, which has no measurement before it, is estimated from the request itself: the UTF-8 byte length of its instructions, messages and tool definitions plus a fixed framing allowance, an upper bound because no token encodes less than one byte. Each later call's estimate is the previous call's measured input (or, if usage was missing, what it was charged) plus the bytes added to the conversation since. A request whose size can't be estimated, such as one carrying non-text content, isn't made. It's an allowance checked before each call, not an absolute token or billing ceiling. A call whose response reports no usage is charged its projection and marks the investigation's usage incomplete. An escalation starts only if at least 20 seconds, 2 read-tool calls, 8 logical calls and half the token allowance remain, and the escalated attempt's first call fits the allowance; otherwise the small model's failure stands as the result, as it would without routing.
+5. **Measured before it's used.** The cascade is adopted, by a later change that sets `routing.mode: cascade` and passes the evaluation gate on its own exact head, only if all of these hold, comparing three cascade runs against three mini-only control runs.
+
+   *Comparable evidence.* The two sides must be the same source and inputs, or the comparison is invalid and the cascade isn't adopted: the same Git tree (each report keeps its own commit for audit, since a pull request's evaluation runs on a merge commit and the measurement on the squash-merged one, which share a tree when the branch was up to date), a clean working tree, the same dataset hashes, prompt versions and hashes, release configuration and model identities (chat, small and screen deployments, model and version), and the same evaluation index name and fingerprint. The fingerprint is a hash of every indexed field of every section (classification, title, document type, headings, section path and ordinal as well as content), ordered by key and read back in full at the start and again at the end of each run; an index that can't be read whole, reads back inconsistently, or changes during a run makes that run invalid. Only the routing mode differs, and each report states the mode it ran.
+
+   *Conditions:*
+   - every hard gate passes in every cascade run (authorization leaks, unauthorized state changes);
+   - a complete cascade safety report (the frozen safety cases, every case and run present, routing `cascade`, the same source identity) passes every safety hard gate; missing, failed or incompatible safety evidence prevents adoption;
+   - **each** cascade run passes every threshold in `eval/thresholds.json` on its own. This is stricter than the release gate, which judges the median of three and is unchanged;
+   - for every gating metric, the cascade's median is no worse than the control's median by more than that metric's [ADR 0018](0018-evaluation-thresholds-from-measured-run-to-run-spread.md) margin, `max(1.6 × s, 1/N)`, with `s` the baseline standard deviation and `N` the case count stored in `eval/thresholds.json`;
+   - the all-in estimated cost per validated investigation is at least **25% lower** than the control's. All-in means every model call of every attempt (failed and escalated ones included), the question and tool-text classifier calls, and the Content Safety text records, priced from `eval/pricing.json`. Cost is inconclusive, and the cascade not adopted, when any case's usage is incomplete, any used deployment or service has no price, prices are in different currencies, or either side has no validated results;
+   - the end-to-end p95 latency is no more than **25% higher** than the control's.
+
+   Tool recall and argument accuracy are scored on the calls of the attempt whose result the case is: a discarded attempt's calls earn the answer nothing. Safety checks count every attempt's calls. With routing off there is one attempt, so nothing changes for the release gate.
+
+   The judge stays off for both sides. If any condition fails, `routing.mode` stays `off`, the result is recorded in [Evaluation](../Evaluation.md), and the experiment ends; no prompt, eligibility rule, limit or case changes in response to a result, and held-out cases are never inspected to tune anything. A different rule needs a new ADR and a fresh measurement.
+
+## Consequences
+
+- The measurement is not a release verdict. The pull request that adds the cascade ships it off and passes the gate as mini-only; its gate run, with the all-in cost accounting, is the control. The cascade runs are an experiment against the deployed small model. Only a later pull request that turns routing on is released, and it passes the gate on its own head.
+- A negative result costs nothing to undo: the code stays, switched off, with the evidence for why.
+- The decision record and the operations workbook show per-tier attempts, escalation decisions, reused reads, tokens per deployment and the estimated cost, never the question or model output.
+- The same bounds apply with routing off, so the control and the cascade run the same code; they stop a runaway investigation rather than changing a normal one.
+- A second tier above mini is out of scope until an evaluation shows mini failing cases a stronger model would pass.

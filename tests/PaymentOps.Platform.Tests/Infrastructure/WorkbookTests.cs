@@ -16,6 +16,13 @@ public sealed class WorkbookTests
     public void The_quality_section_shows_tool_calls_by_outcome() =>
         Assert.Contains(Queries, q => q.Contains("startswith 'tool.'", StringComparison.Ordinal) && q.Contains("paymentops.tool.outcome", StringComparison.Ordinal));
 
+    [Fact]
+    public void The_cost_section_shows_attempts_by_tier_and_escalations()
+    {
+        Assert.Contains(Queries, q => q.Contains("name == 'attempt'", StringComparison.Ordinal) && q.Contains("paymentops.attempt.tier", StringComparison.Ordinal) && q.Contains("paymentops.attempt.failure", StringComparison.Ordinal));
+        Assert.Contains(Queries, q => q.Contains("'3010'", StringComparison.Ordinal) && q.Contains("Decision", StringComparison.Ordinal));
+    }
+
     // Pause changes are the Admin's audit trail: the log event, never the reason text or a name.
     [Fact]
     public void The_operations_section_lists_pause_changes()

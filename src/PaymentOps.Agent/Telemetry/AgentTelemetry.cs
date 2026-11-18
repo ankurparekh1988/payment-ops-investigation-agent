@@ -22,7 +22,9 @@ public static class AgentTelemetry
     internal static readonly Counter<long> ModelTokens = Meter.CreateCounter<long>("paymentops.model.tokens", "{token}", "Model tokens, by direction and deployment.");
     internal static readonly Counter<long> HttpRequests = Meter.CreateCounter<long>("paymentops.http.requests", "{request}", "Requests sent to paid services, retries included.");
     internal static readonly Counter<long> ContentSafetyRecords = Meter.CreateCounter<long>("paymentops.content_safety.records", "{record}", "Content Safety text records answered, as billed.");
-    internal static readonly Counter<long> CacheHits = Meter.CreateCounter<long>("paymentops.screen.cache_hits", "{hit}", "Screening verdicts served from a cache, sending nothing.");
+    internal static readonly Counter<long> CacheHits = Meter.CreateCounter<long>("paymentops.screen.cache_hits", "{hit}", "Screening verdicts and reused reads served from a cache, sending nothing.");
+    internal static readonly Counter<long> Attempts = Meter.CreateCounter<long>("paymentops.investigation.attempts", "{attempt}", "Model attempts, by tier and how they ended.");
+    internal static readonly Counter<long> Escalations = Meter.CreateCounter<long>("paymentops.investigation.escalations", "{escalation}", "Small-model failures that escalated or were refused escalation, by decision.");
     internal static readonly Histogram<double> EstimatedCost = Meter.CreateHistogram<double>("paymentops.investigation.estimated_cost", description: "Estimated cost of an investigation whose usage and prices were complete.");
 
     /// <summary>Counts a request refused before any investigation ran (busy, paused, over a limit, usage unknown); nothing else about it is recorded.</summary>

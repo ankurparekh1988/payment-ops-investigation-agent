@@ -35,6 +35,17 @@ models:
     deploymentType: GlobalStandard
     capacityK: 50
 
+  # The model a cascade starts on (ADR 0023). Deployed whenever it's listed, so it can be measured
+  # before routing uses it; investigations reach it only with routing.mode cascade. It answers the same
+  # people as chat, so it has the same filter.
+  small:
+    deployment: chat-small
+    model: gpt-5.4-nano
+    version: "2026-03-17"
+    deploymentType: GlobalStandard
+    capacityK: 250
+    contentFilterPolicy: strict
+
   # Scores answers during evaluation. Pinned separately so judge behaviour changes only on purpose.
   # It reads answers only to score them and never talks to a person, so it keeps Microsoft's default filter.
   judge:
@@ -63,6 +74,11 @@ retrieval:
   # Only evaluations read it; each one first makes it hold the change's own corpus.
   evaluationIndex: knowledge-eval-v1
   mode: lexical
+
+# Which model an investigation starts on. off: the active chat deployment only. cascade: models.small
+# first, and one attempt on chat only after an eligible failure (ADR 0023). Adopted only by that ADR's rule.
+routing:
+  mode: off
 
 # Prompts embedded in the application, keyed by id. A prompt's body can't change without a higher
 # version: CI compares this section with the base branch. Each prompt is added with the code that

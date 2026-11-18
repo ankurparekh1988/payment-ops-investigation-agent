@@ -4,6 +4,7 @@ using System.Text;
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Judging;
+using PaymentOps.Evaluation.Pricing;
 using PaymentOps.Evaluation.Running;
 using PaymentOps.Evaluation.Scoring;
 
@@ -82,6 +83,7 @@ internal static class ReportMarkdown
         var cost = report.Cost;
         md.AppendLine(CultureInfo.InvariantCulture, $"Estimated model cost per validated investigation: {Money(cost.PerValidatedInvestigation, cost.Currency)} ({cost.ValidatedResults} validated results; chat {Money(cost.Chat, cost.Currency)}, judge {Money(cost.Judge, cost.Currency)}). Informational; prices from {cost.PriceSource ?? "no price list entry"}.");
         md.AppendLine(CultureInfo.InvariantCulture, $"Chat tokens: {cost.ChatTokens.Input} in ({cost.ChatTokens.CachedInput} cached), {cost.ChatTokens.Output} out.");
+        AllIn(md, report);
         return md.ToString();
     }
 
@@ -209,7 +211,20 @@ internal static class ReportMarkdown
 
         md.AppendLine().AppendLine("### Latency and cost").AppendLine();
         md.AppendLine(CultureInfo.InvariantCulture, $"Latency p50 {Seconds(report.Latency.P50)}, p95 {Seconds(report.Latency.P95)}. Estimated chat cost {Money(report.Cost.Chat, report.Cost.Currency)}; informational.");
+        AllIn(md, report);
         return md.ToString();
+    }
+
+    // Every call the system made, priced; and what the run measured, so two reports can be checked to be comparable.
+    private static void AllIn(StringBuilder md, EvaluationReport report)
+    {
+        var cost = report.Cost;
+        md.AppendLine(CultureInfo.InvariantCulture, $"All-in estimated cost per validated investigation (model calls, classifier, Content Safety): {(cost.AllInStatus == AllInCost.Priced ? Money(cost.AllInPerValidatedInvestigation, cost.Currency) : cost.AllInStatus)}.");
+        if (report.Inputs is { } inputs)
+        {
+            var index = inputs.Index.Problem is null ? $"{inputs.Index.Documents} sections, unchanged" : inputs.Index.Problem;
+            md.AppendLine(CultureInfo.InvariantCulture, $"Routing {inputs.Routing}; source tree {report.Source?.Tree ?? "unknown"}{(report.Source?.Dirty == true ? " (dirty)" : string.Empty)}; index {inputs.Index.Name}: {index}.");
+        }
     }
 
     // A second ask counts instead of the first (ADR 0017), so how often the screen couldn't check a question is shown;

@@ -47,6 +47,7 @@ internal sealed class SubmitAssessmentFunction(TurnState turn, DateOnly today, I
             return new(Accepted);
         }
 
+        turn.Reject();
         progress?.Report(new InvestigationProgress.CorrectionRequested());
         return new(JsonSerializer.Serialize(
             new

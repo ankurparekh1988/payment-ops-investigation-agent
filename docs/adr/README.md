@@ -26,3 +26,4 @@ Significant design decisions, why they were made, and what they cost. Each recor
 | [0020](0020-evaluate-on-request-at-lower-cost.md) | Evaluate on request, once per change, at lower cost | Accepted; amended by 0021 |
 | [0021](0021-bounded-usage-and-observable-cost.md) | Bounded usage and observable cost | Accepted; amended by 0022 |
 | [0022](0022-enterprise-ui-on-mudblazor.md) | An enterprise UI on MudBlazor, with a role-layered home and an Admin pause | Accepted |
+| [0023](0023-route-to-a-small-model-first-by-a-pre-registered-rule.md) | Route investigations through a small model first, by a pre-registered rule | Accepted; routing off until the rule adopts it |

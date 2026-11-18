@@ -26,21 +26,20 @@ internal static class TurnOutcome
 {
     /// <param name="work">The turn's planning and submission; it returns a result only to end the turn early.</param>
     /// <param name="failed">Told about a failure before it becomes a result, for logging.</param>
+    /// <param name="budget">The investigation's budget; its deadline ends the work.</param>
     public static async Task<AssessmentResult> RunAsync(
         TurnState turn,
-        InvestigationLimits limits,
-        TimeProvider time,
+        InvestigationBudget budget,
         IProgress<InvestigationProgress>? progress,
         Func<CancellationToken, Task<AssessmentResult?>> work,
         Action<TurnFailure, Exception>? failed,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(turn);
-        ArgumentNullException.ThrowIfNull(limits);
+        ArgumentNullException.ThrowIfNull(budget);
         ArgumentNullException.ThrowIfNull(work);
 
-        using var turnTimeout = new CancellationTokenSource(limits.TurnTimeout, time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turnTimeout.Token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Deadline);
         try
         {
             if (await work(linked.Token) is { } early)
@@ -50,9 +49,10 @@ internal static class TurnOutcome
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            turn.Fail(AttemptFailure.Cancelled);
             return new NotAssessed(NotAssessedReason.Cancelled);
         }
-        catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested)
+        catch (Exception ex) when ((ex is OperationCanceledException && budget.DeadlineReached) || ex is InvestigationBudgetExceededException)
         {
             if (turn.Stop())
             {
@@ -63,22 +63,36 @@ internal static class TurnOutcome
         {
             // A policy decision, not an outage: retrying the same input would be refused again.
             failed?.Invoke(TurnFailure.Blocked, ex);
+            turn.Fail(AttemptFailure.Blocked);
             return new NotAssessed(NotAssessedReason.Blocked);
         }
         catch (Exception ex) when (ex is OperationCanceledException || ModelFailure.IsServiceFailure(ex))
         {
             // A cancellation from neither the caller nor the turn timeout: the model or Search client timed out on its own.
             failed?.Invoke(TurnFailure.ServiceFailed, ex);
+            turn.Fail(AttemptFailure.ServiceFailed);
             return new NotAssessed(NotAssessedReason.ModelUnavailable);
         }
         catch (Exception ex)
         {
             // The framework ended the loop without retrying, and so do we.
             failed?.Invoke(TurnFailure.Aborted, ex);
+            turn.Fail(AttemptFailure.Aborted);
             return new NotAssessed(NotAssessedReason.AssessmentUnverified);
         }
 
-        return turn.Accepted is { } submission ? AssessmentPolicy.Apply(submission, turn)
-            : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
+        if (turn.Accepted is { } submission)
+        {
+            return AssessmentPolicy.Apply(submission, turn);
+        }
+
+        // A stopped attempt failed because of its limit, whatever the model did or didn't submit afterwards.
+        if (turn.Stopped)
+        {
+            turn.Fail(AttemptFailure.LimitReached);
+            return new NotAssessed(NotAssessedReason.LimitReached);
+        }
+
+        return new NotAssessed(NotAssessedReason.AssessmentUnverified);
     }
 }

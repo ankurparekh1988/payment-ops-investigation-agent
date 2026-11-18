@@ -50,8 +50,22 @@ internal sealed class TestRelease : IAiReleaseSource
 
     public const string Retrieval = "retrieval:\n  index: knowledge-v1\n  evaluationIndex: knowledge-eval-v1\n  mode: lexical";
 
-    public static string Manifest(string prompts = "prompts: {}", string models = Models, string schema = "schemaVersion: 1", string retrieval = Retrieval) =>
-        $"{schema}\n{models}\n{retrieval}\n{prompts}\n";
+    public const string Routing = "routing:\n  mode: off";
+
+    /// <summary>A small model to append to <see cref="Models"/>.</summary>
+    public const string SmallModel = """
+
+          small:
+            deployment: chat-small
+            model: gpt-test-small
+            version: "2026-01-01"
+            deploymentType: GlobalStandard
+            capacityK: 10
+            contentFilterPolicy: strict
+        """;
+
+    public static string Manifest(string prompts = "prompts: {}", string models = Models, string schema = "schemaVersion: 1", string retrieval = Retrieval, string routing = Routing) =>
+        $"{schema}\n{models}\n{retrieval}\n{routing}\n{prompts}\n";
 
     public static string PromptEntry(string id = "grounded-answer", string version = "0.1.0", string body = Body) =>
         $"prompts:\n  {id}:\n    version: {version}\n    sha256: {PromptHasher.Hash(body)}";

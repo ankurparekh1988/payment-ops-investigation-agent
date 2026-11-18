@@ -26,6 +26,12 @@ internal sealed class TurnState
 
     public bool Stopped { get; private set; }
 
+    /// <summary>Why the attempt failed, once it has; null while it runs and for a validated result.</summary>
+    public AttemptFailure? Failure { get; private set; }
+
+    /// <summary>A submission was rejected, so the next request is its one correction.</summary>
+    public bool SubmissionRejected { get; private set; }
+
     /// <summary>The validated submission; once set, nothing the model asks for runs.</summary>
     public AssessmentSubmission? Accepted { get; private set; }
 
@@ -240,6 +246,10 @@ internal sealed class TurnState
     }
 
     public void Accept(AssessmentSubmission submission) => Accepted = submission;
+
+    public void Reject() => SubmissionRejected = true;
+
+    public void Fail(AttemptFailure failure) => Failure = failure;
 
     /// <param name="found">False when the source answered that nothing matched, such as an unknown merchant.</param>
     public void StructuredOutcome(bool answered, bool found = true)

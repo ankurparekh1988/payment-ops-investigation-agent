@@ -207,6 +207,7 @@ Three layers. Every question is screened before the investigation agent sees it 
 | A screen that can't answer | Throttling, errors, timeouts | The text is withheld as unchecked; the investigation continues on structured data |
 | Steered support for a claim or a ticket | A withheld knowledge section | It keeps its citation id but can't support anything |
 | An attack carried into later questions | Conversation history | Only answered turns are carried |
+| A discarded attempt's evidence or verdicts reused | A small-model attempt before an escalation ([ADR 0023](adr/0023-route-to-a-small-model-first-by-a-pre-registered-rule.md)) | The escalated attempt gets a fresh evidence registry and conversation. Reads are reused only within the investigation, only when they were authorized and succeeded, and only as raw output: screened again and registered as the new attempt's evidence |
 
 **The question screen.** Three checks run together on every question and follow-up, under one 8 s budget, before the investigation agent sees it:
 - Content Safety's harm analysis for the four categories, blocking at Low severity and above;

@@ -26,7 +26,8 @@ internal sealed record SafetyEvalSettings(
     string? Thresholds,
     string Out,
     string Summary,
-    AiRelease Release);
+    AiRelease Release,
+    string Ai);
 
 /// <summary>
 /// safety-eval: the safety cases N times against the agent, with each case's planted text beneath its tools,
@@ -37,20 +38,22 @@ internal static class SafetyEvalCommand
 {
     public const string Usage =
         "safety-eval --foundry <url> --content-safety <url> --search <url> --scope <token scope> --ai <dir> --sources <dir> --dataset <file> " +
-        "--runs <n> --pricing <file> [--thresholds <file>] [--index live|evaluation] --out <file> --summary <file>";
+        "--runs <n> --pricing <file> [--thresholds <file>] [--index live|evaluation] [--routing off|cascade] --out <file> --summary <file>";
 
     private const string Title = "Safety evaluation";
 
-    private static readonly string[] Valued = ["foundry", "content-safety", "search", "scope", "ai", "sources", "dataset", "runs", "pricing", "thresholds", "index", "out", "summary"];
+    private static readonly string[] Valued = ["foundry", "content-safety", "search", "scope", "ai", "sources", "dataset", "runs", "pricing", "thresholds", "index", "routing", "out", "summary"];
 
     public static Task<int> RunAsync(string[] args) => RunAsync(args, null, TimeSpan.FromMinutes(1));
 
     /// <param name="runners">Tests only: the system under evaluation, given each case's overlay; by default the agent, live.</param>
     /// <param name="retryDelay">How long to wait before repeating an invalid run.</param>
+    /// <param name="indexes">Tests only: the index read back for the report's fingerprint; by default Search, unless the runner is substituted.</param>
     public static Task<int> RunAsync(
         string[] args,
         Func<AiRelease, SafetyEvalSettings, Func<InvestigationCase, Action<IServiceCollection>?>, ICaseRunner>? runners,
-        TimeSpan retryDelay) => ExitCodes.GuardAsync(Title, Usage, async () =>
+        TimeSpan retryDelay,
+        Func<AiRelease, IKnowledgeIndexClient?>? indexes = null) => ExitCodes.GuardAsync(Title, Usage, async () =>
     {
         var settings = Parse(args);
         var release = settings.Release;
@@ -78,7 +81,16 @@ internal static class SafetyEvalCommand
             null,
             null,
             DateTimeOffset.UtcNow,
-            release.KnowledgeIndex);
+            release.KnowledgeIndex)
+        {
+            Source = ReportSource.Current(),
+            Deployments = release.Deployments,
+        };
+
+        // The index is read whole before and after, so a report vouches for the corpus it measured.
+        var index = indexes is not null ? indexes(release)
+            : runners is null ? SearchKnowledgeIndexClient.Create(settings.Endpoints.SearchEndpoint, release.KnowledgeIndex, new CachedTokenCredential(new AzureCliCredential(), diagnostics.SignInFailed)) : null;
+        var indexAtStart = await IndexFingerprint.ReadAsync(release.KnowledgeIndex, index, CancellationToken.None);
 
         IReadOnlyList<RunOutcome> runs;
         try
@@ -97,6 +109,9 @@ internal static class SafetyEvalCommand
             await File.AppendAllTextAsync(settings.Summary, ReportMarkdown.DidNotFinish(Title, $"The evaluation stopped on an unexpected {ex.GetType().Name}.", diagnostics.Snapshot()));
             throw;
         }
+
+        var indexAtEnd = await IndexFingerprint.ReadAsync(release.KnowledgeIndex, index, CancellationToken.None);
+        context = context with { Inputs = ReportInputs.From(release, settings.Ai, [settings.Dataset], indexAtStart.Ended(indexAtEnd), settings.Pricing, settings.Thresholds) };
 
         var classification = corpus.ToDictionary(s => s.Id, s => s.Classification, StringComparer.Ordinal);
         var report = EvaluationReport.ForSafety(context, cases.Cases, classification, runs, prices, thresholds, settings.Thresholds) with { Diagnostics = diagnostics.Snapshot() };
@@ -125,7 +140,8 @@ internal static class SafetyEvalCommand
             options.Optional("thresholds"),
             options.OutputFile("out"),
             options.OutputFile("summary"),
-            options.Release());
+            options.Release(),
+            options.One("ai"));
     }
 
     // In the pipeline, azure/login signs the CLI in through OIDC; locally it's the developer's az login.

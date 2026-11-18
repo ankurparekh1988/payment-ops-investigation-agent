@@ -331,4 +331,59 @@ public sealed class AiReleaseLoaderTests
 
         Assert.Contains(errors, e => e.Contains("evaluationIndex", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void Routing_mode_is_required()
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(routing: string.Empty)).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("routing", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("routing:\n  mode: on")]
+    [InlineData("routing:\n  mode: Cascade")]
+    public void An_unknown_routing_mode_fails(string routing)
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(routing: routing)).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("routing.mode is", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Cascade_requires_a_small_model()
+    {
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(routing: "routing:\n  mode: cascade")).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("routing.mode is cascade, which needs models.small", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Loads_the_small_model_and_routing_mode()
+    {
+        var release = AiReleaseLoader.Load(new TestRelease().With(
+            "manifest.yaml", TestRelease.Manifest(models: TestRelease.Models + TestRelease.SmallModel, routing: "routing:\n  mode: cascade")));
+
+        Assert.Equal(RoutingMode.Cascade, release.RoutingMode);
+        Assert.Equal("chat-small", release.SmallDeployment);
+        Assert.Equal(new DeploymentIdentity("gpt-test-small", "2026-01-01", "GlobalStandard", "strict"), release.Deployments["chat-small"]);
+    }
+
+    [Fact]
+    public void Without_a_small_model_routing_is_off_and_there_is_no_small_deployment()
+    {
+        var release = AiReleaseLoader.Load(TestRelease.WithOnePrompt());
+
+        Assert.Equal(RoutingMode.Off, release.RoutingMode);
+        Assert.Null(release.SmallDeployment);
+    }
+
+    [Fact]
+    public void The_small_model_needs_a_content_filter()
+    {
+        var small = TestRelease.SmallModel.Replace("\n    contentFilterPolicy: strict", string.Empty, StringComparison.Ordinal);
+        var errors = new TestRelease().With("manifest.yaml", TestRelease.Manifest(models: TestRelease.Models + small)).LoadErrors();
+
+        Assert.Contains(errors, e => e.Contains("Missing properties, 'contentFilterPolicy'", StringComparison.Ordinal));
+    }
 }

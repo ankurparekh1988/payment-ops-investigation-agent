@@ -50,13 +50,13 @@ internal sealed class FixedWorkflow(
         }
 
         var turn = new TurnState();
+        using var budget = new InvestigationBudget(_limits, time);
         var guard = new ToolGuard(turn, _limits, time, user, progress, screen);
         var readTools = tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).ToDictionary(tool => tool.Name, guard.Wrap, StringComparer.Ordinal);
         var fanOut = new FanOut(readTools, _limits.MaxToolCalls);
         return await TurnOutcome.RunAsync(
             turn,
-            _limits,
-            time,
+            budget,
             progress,
             async token =>
             {

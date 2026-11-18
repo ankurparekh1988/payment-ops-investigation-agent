@@ -21,9 +21,13 @@ internal sealed class ScriptedChatClient(params Func<IReadOnlyList<ChatMessage>,
         new(new ChatMessage(ChatRole.Assistant, [.. calls.Select((c, i) => new FunctionCallContent(c.CallId ?? $"call-{Guid.NewGuid():N}", c.Name, ToArguments(c.Arguments)))]))
         {
             FinishReason = ChatFinishReason.ToolCalls,
+            Usage = TypicalUsage(),
         };
 
-    public static ChatResponse Text(string text) => new(new ChatMessage(ChatRole.Assistant, text)) { FinishReason = ChatFinishReason.Stop };
+    public static ChatResponse Text(string text) => new(new ChatMessage(ChatRole.Assistant, text)) { FinishReason = ChatFinishReason.Stop, Usage = TypicalUsage() };
+
+    // Scripted answers report usage as the model does, so the investigation's token allowance charges measured tokens.
+    private static UsageDetails TypicalUsage() => new() { InputTokenCount = 1_000, OutputTokenCount = 100 };
 
     public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {

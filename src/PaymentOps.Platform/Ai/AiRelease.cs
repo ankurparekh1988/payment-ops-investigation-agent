@@ -14,6 +14,8 @@ public sealed record DeploymentIdentity(string Model, string Version, string Dep
 /// prompts it may send. Immutable once loaded.
 /// </summary>
 /// <param name="ScreenDeployment">The question screen's classifier, kept apart from investigation traffic.</param>
+/// <param name="SmallDeployment">The model a cascade starts on; null when the release has none.</param>
+/// <param name="RoutingMode">Which model an investigation starts on (ADR 0023).</param>
 /// <param name="KnowledgeIndex">The search index the knowledge corpus is published to.</param>
 /// <param name="EvaluationIndex">The index evaluations read, reconciled to the evaluated change's corpus first.</param>
 /// <param name="RetrievalMode">How the knowledge index is queried.</param>
@@ -24,6 +26,8 @@ public sealed record AiRelease(
     string EmbeddingDeployment,
     string JudgeDeployment,
     string ScreenDeployment,
+    string? SmallDeployment,
+    RoutingMode RoutingMode,
     string KnowledgeIndex,
     string EvaluationIndex,
     RetrievalMode RetrievalMode,

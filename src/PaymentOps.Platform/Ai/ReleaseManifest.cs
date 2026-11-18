@@ -2,7 +2,7 @@ namespace PaymentOps.Platform.Ai;
 
 // The YAML shape of ai/manifest.yaml. Every member is required and non-null unless marked optional, and unknown keys are
 // rejected, so a typo or an empty value fails loading instead of silently taking a default. A key is
-// only accepted where something reads it: contentFilterPolicy exists on chat deployments, the judge and the screen.
+// only accepted where something reads it: contentFilterPolicy exists on chat deployments, the small model, the judge and the screen.
 
 internal sealed class ReleaseManifest
 {
@@ -11,6 +11,8 @@ internal sealed class ReleaseManifest
     public required ManifestModels Models { get; init; }
 
     public required ManifestRetrieval Retrieval { get; init; }
+
+    public required ManifestRouting Routing { get; init; }
 
     public required Dictionary<string, ManifestPrompt> Prompts { get; init; }
 }
@@ -25,6 +27,9 @@ internal sealed class ManifestModels
 
     // The question screen's classifier has its own rate limit, so investigations can't throttle it.
     public required FilteredModelDeployment Screen { get; init; }
+
+    // Optional: the model a cascade starts on. Deployed whenever it's listed, so it can be measured before routing uses it.
+    public FilteredModelDeployment? Small { get; init; }
 }
 
 internal sealed class ChatModels
@@ -65,6 +70,11 @@ internal sealed class ManifestRetrieval
 
     // Optional: absent means no reranker-score floor. Only meaningful with semantic mode.
     public double? SemanticFloor { get; init; }
+}
+
+internal sealed class ManifestRouting
+{
+    public required string Mode { get; init; }
 }
 
 internal sealed class ManifestPrompt

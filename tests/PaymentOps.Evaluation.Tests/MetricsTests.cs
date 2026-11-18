@@ -107,6 +107,21 @@ public sealed class MetricsTests
         Assert.Equal(1, Score(Loaded(c), 0, Result("a") with { Calls = [wrongMerchant, matching] }).Values[MetricNames.ToolArgumentAccuracy]);
     }
 
+    // A cascade's discarded small-model attempt earns the escalated answer nothing.
+    [Fact]
+    public void Tool_recall_and_arguments_score_only_the_answering_attempts_calls()
+    {
+        var c = Case("a", c => c with { RequiredTools = [ToolNames.MerchantProfile] });
+        var result = Result("a") with
+        {
+            Calls = [Call(ToolNames.MerchantProfile) with { Deployment = "chat-small" }, Call(ToolNames.KnowledgeSearch) with { Deployment = "chat-blue" }],
+            AnsweringDeployment = "chat-blue",
+        };
+
+        Assert.Equal(0, Score(Loaded(c), 0, result).Values[MetricNames.RequiredToolRecall]);
+        Assert.Equal(1, Score(Loaded(c), 0, result with { AnsweringDeployment = "chat-small" }).Values[MetricNames.RequiredToolRecall]);
+    }
+
     [Fact]
     public void Required_tool_recall_counts_each_required_tool_once()
     {

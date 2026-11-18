@@ -12,7 +12,7 @@ public sealed class PriceListTests
     private static string File(string price)
     {
         var path = Path.GetTempFileName();
-        System.IO.File.WriteAllText(path, $$"""{ "schemaVersion": 1, "prices": [ {{price}} ] }""");
+        System.IO.File.WriteAllText(path, $$"""{ "schemaVersion": 1, "prices": [ {{price}} ], "contentSafety": [] }""");
         return path;
     }
 

@@ -37,4 +37,22 @@ public sealed class InvestigationLimits
     public int MaxQuestionLength { get; set; } = 1000;
 
     public int MaxOutputTokens { get; set; } = 2000;
+
+    /// <summary>Logical model calls per investigation across its attempts; the SDK's retries of one call aren't counted.</summary>
+    public int MaxModelRequests { get; set; } = 16;
+
+    /// <summary>
+    /// Input and output tokens per investigation, checked before each model call against what's been used plus an estimate
+    /// of that call: an estimated allowance, not an absolute ceiling.
+    /// </summary>
+    public int MaxInvestigationTokens { get; set; } = 120_000;
+
+    /// <summary>What must be left for a second attempt to start (ADR 0023); otherwise the first attempt's result stands.</summary>
+    public TimeSpan MinEscalationTime { get; set; } = TimeSpan.FromSeconds(20);
+
+    public int MinEscalationToolCalls { get; set; } = 2;
+
+    public int MinEscalationModelRequests { get; set; } = 8;
+
+    public int MinEscalationTokens { get; set; } = 60_000;
 }
