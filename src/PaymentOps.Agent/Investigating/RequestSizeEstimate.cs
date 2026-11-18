@@ -64,6 +64,10 @@ internal static class RequestSizeEstimate
                 TextReasoningContent reasoning => Bytes(reasoning.Text),
                 FunctionCallContent call => Bytes(call.CallId) + Bytes(call.Name) + Bytes(JsonSerializer.Serialize(call.Arguments)),
                 FunctionResultContent result => Bytes(result.CallId) + Bytes(result.Result as string ?? JsonSerializer.Serialize(result.Result)),
+                ErrorContent error => Bytes(error.Message) + Bytes(error.ErrorCode) + Bytes(error.Details),
+
+                // Usage rides on a response and isn't sent back as text.
+                UsageContent => 0,
                 _ => null,
             };
         }

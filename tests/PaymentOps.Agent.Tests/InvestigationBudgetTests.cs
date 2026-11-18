@@ -65,6 +65,14 @@ public sealed class InvestigationBudgetTests
     }
 
     [Fact]
+    public void Error_text_counts_and_usage_adds_nothing()
+    {
+        ChatMessage[] added = [new(ChatRole.Assistant, [new ErrorContent("refused") { ErrorCode = "x" }, new UsageContent(new UsageDetails { InputTokenCount = 5 })])];
+
+        Assert.Equal("refused".Length + 1 + RequestSizeEstimate.PerMessage, RequestSizeEstimate.Appended(added));
+    }
+
+    [Fact]
     public async Task A_request_that_cannot_be_estimated_is_not_made()
     {
         var inner = new ScriptedChatClient(_ => Answer());
