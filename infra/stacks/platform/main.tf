@@ -52,11 +52,13 @@ locals {
       PaymentOps__CostEstimate__ContentSafetyPerThousandRecords = tostring(var.cost_estimate.content_safety_per_thousand_records)
     },
     merge([
-      for i, name in sort(keys(var.cost_estimate.deployments)) : {
+      for i, name in sort(keys(var.cost_estimate.deployments)) : merge({
         "PaymentOps__CostEstimate__Deployments__${i}__Deployment"       = name
         "PaymentOps__CostEstimate__Deployments__${i}__InputPerMillion"  = tostring(var.cost_estimate.deployments[name].input_per_million)
         "PaymentOps__CostEstimate__Deployments__${i}__OutputPerMillion" = tostring(var.cost_estimate.deployments[name].output_per_million)
-      }
+        }, var.cost_estimate.deployments[name].cached_input_per_million == null ? {} : {
+        "PaymentOps__CostEstimate__Deployments__${i}__CachedInputPerMillion" = tostring(var.cost_estimate.deployments[name].cached_input_per_million)
+      })
     ]...)
   )
 

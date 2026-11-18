@@ -103,6 +103,7 @@ internal sealed class InvestigationAgentRunner(
         var named = new MerchantSources([question, .. history.Where(m => m.Role == ChatRole.User).Select(m => m.Text)]);
         List<ChatMessage> messages = [.. history, new ChatMessage(ChatRole.User, question)];
 
+        TurnUsage.RecordRouting(ToolJson.Word(models.Mode));
         var first = Prepare(models.FirstTier, progress, investigationId, named, budget, reads);
         var result = await first.RunAsync(messages, budget, progress, timer, cancellationToken);
         TurnUsage.RecordAttempt(new AttemptRecord(first.Tier, first.Turn.Failure));

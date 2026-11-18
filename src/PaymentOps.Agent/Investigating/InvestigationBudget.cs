@@ -135,6 +135,7 @@ internal sealed class InvestigationBudget : IDisposable
                 if (input > admission.EstimatedInput)
                 {
                     _estimateExceeded++;
+                    Telemetry.TurnUsage.RecordEstimateExceeded();
                 }
             }
             else

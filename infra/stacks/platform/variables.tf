@@ -137,8 +137,9 @@ variable "cost_estimate" {
     currency                            = string
     content_safety_per_thousand_records = number
     deployments = map(object({
-      input_per_million  = number
-      output_per_million = number
+      input_per_million        = number
+      cached_input_per_million = optional(number)
+      output_per_million       = number
     }))
   })
   default = null

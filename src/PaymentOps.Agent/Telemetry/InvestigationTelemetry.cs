@@ -48,16 +48,25 @@ internal static class InvestigationTelemetry
         _ => ErrorOutcome,
     };
 
-    public static void Complete(Activity? activity, TurnUsage usage, CostEstimateOptions prices, ILogger logger, Guid investigationId, AssessmentResult? result, Exception? failure)
+    public static void Complete(Activity? activity, UsageSnapshot usage, CostEstimateOptions prices, ILogger logger, Guid investigationId, AssessmentResult? result, Exception? failure)
     {
         var outcome = Outcome(result);
         var estimate = CostEstimate.From(usage, prices);
-        var tokens = usage.Tokens.Values;
-        var (input, output) = (tokens.Sum(t => t.Input), tokens.Sum(t => t.Output));
-        var records = usage.Records.Values.Sum();
+        var (input, output) = (usage.Deployments.Values.Sum(d => d.InputTokens), usage.Deployments.Values.Sum(d => d.OutputTokens));
+        var records = usage.ContentSafetyRecords.Values.Sum();
         var requests = usage.HttpRequests.Values.Sum();
+        var attempts = Attempts(usage, outcome);
 
         AgentTelemetry.Investigations.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+        foreach (var attempt in usage.Attempts)
+        {
+            AgentTelemetry.Attempts.Add(1, new("tier", ToolJson.Word(attempt.Tier)), new("failure", attempt.Failure is { } f ? ToolJson.Word(f) : "none"));
+        }
+
+        if (usage.Escalation is { } escalation and not "none")
+        {
+            AgentTelemetry.Escalations.Add(1, new KeyValuePair<string, object?>("decision", escalation));
+        }
         if (estimate.Amount is { } amount)
         {
             AgentTelemetry.EstimatedCost.Record((double)amount, new KeyValuePair<string, object?>("currency", estimate.Currency));
@@ -70,6 +79,10 @@ internal static class InvestigationTelemetry
             activity.SetTag("paymentops.tokens.output", output);
             activity.SetTag("paymentops.content_safety.records", records);
             activity.SetTag("paymentops.http.requests", requests);
+            activity.SetTag("paymentops.routing", usage.Routing);
+            activity.SetTag("paymentops.attempts", attempts);
+            activity.SetTag("paymentops.escalation", usage.Escalation);
+            activity.SetTag("paymentops.reads.reused", usage.ReusedReads);
             activity.SetTag(estimate.Amount is null ? "paymentops.cost.unavailable" : "paymentops.estimated_cost", estimate.Amount?.ToString(CultureInfo.InvariantCulture) ?? estimate.Unavailable);
             if (failure is not null)
             {
@@ -90,7 +103,11 @@ internal static class InvestigationTelemetry
         var sections = Join(statements.SelectMany(s => s.Citations.Select(c => c.SectionKey)).Distinct(StringComparer.Ordinal));
         var screens = Join(usage.Screens.Select(s => $"{s.Key}={s.Value}"));
         var cacheHits = usage.CacheHits.Values.Sum();
-        InvestigationLog.Decision(logger, investigationId, outcome, tools, evidence, sections, screens, requests, records, input, output, cacheHits, estimate.Amount, estimate.Currency, estimate.Unavailable);
+        var deployments = Join(usage.Deployments.Select(d => string.Create(
+            CultureInfo.InvariantCulture, $"{d.Key}:{d.Value.LogicalCalls}/{d.Value.HttpAttempts}/{d.Value.InputTokens}/{d.Value.CachedInputTokens}/{d.Value.OutputTokens}")));
+        InvestigationLog.Decision(
+            logger, investigationId, outcome, tools, evidence, sections, screens, requests, records, input, output, cacheHits, estimate.Amount, estimate.Currency, estimate.Unavailable,
+            usage.Routing ?? "none", attempts, usage.Escalation ?? "none", usage.ReusedReads, deployments, usage.EstimateExceeded);
     }
 
     /// <summary>A request refused before any investigation ran: counted by reason, nothing else recorded.</summary>
@@ -100,4 +117,8 @@ internal static class InvestigationTelemetry
             : throw new ArgumentOutOfRangeException(nameof(reason), reason, "Only a refusal before an investigation starts is a rejection.")));
 
     private static string Join(IEnumerable<string> values) => string.Join(',', values);
+
+    // Each attempt's tier and how it ended, in order: a failure, or the investigation's outcome for the one that answered.
+    private static string Attempts(UsageSnapshot usage, string outcome) =>
+        string.Join('>', usage.Attempts.Select(a => $"{ToolJson.Word(a.Tier)}:{(a.Failure is { } f ? ToolJson.Word(f) : outcome)}"));
 }

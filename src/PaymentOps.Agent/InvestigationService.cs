@@ -25,7 +25,8 @@ internal sealed class InvestigationService(
     ProposalStore proposals,
     ILogger<InvestigationService>? logger = null,
     IOptions<CostEstimateOptions>? prices = null,
-    TraceContext? trace = null) : IInvestigationService
+    TraceContext? trace = null,
+    IInvestigationUsageSink? usageSink = null) : IInvestigationService
 {
     private readonly ILogger _logger = logger ?? NullLogger<InvestigationService>.Instance;
 
@@ -58,7 +59,10 @@ internal sealed class InvestigationService(
         }
         finally
         {
-            InvestigationTelemetry.Complete(activity, usage, prices?.Value ?? new CostEstimateOptions(), _logger, investigationId, result, failure);
+            // Frozen here, inside the usage scope, so every reader sees the same counts and none is counted twice.
+            var snapshot = usage.Snapshot();
+            InvestigationTelemetry.Complete(activity, snapshot, prices?.Value ?? new CostEstimateOptions(), _logger, investigationId, result, failure);
+            usageSink?.Completed(investigationId, snapshot);
         }
     }
 

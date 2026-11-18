@@ -205,6 +205,26 @@ public sealed class InvestigationTraceTests : IDisposable
     }
 
     [Fact]
+    public async Task Decision_record_names_routing_attempts_escalation_and_reused_reads()
+    {
+        var (root, _, logger) = await RunAsync(Turns["escalated"]);
+
+        var decision = Assert.Single(logger.Entries, e => e.Message.Contains("decision:", StringComparison.Ordinal)).Message;
+        Assert.Contains("routing cascade, attempts small:rejected_after_correction>chat:assessed, escalation escalated, reused reads 0", decision, StringComparison.Ordinal);
+        Assert.Equal("small:rejected_after_correction>chat:assessed", root.GetTagItem("paymentops.attempts"));
+        Assert.Contains(Measured("paymentops.investigation.escalations"), m => m.Tags.Contains(new("decision", "escalated")));
+    }
+
+    [Fact]
+    public async Task Decision_record_without_routing_names_one_chat_attempt()
+    {
+        var (_, _, logger) = await RunAsync(Turns["assessed"]);
+
+        var decision = Assert.Single(logger.Entries, e => e.Message.Contains("decision:", StringComparison.Ordinal)).Message;
+        Assert.Contains("routing off, attempts chat:assessed, escalation none", decision, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task An_escalated_investigation_has_one_id_and_one_trace_with_a_span_per_attempt()
     {
         var (root, trace, logger) = await RunAsync(Turns["escalated"]);

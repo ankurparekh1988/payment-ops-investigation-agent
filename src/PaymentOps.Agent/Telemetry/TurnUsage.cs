@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 
 using PaymentOps.Agent.Investigating;
@@ -18,12 +19,17 @@ internal sealed class TurnUsage : IDisposable
     private readonly Dictionary<string, int> _httpRequests = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _records = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (long Input, long Output)> _tokens = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, long> _cachedInput = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _modelCalls = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _modelHttp = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _cacheHits = new(StringComparer.Ordinal);
     private readonly List<string> _incomplete = [];
     private readonly List<(string Name, string Outcome)> _tools = [];
     private readonly Dictionary<string, int> _screens = new(StringComparer.Ordinal);
     private readonly List<AttemptRecord> _attempts = [];
     private string? _escalation;
+    private string? _routing;
+    private int _estimateExceeded;
     private TurnUsage? _previous;
 
     public static TurnUsage? Current => Ambient.Value;
@@ -151,6 +157,43 @@ internal sealed class TurnUsage : IDisposable
         if (Current is { } usage)
         {
             usage.Count(usage._httpRequests, service, 1);
+            if (deployment is not null)
+            {
+                usage.Count(usage._modelHttp, deployment, 1);
+            }
+        }
+    }
+
+    /// <summary>One logical model call: one request the agent made, however many HTTP attempts it took.</summary>
+    public static void RecordModelCall(string deployment)
+    {
+        if (Current is { } usage)
+        {
+            usage.Count(usage._modelCalls, deployment, 1);
+        }
+    }
+
+    /// <summary>The routing mode the investigation ran under.</summary>
+    public static void RecordRouting(string routing)
+    {
+        if (Current is { } usage)
+        {
+            lock (usage._lock)
+            {
+                usage._routing = routing;
+            }
+        }
+    }
+
+    /// <summary>A call whose measured input exceeded its estimate before it was sent.</summary>
+    public static void RecordEstimateExceeded()
+    {
+        if (Current is { } usage)
+        {
+            lock (usage._lock)
+            {
+                usage._estimateExceeded++;
+            }
         }
     }
 
@@ -160,11 +203,19 @@ internal sealed class TurnUsage : IDisposable
         Current?.AddRecords(service, records);
     }
 
-    public static void RecordTokens(string deployment, long input, long output)
+    /// <param name="cachedInput">The part of <paramref name="input"/> served from the prompt cache, billed at its own rate.</param>
+    public static void RecordTokens(string deployment, long input, long output, long cachedInput = 0)
     {
         AgentTelemetry.ModelTokens.Add(input, new("direction", "input"), new("deployment", deployment));
         AgentTelemetry.ModelTokens.Add(output, new("direction", "output"), new("deployment", deployment));
-        Current?.AddTokens(deployment, input, output);
+        if (Current is { } usage)
+        {
+            usage.AddTokens(deployment, input, output);
+            lock (usage._lock)
+            {
+                usage._cachedInput[deployment] = usage._cachedInput.GetValueOrDefault(deployment) + cachedInput;
+            }
+        }
     }
 
     public static void RecordCacheHit(string cache, int count = 1)
@@ -206,6 +257,36 @@ internal sealed class TurnUsage : IDisposable
         lock (_lock)
         {
             _incomplete.Add(reason);
+        }
+    }
+
+    /// <summary>What the investigation used, frozen: later recording doesn't change it.</summary>
+    public UsageSnapshot Snapshot()
+    {
+        lock (_lock)
+        {
+            var deployments = _tokens.Keys.Concat(_modelCalls.Keys).Concat(_modelHttp.Keys).Distinct(StringComparer.Ordinal)
+                .ToImmutableSortedDictionary(
+                    d => d,
+                    d => new DeploymentUsage(
+                        _modelCalls.GetValueOrDefault(d),
+                        _modelHttp.GetValueOrDefault(d),
+                        _tokens.GetValueOrDefault(d).Input,
+                        _cachedInput.GetValueOrDefault(d),
+                        _tokens.GetValueOrDefault(d).Output),
+                    StringComparer.Ordinal);
+            return new UsageSnapshot(
+                _routing,
+                deployments,
+                _records.ToImmutableSortedDictionary(StringComparer.Ordinal),
+                _httpRequests.ToImmutableSortedDictionary(StringComparer.Ordinal),
+                _cacheHits.ToImmutableSortedDictionary(StringComparer.Ordinal),
+                _screens.ToImmutableSortedDictionary(StringComparer.Ordinal),
+                [.. _tools],
+                [.. _attempts],
+                _escalation,
+                _estimateExceeded,
+                [.. _incomplete]);
         }
     }
 
