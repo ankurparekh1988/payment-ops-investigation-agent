@@ -174,7 +174,8 @@ internal sealed class ToolGuard(
     // screened below exactly as a fresh read is.
     private async Task<ToolResult> ReadAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)
     {
-        var key = $"{tool.Name}({Canonical(tool, request)})";
+        // The typed request exactly as the tool receives it: nothing trimmed, so a variant the tool would reject is never a hit.
+        var key = $"{tool.Name}:{JsonSerializer.Serialize(request, tool.RequestType, ToolJson.Options)}";
         if (reads is not null && reads.TryGet(key, out var cached))
         {
             TurnUsage.RecordCacheHit(ReadCache.Name);

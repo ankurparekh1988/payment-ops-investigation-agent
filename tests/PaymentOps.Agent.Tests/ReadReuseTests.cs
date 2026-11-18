@@ -83,6 +83,22 @@ public sealed class ReadReuseTests
         Assert.Equal(2, Reused(run.Usage));
     }
 
+    // Dates must be exactly YYYY-MM-DD: a padded date the tool rejects must not be answered from the cache.
+    [Fact]
+    public async Task A_whitespace_variant_of_a_cached_read_is_validated_not_served()
+    {
+        static ChatResponse Batches(string start) =>
+            Call(ToolNames.SettlementBatches, new { merchant_id = "M-1042", start_date = start, end_date = "2026-11-10" });
+
+        var run = await InvestigateAsync(
+            new CountingKnowledge(),
+            [Batches("2026-11-09")],
+            [Respond(Batches(" 2026-11-09")), Respond(Call(Submit, Submission())), Respond(Call(Submit, Submission()))]);
+
+        Assert.Equal(0, Reused(run.Usage));
+        Assert.Contains("invalid_argument", ToolResults(run.Chat.Requests[1].Messages)[0], StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_failed_read_is_not_reused()
     {
