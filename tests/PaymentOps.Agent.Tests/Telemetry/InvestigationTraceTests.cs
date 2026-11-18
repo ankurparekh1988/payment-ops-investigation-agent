@@ -91,7 +91,8 @@ public sealed class InvestigationTraceTests : IDisposable
         IChatClient? FilteredModel = null,
         IQuestionScreen? Questions = null,
         bool Cancelled = false,
-        int MaxQuestions = 10);
+        int MaxQuestions = 10,
+        Func<ModelRouting>? Routing = null);
 
     private static readonly RetrievedSection Section = new("k1", "d1", "Missing file guide", "Guide > Missing file", $"Check the processor's file feed. {ToolSentinel}", "General", null);
 
@@ -110,6 +111,17 @@ public sealed class InvestigationTraceTests : IDisposable
         ["model unavailable"] = new("model_unavailable", () => new(_ => throw new ClientResultException(new FakePipelineResponse(400, "{\"error\":{\"code\":\"invalid_request\"}}")))),
         ["cancelled"] = new("cancelled", Cancelled: true),
         ["conversation full"] = new("conversation_limit", MaxQuestions: 0),
+
+        // The small model's submission is rejected twice, so chat makes the one escalated attempt.
+        ["escalated"] = new("assessed", Routing: () => new ModelRouting(
+            RoutingMode.Cascade,
+            new ScriptedChatClient(
+                _ => Call(ToolNames.KnowledgeSearch, new { query = "missing settlement file" }),
+                _ => Call(ToolNames.MerchantProfile, new { merchant_id = "M-1042" }),
+                _ => Call(ToolNames.SubmitAssessment, Submission(summaryText: $"The batch didn't arrive. {AnswerSentinel}"))),
+            new ScriptedChatClient(
+                _ => Call(ToolNames.SubmitAssessment, Submission(claimEvidence: ["payout:PO-404"], summaryText: AnswerSentinel)),
+                _ => Call(ToolNames.SubmitAssessment, Submission(claimEvidence: ["payout:PO-404"], summaryText: AnswerSentinel))))),
     };
 
     private static (InvestigationService Service, RecordingLogger<InvestigationService> Logger) Service(AgentFixture fixture, Turn turn)
@@ -119,7 +131,7 @@ public sealed class InvestigationTraceTests : IDisposable
         var user = TestUser.Reader with { UserId = UserSentinel };
         var logger = new RecordingLogger<InvestigationService>();
         var service = new InvestigationService(
-            fixture.Runner(model, user: user, questionScreen: turn.Questions),
+            turn.Routing is { } routing ? fixture.Runner(routing(), user: user, questionScreen: turn.Questions) : fixture.Runner(model, user: user, questionScreen: turn.Questions),
             fixture.FixedPrompt,
             new SourceService(FakeKnowledgeLookup.Returning(), user, limits, NullLogger<SourceService>.Instance),
             new Conversation(),
@@ -190,6 +202,19 @@ public sealed class InvestigationTraceTests : IDisposable
         Assert.Contains(trace, a => a.OperationName == "knowledge.search");
         Assert.Contains(trace, a => a.OperationName == $"tool.{ToolNames.KnowledgeSearch}" && Equals(a.GetTagItem("paymentops.tool.outcome"), "ok"));
         Assert.All(trace.Where(a => a != root), a => Assert.Equal(root.TraceId, a.TraceId));
+    }
+
+    [Fact]
+    public async Task An_escalated_investigation_has_one_id_and_one_trace_with_a_span_per_attempt()
+    {
+        var (root, trace, logger) = await RunAsync(Turns["escalated"]);
+
+        var attempts = trace.Where(a => a.OperationName == "attempt").OrderBy(a => a.StartTimeUtc).ToList();
+        Assert.Equal(["small", "chat"], attempts.Select(a => a.GetTagItem("paymentops.attempt.tier")));
+        Assert.Equal(["rejected_after_correction", "none"], attempts.Select(a => a.GetTagItem("paymentops.attempt.failure")));
+        Assert.All(attempts, a => Assert.Equal(root.SpanId, a.ParentSpanId));
+        Assert.Single(trace, a => a.OperationName == "screen.question");
+        Assert.Single(logger.Entries, e => e.Message.Contains("decision:", StringComparison.Ordinal));
     }
 
     [Fact]

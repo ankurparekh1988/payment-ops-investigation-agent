@@ -8,6 +8,7 @@ using PaymentOps.Agent.Contracts;
 using PaymentOps.Agent.Conversations;
 using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Knowledge;
+using PaymentOps.Agent.Model;
 using PaymentOps.Data.Demo;
 using PaymentOps.Domain.Incidents;
 using PaymentOps.Domain.Investigation;
@@ -100,6 +101,20 @@ public sealed class ApprovalTests : IDisposable
             _proposals);
     }
 
+    private InvestigationService Investigation(IUserContext user, ModelRouting models, Conversation conversation)
+    {
+        var limits = Options.Create(new InvestigationLimits());
+        return new InvestigationService(
+            _fixture.Runner(models, user),
+            _fixture.FixedPrompt,
+            new SourceService(FakeKnowledgeLookup.Returning(), user, limits, NullLogger<SourceService>.Instance),
+            conversation,
+            Options.Create(new ConversationOptions()),
+            limits,
+            user,
+            _proposals);
+    }
+
     private ApprovalService Approvals(IUserContext user) => new(_proposals, _tickets, user, _log);
 
     private async Task<TicketProposal> ProposeAsync(IUserContext user, Conversation? conversation = null)
@@ -109,6 +124,22 @@ public sealed class ApprovalTests : IDisposable
     }
 
     private Task<IncidentTicket?> Ticket(int number) => _tickets.FindAsync($"INC-{number:D4}", CancellationToken.None);
+
+    // The small model proposed a ticket it couldn't support; only the escalated attempt's proposal is kept, once.
+    [Fact]
+    public async Task An_escalated_investigation_keeps_one_turn_and_one_proposal()
+    {
+        var conversation = new Conversation();
+        var small = Model(Call(ToolNames.SubmitAssessment, Submission(Ticket())), Call(ToolNames.SubmitAssessment, Submission(Ticket())));
+        var chat = Model(Trajectory(Submission(Ticket())));
+
+        var result = await Investigation(TestUser.Engineer, new ModelRouting(RoutingMode.Cascade, chat, small), conversation).InvestigateAsync(Question, null, CancellationToken.None);
+
+        Assert.Equal(ProposalStatus.Pending, Assert.IsType<AssessmentResult.Assessed>(result).Proposal!.Status);
+        Assert.Equal(1, _proposals.PendingCount);
+        Assert.Single(conversation.Turns);
+        Assert.Equal(2, small.Requests.Count);
+    }
 
     [Fact]
     public async Task A_readers_assessment_creates_no_pending_proposal()

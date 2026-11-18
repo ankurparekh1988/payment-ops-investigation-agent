@@ -42,6 +42,8 @@ internal sealed class InvestigationAgentRunner(
 
     private ILogger Logger => logger;
 
+    private ModelRouting Models => models;
+
     /// <param name="history">Earlier turns as plain text: context for the question, never evidence for it.</param>
     public async Task<AssessmentResult> InvestigateAsync(
         string question, IReadOnlyList<ChatMessage> history, IProgress<InvestigationProgress>? progress, Guid investigationId, CancellationToken cancellationToken)
@@ -154,11 +156,15 @@ internal sealed class InvestigationAgentRunner(
     private sealed record Attempt(
         InvestigationAgentRunner Runner, ModelTier Tier, TurnState Turn, ChatClientAgent Agent, IList<AITool> Tools, SubmitAssessmentFunction Submit, Guid InvestigationId, ChatOptions FirstRequestOptions)
     {
-        public Task<AssessmentResult> RunAsync(List<ChatMessage> messages, InvestigationBudget budget, IProgress<InvestigationProgress>? progress, Stopwatch timer, CancellationToken cancellationToken)
+        public async Task<AssessmentResult> RunAsync(List<ChatMessage> messages, InvestigationBudget budget, IProgress<InvestigationProgress>? progress, Stopwatch timer, CancellationToken cancellationToken)
         {
+            // One span per attempt under the investigation's, naming the tier and the deployment it called.
+            using var span = AgentTelemetry.Source.StartActivity("attempt");
+            span?.SetTag("paymentops.attempt.tier", ToolJson.Word(Tier));
+            span?.SetTag("paymentops.attempt.deployment", Runner.Models.For(Tier).GetService<ChatClientMetadata>()?.DefaultModelId);
             budget.StartAttempt();
             var logger = Runner.Logger;
-            return TurnOutcome.RunAsync(
+            var result = await TurnOutcome.RunAsync(
                 Turn,
                 budget,
                 progress,
@@ -204,6 +210,8 @@ internal sealed class InvestigationAgentRunner(
                     }
                 },
                 cancellationToken);
+            span?.SetTag("paymentops.attempt.failure", Turn.Failure is { } failure ? ToolJson.Word(failure) : "none");
+            return result;
         }
     }
 
