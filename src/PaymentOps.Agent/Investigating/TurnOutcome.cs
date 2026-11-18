@@ -26,21 +26,20 @@ internal static class TurnOutcome
 {
     /// <param name="work">The turn's planning and submission; it returns a result only to end the turn early.</param>
     /// <param name="failed">Told about a failure before it becomes a result, for logging.</param>
+    /// <param name="budget">The investigation's budget; its deadline ends the work.</param>
     public static async Task<AssessmentResult> RunAsync(
         TurnState turn,
-        InvestigationLimits limits,
-        TimeProvider time,
+        InvestigationBudget budget,
         IProgress<InvestigationProgress>? progress,
         Func<CancellationToken, Task<AssessmentResult?>> work,
         Action<TurnFailure, Exception>? failed,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(turn);
-        ArgumentNullException.ThrowIfNull(limits);
+        ArgumentNullException.ThrowIfNull(budget);
         ArgumentNullException.ThrowIfNull(work);
 
-        using var turnTimeout = new CancellationTokenSource(limits.TurnTimeout, time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turnTimeout.Token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Deadline);
         try
         {
             if (await work(linked.Token) is { } early)
@@ -53,7 +52,7 @@ internal static class TurnOutcome
             turn.Fail(AttemptFailure.Cancelled);
             return new NotAssessed(NotAssessedReason.Cancelled);
         }
-        catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested)
+        catch (Exception ex) when ((ex is OperationCanceledException && budget.DeadlineReached) || ex is InvestigationBudgetExceededException)
         {
             if (turn.Stop())
             {

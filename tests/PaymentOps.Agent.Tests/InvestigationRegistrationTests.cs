@@ -84,8 +84,10 @@ public sealed class InvestigationRegistrationTests
     [Fact]
     public void Small_and_chat_clients_call_their_own_deployments()
     {
-        using var provider = Services().BuildServiceProvider();
-        var release = provider.GetRequiredService<AiRelease>();
+        var services = Services();
+        var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource()) with { RoutingMode = RoutingMode.Cascade };
+        services.AddSingleton(release);
+        using var provider = services.BuildServiceProvider();
 
         var routing = provider.GetRequiredService<ModelRouting>();
 
@@ -102,6 +104,14 @@ public sealed class InvestigationRegistrationTests
 
         Assert.Equal(ModelTier.Chat, new ModelRouting(RoutingMode.Off, chat, small).FirstTier);
         Assert.Equal(ModelTier.Small, new ModelRouting(RoutingMode.Cascade, chat, small).FirstTier);
+    }
+
+    [Fact]
+    public void Off_builds_no_small_client()
+    {
+        using var provider = Services().BuildServiceProvider();
+
+        Assert.Null(provider.GetRequiredService<ModelRouting>().Small);
     }
 
     [Fact]

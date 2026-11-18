@@ -45,7 +45,7 @@ public sealed class UsageAccountingTests
     }
 
     /// <summary>Answers model requests with the scripted statuses in order; a success is a short completion with usage.</summary>
-    private sealed class ScriptedModel(params HttpStatusCode[] statuses) : HttpMessageHandler
+    internal sealed class ScriptedModel(params HttpStatusCode[] statuses) : HttpMessageHandler
     {
         private int _calls;
 

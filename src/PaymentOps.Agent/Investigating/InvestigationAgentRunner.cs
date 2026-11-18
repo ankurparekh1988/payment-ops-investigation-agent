@@ -19,7 +19,9 @@ namespace PaymentOps.Agent.Investigating;
 
 /// <summary>
 /// One investigation: the model chooses read tools until it submits an assessment, which is shown only after
-/// it checks out against this turn's evidence. Earlier turns come in as plain text and register no evidence.
+/// it checks out against this attempt's evidence. Earlier turns come in as plain text and register no evidence.
+/// With routing on, the small model makes the first attempt, and only a capability failure starts one attempt on chat,
+/// within the same budget (ADR 0023).
 /// </summary>
 internal sealed class InvestigationAgentRunner(
     ModelRouting models,
@@ -38,33 +40,30 @@ internal sealed class InvestigationAgentRunner(
 
     private readonly InvestigationLimits _limits = options.Value;
 
+    private ILogger Logger => logger;
+
     /// <param name="history">Earlier turns as plain text: context for the question, never evidence for it.</param>
     public async Task<AssessmentResult> InvestigateAsync(
         string question, IReadOnlyList<ChatMessage> history, IProgress<InvestigationProgress>? progress, Guid investigationId, CancellationToken cancellationToken)
     {
         var timer = Stopwatch.StartNew();
-        var turn = new TurnState();
-        var result = await RunAsync(question, history, progress, investigationId, turn, timer, cancellationToken) with { InvestigationId = investigationId };
-        if (turn.Attempted)
-        {
-            TurnUsage.RecordAttempt(new AttemptRecord(ModelTier.Chat, turn.Failure));
-        }
-
-        InvestigationLog.Completed(logger, result, turn.Gaps.Count, timer.ElapsedMilliseconds);
+        var (result, gaps) = await RunAsync(question, history, progress, investigationId, timer, cancellationToken);
+        result = result with { InvestigationId = investigationId };
+        InvestigationLog.Completed(logger, result, gaps, timer.ElapsedMilliseconds);
         return result;
     }
 
-    private async Task<AssessmentResult> RunAsync(
-        string question, IReadOnlyList<ChatMessage> history, IProgress<InvestigationProgress>? progress, Guid investigationId, TurnState turn, Stopwatch timer, CancellationToken cancellationToken)
+    private async Task<(AssessmentResult Result, int Gaps)> RunAsync(
+        string question, IReadOnlyList<ChatMessage> history, IProgress<InvestigationProgress>? progress, Guid investigationId, Stopwatch timer, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(question) || question.Length > _limits.MaxQuestionLength)
         {
-            return new NotAssessed(NotAssessedReason.InvalidQuestion);
+            return (new NotAssessed(NotAssessedReason.InvalidQuestion), 0);
         }
 
         if (!user.IsAuthenticated || !user.IsInRole(OpsRoles.Reader))
         {
-            return new NotAssessed(NotAssessedReason.NotAuthorized);
+            return (new NotAssessed(NotAssessedReason.NotAuthorized), 0);
         }
 
         // Before the investigation agent sees it: a question that is harmful, an attack, or couldn't be checked never reaches it.
@@ -77,7 +76,7 @@ internal sealed class InvestigationAgentRunner(
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                return new NotAssessed(NotAssessedReason.Cancelled);
+                return (new NotAssessed(NotAssessedReason.Cancelled), 0);
             }
 
             var name = ToolJson.Word(verdict);
@@ -88,81 +87,123 @@ internal sealed class InvestigationAgentRunner(
         if (verdict != QuestionVerdict.Clean)
         {
             InvestigationLog.QuestionBlocked(logger, investigationId, verdict, timer.ElapsedMilliseconds);
-            return new NotAssessed(verdict switch
+            return (new NotAssessed(verdict switch
             {
                 QuestionVerdict.SelfHarm => NotAssessedReason.BlockedSelfHarm,
                 QuestionVerdict.Unavailable => NotAssessedReason.Unscreened,
                 _ => NotAssessedReason.Blocked,
-            });
+            }), 0);
         }
 
-        var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);
+        // One budget for the whole investigation: every attempt shares its deadline, tool calls, model calls and tokens.
+        using var budget = new InvestigationBudget(_limits, time);
         var named = new MerchantSources([question, .. history.Where(m => m.Role == ChatRole.User).Select(m => m.Text)]);
-        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId, named, trace?.KnowledgeIndex);
+        List<ChatMessage> messages = [.. history, new ChatMessage(ChatRole.User, question)];
+
+        var first = Prepare(models.FirstTier, progress, investigationId, named, budget);
+        var result = await first.RunAsync(messages, budget, progress, timer, cancellationToken);
+        TurnUsage.RecordAttempt(new AttemptRecord(first.Tier, first.Turn.Failure));
+        if (first.Tier != ModelTier.Small || !Escalation.IsEligible(first.Turn.Failure))
+        {
+            TurnUsage.RecordEscalation("none");
+            return (result, first.Turn.Gaps.Count);
+        }
+
+        // A fresh attempt: chat never sees the small model's submission, tool calls or evidence ids.
+        var second = Prepare(ModelTier.Chat, progress, investigationId, named, budget);
+        var refused = budget.RefuseEscalation(RequestSizeEstimate.FirstCall(messages, second.FirstRequestOptions));
+        var decision = refused is null ? "escalated" : $"refused:{refused}";
+        TurnUsage.RecordEscalation(decision);
+        InvestigationLog.Escalation(logger, investigationId, first.Turn.Failure!.Value, decision, timer.ElapsedMilliseconds);
+        if (refused is not null)
+        {
+            return (result, first.Turn.Gaps.Count);
+        }
+
+        result = await second.RunAsync(messages, budget, progress, timer, cancellationToken);
+        TurnUsage.RecordAttempt(new AttemptRecord(second.Tier, second.Turn.Failure));
+        return (result, second.Turn.Gaps.Count);
+    }
+
+    private Attempt Prepare(ModelTier tier, IProgress<InvestigationProgress>? progress, Guid investigationId, MerchantSources named, InvestigationBudget budget)
+    {
+        var turn = new TurnState();
+        var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);
+        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId, named, trace?.KnowledgeIndex, budget);
         List<AITool> readTools = [.. tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).Select(guard.Wrap)];
+        var instructions = fixedPrompt.Instructions();
 
         // No default tools: tools passed per run are added to an agent's defaults, and the correction run must offer only submit_assessment.
-        var agent = new ChatClientAgent(InvestigationPipeline.FunctionInvoking(models.Chat, _limits), new ChatClientAgentOptions
+        var agent = new ChatClientAgent(InvestigationPipeline.FunctionInvoking(new BudgetedChatClient(models.For(tier), budget), _limits), new ChatClientAgentOptions
         {
             Name = "ops-investigation",
             UseProvidedChatClientAsIs = true,
             ChatOptions = new ChatOptions
             {
-                Instructions = fixedPrompt.Instructions(),
+                Instructions = instructions,
                 MaxOutputTokens = _limits.MaxOutputTokens,
                 AllowMultipleToolCalls = false,
                 Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None },
             },
         });
 
-        turn.Attempted = true;
-        return await TurnOutcome.RunAsync(
-            turn,
-            _limits,
-            time,
-            progress,
-            async token =>
-            {
-                // A fresh session every turn: earlier turns arrive only as the plain-text history, never as tool messages.
-                var session = await agent.CreateSessionAsync(token);
-                var first = await agent.RunAsync([.. history, new ChatMessage(ChatRole.User, question)], session, Run([.. readTools, submit], null), token);
+        return new Attempt(this, tier, turn, agent, [.. readTools, submit], submit, investigationId, new ChatOptions { Instructions = instructions, Tools = [.. readTools, submit] });
+    }
 
-                // A call no tool answered (an unknown tool) ends the investigation: fail closed, and that history can't be sent again.
-                if (turn.Accepted is null && HasUnansweredCall(first.Messages))
+    private sealed record Attempt(
+        InvestigationAgentRunner Runner, ModelTier Tier, TurnState Turn, ChatClientAgent Agent, IList<AITool> Tools, SubmitAssessmentFunction Submit, Guid InvestigationId, ChatOptions FirstRequestOptions)
+    {
+        public Task<AssessmentResult> RunAsync(List<ChatMessage> messages, InvestigationBudget budget, IProgress<InvestigationProgress>? progress, Stopwatch timer, CancellationToken cancellationToken)
+        {
+            budget.StartAttempt();
+            var logger = Runner.Logger;
+            return TurnOutcome.RunAsync(
+                Turn,
+                budget,
+                progress,
+                async token =>
                 {
-                    turn.Fail(AttemptFailure.UnknownToolCall);
-                    return Unverified;
-                }
+                    // A fresh session every attempt: earlier turns arrive only as the plain-text history, never as tool messages.
+                    var session = await Agent.CreateSessionAsync(token);
+                    var first = await Agent.RunAsync([.. messages], session, Run(Tools, null), token);
 
-                // One more request either way: to correct a rejected submission, or to submit at all.
-                if (turn.Accepted is null)
-                {
-                    var correcting = turn.SubmissionRejected;
-                    await agent.RunAsync([], session, Run([submit], ChatToolMode.RequireSpecific(ToolNames.SubmitAssessment)), token);
-                    if (turn.Accepted is null)
+                    // A call no tool answered (an unknown tool) ends the attempt: fail closed, and that history can't be sent again.
+                    if (Turn.Accepted is null && HasUnansweredCall(first.Messages))
                     {
-                        turn.Fail(correcting ? AttemptFailure.RejectedAfterCorrection : AttemptFailure.NoSubmission);
+                        Turn.Fail(AttemptFailure.UnknownToolCall);
+                        return Unverified;
                     }
-                }
 
-                return null;
-            },
-            (failure, ex) =>
-            {
-                switch (failure)
+                    // One more request either way: to correct a rejected submission, or to submit at all.
+                    if (Turn.Accepted is null)
+                    {
+                        var correcting = Turn.SubmissionRejected;
+                        await Agent.RunAsync([], session, Run([Submit], ChatToolMode.RequireSpecific(ToolNames.SubmitAssessment)), token);
+                        if (Turn.Accepted is null)
+                        {
+                            Turn.Fail(correcting ? AttemptFailure.RejectedAfterCorrection : AttemptFailure.NoSubmission);
+                        }
+                    }
+
+                    return null;
+                },
+                (failure, ex) =>
                 {
-                    case TurnFailure.ServiceFailed:
-                        InvestigationLog.ModelFailed(logger, investigationId, ex, timer.ElapsedMilliseconds);
-                        break;
-                    case TurnFailure.Blocked:
-                        InvestigationLog.Blocked(logger, investigationId, ex is ContentFilteredException ? "completion" : "prompt", timer.ElapsedMilliseconds);
-                        break;
-                    default:
-                        InvestigationLog.Aborted(logger, investigationId, ex, timer.ElapsedMilliseconds);
-                        break;
-                }
-            },
-            cancellationToken);
+                    switch (failure)
+                    {
+                        case TurnFailure.ServiceFailed:
+                            InvestigationLog.ModelFailed(logger, InvestigationId, ex, timer.ElapsedMilliseconds);
+                            break;
+                        case TurnFailure.Blocked:
+                            InvestigationLog.Blocked(logger, InvestigationId, ex is ContentFilteredException ? "completion" : "prompt", timer.ElapsedMilliseconds);
+                            break;
+                        default:
+                            InvestigationLog.Aborted(logger, InvestigationId, ex, timer.ElapsedMilliseconds);
+                            break;
+                    }
+                },
+                cancellationToken);
+        }
     }
 
     private static readonly NotAssessed Unverified = new(NotAssessedReason.AssessmentUnverified);

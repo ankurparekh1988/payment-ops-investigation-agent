@@ -26,9 +26,6 @@ internal sealed class TurnState
 
     public bool Stopped { get; private set; }
 
-    /// <summary>The question passed the checks before the agent, so a model attempt ran.</summary>
-    public bool Attempted { get; set; }
-
     /// <summary>Why the attempt failed, once it has; null while it runs and for a validated result.</summary>
     public AttemptFailure? Failure { get; private set; }
 

@@ -23,6 +23,7 @@ internal sealed class TurnUsage : IDisposable
     private readonly List<(string Name, string Outcome)> _tools = [];
     private readonly Dictionary<string, int> _screens = new(StringComparer.Ordinal);
     private readonly List<AttemptRecord> _attempts = [];
+    private string? _escalation;
     private TurnUsage? _previous;
 
     public static TurnUsage? Current => Ambient.Value;
@@ -78,6 +79,29 @@ internal sealed class TurnUsage : IDisposable
             lock (_lock)
             {
                 return [.. _attempts];
+            }
+        }
+    }
+
+    /// <summary><c>none</c>, <c>escalated</c>, or <c>refused:</c> and the bound that refused it; null before an attempt ends.</summary>
+    public string? Escalation
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _escalation;
+            }
+        }
+    }
+
+    public static void RecordEscalation(string escalation)
+    {
+        if (Current is { } usage)
+        {
+            lock (usage._lock)
+            {
+                usage._escalation = escalation;
             }
         }
     }

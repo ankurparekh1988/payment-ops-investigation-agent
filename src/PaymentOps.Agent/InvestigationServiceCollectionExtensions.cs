@@ -70,7 +70,8 @@ public static class InvestigationServiceCollectionExtensions
             return new ModelRouting(
                 release.RoutingMode,
                 sp.GetRequiredService<IChatClient>(),
-                release.SmallDeployment is { } small ? Investigation(sp, small) : null);
+                // Off never calls the small model, so its client isn't built.
+                release.RoutingMode == RoutingMode.Cascade && release.SmallDeployment is { } small ? Investigation(sp, small) : null);
         });
         services.AddInvestigationTools();
 

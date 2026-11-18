@@ -60,6 +60,10 @@ internal static partial class InvestigationLog
     [LoggerMessage(EventId = 3009, Level = LogLevel.Information, Message = "Investigation {InvestigationId} decision: {Outcome}, tools {Tools}, evidence {Evidence}, sections {Sections}, screens {Screens}, requests {Requests}, content safety records {ContentSafetyRecords}, tokens {InputTokens}/{OutputTokens}, cache hits {CacheHits}, estimated cost {EstimatedCost} {Currency}, cost unavailable {CostUnavailable}")]
     public static partial void Decision(ILogger logger, Guid investigationId, string outcome, string tools, string evidence, string sections, string screens, int requests, int contentSafetyRecords, long inputTokens, long outputTokens, int cacheHits, decimal? estimatedCost, string? currency, string? costUnavailable);
 
+    /// <param name="decision"><c>escalated</c>, or <c>refused:</c> and the bound that left too little for a second attempt.</param>
+    [LoggerMessage(EventId = 3010, Level = LogLevel.Information, Message = "Investigation {InvestigationId} small model failed ({Failure}); escalation {Decision}, {ElapsedMs} ms")]
+    public static partial void Escalation(ILogger logger, Guid investigationId, AttemptFailure failure, string decision, long elapsedMs);
+
     [LoggerMessage(EventId = 3004, Level = LogLevel.Error, Message = "Investigation {InvestigationId} aborted by an unexpected failure: {ExceptionType}, after {ElapsedMs} ms")]
     private static partial void Aborted(ILogger logger, Guid investigationId, string exceptionType, long elapsedMs);
 }

@@ -30,7 +30,8 @@ internal sealed class ToolGuard(
     ILogger? logger = null,
     Guid investigationId = default,
     MerchantSources? merchants = null,
-    string? searchIndex = null)
+    string? searchIndex = null,
+    InvestigationBudget? budget = null)
 {
     // A guard built without a screen can check nothing, so it withholds every untrusted value: fail closed.
     private readonly IUntrustedTextScreen _screen = screen ?? new UnavailableScreen();
@@ -119,7 +120,8 @@ internal sealed class ToolGuard(
     {
         lock (_lock)
         {
-            if (turn.Stopped || ++_calls > limits.MaxToolCalls)
+            // An investigation's attempts share its read-tool calls; a guard on its own counts its own.
+            if (turn.Stopped || !(budget?.TryTakeToolCall() ?? ++_calls <= limits.MaxToolCalls))
             {
                 return false;
             }
