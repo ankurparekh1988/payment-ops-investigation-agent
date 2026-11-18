@@ -65,6 +65,16 @@ internal static partial class ReleaseManifestValidator
             }
         }
 
+        var routing = ParseRoutingMode(manifest.Routing.Mode);
+        if (routing is null)
+        {
+            errors.Add($"routing.mode is '{manifest.Routing.Mode}'; use off or cascade.");
+        }
+        else if (routing == RoutingMode.Cascade && manifest.Models.Small is null)
+        {
+            errors.Add("routing.mode is cascade, which needs models.small.");
+        }
+
         foreach (var (id, prompt) in manifest.Prompts)
         {
             if (!PromptId().IsMatch(id))
@@ -93,13 +103,22 @@ internal static partial class ReleaseManifestValidator
         _ => null,
     };
 
+    public static RoutingMode? ParseRoutingMode(string value) => value switch
+    {
+        "off" => RoutingMode.Off,
+        "cascade" => RoutingMode.Cascade,
+        _ => null,
+    };
+
     /// <summary>Every model deployment the manifest declares, with its path for error messages.</summary>
-    public static IReadOnlyList<(string Path, ModelDeployment Deployment)> AllDeployments(ReleaseManifest manifest) =>
-        manifest.Models.Chat.Deployments.Select(d => ($"models.chat.deployments.{d.Key}", (ModelDeployment)d.Value))
+    public static IReadOnlyList<(string Path, ModelDeployment Deployment)> AllDeployments(ReleaseManifest manifest)
+    {
+        var deployments = manifest.Models.Chat.Deployments.Select(d => ($"models.chat.deployments.{d.Key}", (ModelDeployment)d.Value))
             .Append(("models.embedding", manifest.Models.Embedding))
             .Append(("models.judge", manifest.Models.Judge))
-            .Append(("models.screen", manifest.Models.Screen))
-            .ToList();
+            .Append(("models.screen", manifest.Models.Screen));
+        return (manifest.Models.Small is { } small ? deployments.Append(("models.small", small)) : deployments).ToList();
+    }
 
     private static void CheckFilter(string path, string policy, List<string> errors)
     {

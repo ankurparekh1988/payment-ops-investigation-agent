@@ -13,7 +13,18 @@ locals {
     }
   }
 
-  model_deployments = merge(local.chat_deployments, {
+  # Optional in the manifest; deployed whenever it's listed, whatever the routing mode.
+  small_deployments = try(local.models.small, null) == null ? {} : {
+    (local.models.small.deployment) = {
+      model          = local.models.small.model
+      version        = local.models.small.version
+      sku            = local.models.small.deploymentType
+      capacity       = local.models.small.capacityK
+      content_filter = local.models.small.contentFilterPolicy
+    }
+  }
+
+  model_deployments = merge(local.chat_deployments, local.small_deployments, {
     (local.models.embedding.deployment) = {
       model          = local.models.embedding.model
       version        = local.models.embedding.version

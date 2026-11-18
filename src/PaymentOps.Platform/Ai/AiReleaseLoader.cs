@@ -57,6 +57,8 @@ public static class AiReleaseLoader
             models.Embedding.Deployment,
             models.Judge.Deployment,
             models.Screen.Deployment,
+            models.Small?.Deployment,
+            ReleaseManifestValidator.ParseRoutingMode(manifest.Routing.Mode)!.Value,
             manifest.Retrieval.Index,
             manifest.Retrieval.EvaluationIndex,
             ReleaseManifestValidator.ParseRetrievalMode(manifest.Retrieval.Mode)!.Value,
