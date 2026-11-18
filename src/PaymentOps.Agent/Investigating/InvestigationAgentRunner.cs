@@ -45,6 +45,11 @@ internal sealed class InvestigationAgentRunner(
         var timer = Stopwatch.StartNew();
         var turn = new TurnState();
         var result = await RunAsync(question, history, progress, investigationId, turn, timer, cancellationToken) with { InvestigationId = investigationId };
+        if (turn.Attempted)
+        {
+            TurnUsage.RecordAttempt(new AttemptRecord(ModelTier.Chat, turn.Failure));
+        }
+
         InvestigationLog.Completed(logger, result, turn.Gaps.Count, timer.ElapsedMilliseconds);
         return result;
     }
@@ -110,6 +115,7 @@ internal sealed class InvestigationAgentRunner(
             },
         });
 
+        turn.Attempted = true;
         return await TurnOutcome.RunAsync(
             turn,
             _limits,
@@ -124,13 +130,19 @@ internal sealed class InvestigationAgentRunner(
                 // A call no tool answered (an unknown tool) ends the investigation: fail closed, and that history can't be sent again.
                 if (turn.Accepted is null && HasUnansweredCall(first.Messages))
                 {
+                    turn.Fail(AttemptFailure.UnknownToolCall);
                     return Unverified;
                 }
 
                 // One more request either way: to correct a rejected submission, or to submit at all.
                 if (turn.Accepted is null)
                 {
+                    var correcting = turn.SubmissionRejected;
                     await agent.RunAsync([], session, Run([submit], ChatToolMode.RequireSpecific(ToolNames.SubmitAssessment)), token);
+                    if (turn.Accepted is null)
+                    {
+                        turn.Fail(correcting ? AttemptFailure.RejectedAfterCorrection : AttemptFailure.NoSubmission);
+                    }
                 }
 
                 return null;

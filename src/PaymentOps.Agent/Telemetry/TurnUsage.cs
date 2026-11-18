@@ -1,5 +1,7 @@
 using System.Diagnostics;
 
+using PaymentOps.Agent.Investigating;
+
 namespace PaymentOps.Agent.Telemetry;
 
 /// <summary>
@@ -20,6 +22,7 @@ internal sealed class TurnUsage : IDisposable
     private readonly List<string> _incomplete = [];
     private readonly List<(string Name, string Outcome)> _tools = [];
     private readonly Dictionary<string, int> _screens = new(StringComparer.Ordinal);
+    private readonly List<AttemptRecord> _attempts = [];
     private TurnUsage? _previous;
 
     public static TurnUsage? Current => Ambient.Value;
@@ -63,6 +66,29 @@ internal sealed class TurnUsage : IDisposable
             lock (_lock)
             {
                 return [.. _tools];
+            }
+        }
+    }
+
+    /// <summary>The investigation's model attempts, in order.</summary>
+    public IReadOnlyList<AttemptRecord> Attempts
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _attempts];
+            }
+        }
+    }
+
+    public static void RecordAttempt(AttemptRecord attempt)
+    {
+        if (Current is { } usage)
+        {
+            lock (usage._lock)
+            {
+                usage._attempts.Add(attempt);
             }
         }
     }

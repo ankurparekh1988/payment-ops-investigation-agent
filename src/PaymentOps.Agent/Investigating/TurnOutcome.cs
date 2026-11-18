@@ -50,6 +50,7 @@ internal static class TurnOutcome
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            turn.Fail(AttemptFailure.Cancelled);
             return new NotAssessed(NotAssessedReason.Cancelled);
         }
         catch (OperationCanceledException) when (turnTimeout.IsCancellationRequested)
@@ -63,22 +64,36 @@ internal static class TurnOutcome
         {
             // A policy decision, not an outage: retrying the same input would be refused again.
             failed?.Invoke(TurnFailure.Blocked, ex);
+            turn.Fail(AttemptFailure.Blocked);
             return new NotAssessed(NotAssessedReason.Blocked);
         }
         catch (Exception ex) when (ex is OperationCanceledException || ModelFailure.IsServiceFailure(ex))
         {
             // A cancellation from neither the caller nor the turn timeout: the model or Search client timed out on its own.
             failed?.Invoke(TurnFailure.ServiceFailed, ex);
+            turn.Fail(AttemptFailure.ServiceFailed);
             return new NotAssessed(NotAssessedReason.ModelUnavailable);
         }
         catch (Exception ex)
         {
             // The framework ended the loop without retrying, and so do we.
             failed?.Invoke(TurnFailure.Aborted, ex);
+            turn.Fail(AttemptFailure.Aborted);
             return new NotAssessed(NotAssessedReason.AssessmentUnverified);
         }
 
-        return turn.Accepted is { } submission ? AssessmentPolicy.Apply(submission, turn)
-            : new NotAssessed(turn.Stopped ? NotAssessedReason.LimitReached : NotAssessedReason.AssessmentUnverified);
+        if (turn.Accepted is { } submission)
+        {
+            return AssessmentPolicy.Apply(submission, turn);
+        }
+
+        // A stopped attempt failed because of its limit, whatever the model did or didn't submit afterwards.
+        if (turn.Stopped)
+        {
+            turn.Fail(AttemptFailure.LimitReached);
+            return new NotAssessed(NotAssessedReason.LimitReached);
+        }
+
+        return new NotAssessed(NotAssessedReason.AssessmentUnverified);
     }
 }
