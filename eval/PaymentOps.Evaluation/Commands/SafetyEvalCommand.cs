@@ -111,7 +111,7 @@ internal static class SafetyEvalCommand
         }
 
         var indexAtEnd = await IndexFingerprint.ReadAsync(release.KnowledgeIndex, index, CancellationToken.None);
-        context = context with { Inputs = ReportInputs.From(release, settings.Ai, [settings.Dataset], indexAtStart.Ended(indexAtEnd)) };
+        context = context with { Inputs = ReportInputs.From(release, settings.Ai, [settings.Dataset], indexAtStart.Ended(indexAtEnd), settings.Pricing, settings.Thresholds) };
 
         var classification = corpus.ToDictionary(s => s.Id, s => s.Classification, StringComparer.Ordinal);
         var report = EvaluationReport.ForSafety(context, cases.Cases, classification, runs, prices, thresholds, settings.Thresholds) with { Diagnostics = diagnostics.Snapshot() };

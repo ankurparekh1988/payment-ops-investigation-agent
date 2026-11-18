@@ -1,9 +1,16 @@
 using System.Globalization;
 
+using PaymentOps.Evaluation.Cases;
 using PaymentOps.Evaluation.Pricing;
 using PaymentOps.Evaluation.Scoring;
 
 namespace PaymentOps.Evaluation.Reporting;
+
+/// <summary>
+/// What the decision is bound to outside the reports: the hash of the thresholds file it applies, and the frozen safety
+/// dataset by hash and case ids.
+/// </summary>
+internal sealed record RoutingEvidence(string ThresholdsSha256, string SafetyDatasetSha256, IReadOnlySet<string> SafetyCases);
 
 /// <summary>One step of the rule: whether it held, and what it compared.</summary>
 internal sealed record RoutingCheck(string Step, bool Passed, IReadOnlyList<string> Findings);
@@ -26,6 +33,9 @@ internal static class RoutingDecision
     /// <summary>The cascade's p95 latency may be at most this multiple of the control's.</summary>
     public const decimal MaxLatencyRatio = 1.25m;
 
+    /// <summary>Runs on each side: three control, three cascade and three cascade safety runs.</summary>
+    public const int ComparedRuns = 3;
+
     private const decimal SpreadMultiple = 1.6m;
 
     public sealed record Result(string Verdict, IReadOnlyList<RoutingCheck> Checks)
@@ -38,26 +48,31 @@ internal static class RoutingDecision
         };
     }
 
-    public static Result Decide(EvaluationReport control, EvaluationReport cascade, EvaluationReport? safety, Thresholds thresholds)
+    public static Result Decide(EvaluationReport control, EvaluationReport cascade, EvaluationReport? safety, Thresholds thresholds, RoutingEvidence evidence)
     {
         ArgumentNullException.ThrowIfNull(control);
         ArgumentNullException.ThrowIfNull(cascade);
         ArgumentNullException.ThrowIfNull(thresholds);
+        ArgumentNullException.ThrowIfNull(evidence);
 
         var checks = new List<RoutingCheck>();
-        var identity = Identity(control, cascade, safety);
+        var identity = Identity(control, cascade, safety, evidence);
         checks.Add(new RoutingCheck("identity", identity.Count == 0, identity));
         if (identity.Count > 0)
         {
             return new Result(Invalid, checks);
         }
 
-        var (safetyInvalid, safetyFailed) = SafetyEvidence(safety!, cascade.Runs.Count);
-        checks.Add(new RoutingCheck("safety", safetyInvalid.Count == 0 && safetyFailed.Count == 0, [.. safetyInvalid, .. safetyFailed]));
-        if (safetyInvalid.Count > 0)
+        // Incomplete evidence is invalid, never a pass by omission.
+        var complete = Completeness(control, cascade, safety!, thresholds, evidence);
+        checks.Add(new RoutingCheck("evidence", complete.Count == 0, complete));
+        if (complete.Count > 0)
         {
             return new Result(Invalid, checks);
         }
+
+        var safetyFailed = SafetyFailures(safety!);
+        checks.Add(new RoutingCheck("safety", safetyFailed.Count == 0, safetyFailed));
 
         // The rest are all evaluated, so the summary shows every value; the first failing step decides.
         var hard = HardGates(cascade);
@@ -81,7 +96,7 @@ internal static class RoutingDecision
     }
 
     // The same source and inputs on every side, only the routing mode differing.
-    private static List<string> Identity(EvaluationReport control, EvaluationReport cascade, EvaluationReport? safety)
+    private static List<string> Identity(EvaluationReport control, EvaluationReport cascade, EvaluationReport? safety, RoutingEvidence evidence)
     {
         var problems = new List<string>();
         if (safety is null)
@@ -142,9 +157,26 @@ internal static class RoutingDecision
         Same("screen model", c.Screen, k.Screen, s.Screen);
         Same("index name", c.Index.Name, k.Index.Name, s.Index.Name);
         Same("index fingerprint", c.Index.Fingerprint, k.Index.Fingerprint, s.Index.Fingerprint);
+        Same("price list", c.Pricing, k.Pricing, s.Pricing);
         if (k.Small is null)
         {
             problems.Add("the cascade names no small model");
+        }
+
+        // The thresholds applied here are the ones the control's release verdict was gated on.
+        if (c.Thresholds != evidence.ThresholdsSha256)
+        {
+            problems.Add($"the thresholds file isn't the one the control was gated on: {c.Thresholds ?? "none"} / {evidence.ThresholdsSha256}");
+        }
+
+        if (k.Thresholds is not null && k.Thresholds != evidence.ThresholdsSha256)
+        {
+            problems.Add("the cascade ran against a different thresholds file");
+        }
+
+        if (s.Datasets.Count != 1 || s.Datasets.Values.Single() != evidence.SafetyDatasetSha256)
+        {
+            problems.Add("the safety report didn't run the frozen safety dataset");
         }
 
         return problems;
@@ -162,35 +194,79 @@ internal static class RoutingDecision
 
     private static string Prompts(ReportInputs inputs) => string.Join(';', inputs.Prompts.Select(p => $"{p.Id}@{p.Version}={p.Sha256}"));
 
-    // Missing or incomplete evidence is invalid; evidence that a safety gate failed rejects.
-    private static (List<string> Invalid, List<string> Failed) SafetyEvidence(EvaluationReport safety, int runs)
+    // Every run there, every case once in every run, every gated metric measured, and a control that passed its gate.
+    private static List<string> Completeness(EvaluationReport control, EvaluationReport cascade, EvaluationReport safety, Thresholds thresholds, RoutingEvidence evidence)
     {
-        var invalid = new List<string>();
-        var cases = safety.Stability.Select(s => s.CaseId).ToHashSet(StringComparer.Ordinal);
-        if (safety.Runs.Count != runs)
+        var problems = new List<string>();
+        if (control.Gate.Verdict != GateReport.Passed)
         {
-            invalid.Add($"the safety report has {safety.Runs.Count} runs, not {runs}");
+            problems.Add($"the control's release verdict is {control.Gate.Verdict}, not passed");
         }
 
-        foreach (var run in safety.Runs)
+        var cases = control.Stability.Select(s => s.CaseId).ToHashSet(StringComparer.Ordinal);
+        if (cases.Count == 0 || !cases.SetEquals(cascade.Stability.Select(s => s.CaseId)))
         {
-            var present = run.Cases.Select(r => r.CaseId).ToHashSet(StringComparer.Ordinal);
-            if (cases.Count == 0 || !cases.SetEquals(present))
+            problems.Add("control and cascade don't cover the same cases");
+        }
+
+        var metrics = Compared(thresholds);
+        foreach (var (side, report, expected) in new[] { ("control", control, cases), ("cascade", cascade, cases), ("safety", safety, (HashSet<string>)[.. evidence.SafetyCases]) })
+        {
+            if (report.Runs.Count != ComparedRuns)
             {
-                invalid.Add($"safety run {run.Run} doesn't hold every case");
+                problems.Add($"{side} has {report.Runs.Count} runs, not {ComparedRuns}");
             }
 
-            if (run.Cases.Any(r => r.InfrastructureFailure is not null))
+            foreach (var run in report.Runs)
             {
-                invalid.Add($"safety run {run.Run} has cases the environment spoiled");
-            }
+                var ids = run.Cases.Select(r => r.CaseId).ToList();
+                if (ids.Count != ids.Distinct(StringComparer.Ordinal).Count() || !expected.SetEquals(ids))
+                {
+                    problems.Add($"{side} run {run.Run} doesn't hold each expected case exactly once");
+                }
 
-            if (run.SafetyHardGates is null)
-            {
-                invalid.Add($"safety run {run.Run} has no safety gates");
+                if (run.Cases.Any(r => r.InfrastructureFailure is not null))
+                {
+                    problems.Add($"{side} run {run.Run} has cases the environment spoiled");
+                }
+
+                if (side == "safety")
+                {
+                    if (run.SafetyHardGates is null)
+                    {
+                        problems.Add($"safety run {run.Run} has no safety gates");
+                    }
+
+                    continue;
+                }
+
+                problems.AddRange(metrics.Where(m => run.Metrics.GetValueOrDefault(m) is null).Select(m => $"{side} run {run.Run} didn't measure {m}"));
             }
         }
 
+        if (!evidence.SafetyCases.ToHashSet(StringComparer.Ordinal).SetEquals(safety.Stability.Select(s => s.CaseId)))
+        {
+            problems.Add("the safety report's cases aren't the frozen safety dataset's");
+        }
+
+        if (metrics.Count == 0)
+        {
+            problems.Add("the thresholds file gates no investigation metric");
+        }
+
+        return problems;
+    }
+
+    /// <summary>The investigation metrics the thresholds gate; retrieval is measured by its own evaluation, not here.</summary>
+    public static IReadOnlyList<string> Compared(Thresholds thresholds)
+    {
+        ArgumentNullException.ThrowIfNull(thresholds);
+        return [.. thresholds.Metrics.Keys.Where(m => ThresholdRule.Gating.Contains(m) && m != MetricNames.RetrievalRecallAt5).Order(StringComparer.Ordinal)];
+    }
+
+    // A failed safety gate, or an authorization or state-change violation in a safety run, rejects.
+    private static List<string> SafetyFailures(EvaluationReport safety)
+    {
         var failed = new List<string>();
         foreach (var run in safety.Runs)
         {
@@ -207,7 +283,7 @@ internal static class RoutingDecision
             failed.AddRange(safety.Gate.Failures.Select(f => $"safety gate: {f}"));
         }
 
-        return (invalid, failed);
+        return failed;
     }
 
     private static List<string> HardGates(EvaluationReport cascade) =>
@@ -219,8 +295,9 @@ internal static class RoutingDecision
         var failures = new List<string>();
         foreach (var run in cascade.Runs)
         {
-            foreach (var (metric, entry) in thresholds.Metrics.Where(m => ThresholdRule.Gating.Contains(m.Key)).OrderBy(m => m.Key, StringComparer.Ordinal))
+            foreach (var metric in Compared(thresholds))
             {
+                var entry = thresholds.Metrics[metric];
                 if (run.Metrics.GetValueOrDefault(metric) is { } value && !ThresholdRule.Meets(metric, value, entry.Threshold))
                 {
                     failures.Add(string.Create(CultureInfo.InvariantCulture, $"run {run.Run}: {metric} {value:F3} against {entry.Threshold:F2} ({entry.Direction} is better)"));
@@ -235,14 +312,14 @@ internal static class RoutingDecision
     private static List<string> Margins(EvaluationReport control, EvaluationReport cascade, Thresholds thresholds)
     {
         var failures = new List<string>();
-        foreach (var (metric, entry) in thresholds.Metrics.Where(m => ThresholdRule.Gating.Contains(m.Key)).OrderBy(m => m.Key, StringComparer.Ordinal))
+        foreach (var metric in Compared(thresholds))
         {
             if (Median(control, metric) is not { } before || Median(cascade, metric) is not { } after)
             {
                 continue;
             }
 
-            var margin = Margin(entry);
+            var margin = Margin(thresholds.Metrics[metric]);
             var within = ThresholdRule.Direction(metric) == ThresholdRule.Lower ? (decimal)after <= (decimal)before + margin : (decimal)after >= (decimal)before - margin;
             if (!within)
             {

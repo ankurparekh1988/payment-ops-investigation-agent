@@ -19,21 +19,30 @@ public sealed class RoutingDecisionTests
     private static readonly ModelIdentity ScreenModel = new("screen", "gpt-5.4-mini", "2026-03-17", "GlobalStandard", "strict");
 
     // Margins: validated results max(1.6 × 0.02, 1/20) = 0.05; false positives max(1.6 × 0.01, 1/20) = 0.05.
+    // Retrieval sits in the same thresholds file but is measured by its own evaluation, never compared here.
     private static Thresholds Frozen(double vrrThreshold = 0.90, double fpThreshold = 0.10) => new(2, "baseline", "rule", new Dictionary<string, ThresholdEntry>
     {
         [Vrr] = new(vrrThreshold, ThresholdRule.Higher, 20, 0.9, 0.95, 1, 0.95, 0.02, [0.95, 0.95]),
         [Fp] = new(fpThreshold, ThresholdRule.Lower, 20, 0, 0.05, 0.1, 0.05, 0.01, [0.05, 0.05]),
+        [MetricNames.RetrievalRecallAt5] = new(0.8, ThresholdRule.Higher, 10, 0.9, 0.9, 0.9, null, null, [0.9]),
     });
 
-    private static ReportInputs Inputs(string routing) => new(
-        new Dictionary<string, string> { ["investigations-regression.json"] = "sha256:d1" },
+    private const string ThresholdsHash = "sha256:thresholds";
+    private const string SafetyHash = "sha256:safety";
+
+    private static readonly RoutingEvidence Evidence = new(ThresholdsHash, SafetyHash, new HashSet<string> { "reg-1", "held-1" });
+
+    private static ReportInputs Inputs(string routing, bool safety = false) => new(
+        new Dictionary<string, string> { [safety ? "safety.json" : "investigations-regression.json"] = safety ? SafetyHash : "sha256:d1" },
         [new PromptHash("investigation-agent", "1.2.0", "sha256:p1")],
         "sha256:release",
         Mini,
         Nano,
         ScreenModel,
         routing,
-        new IndexIdentity("knowledge-eval-v1", "sha256:index", 40, true, null));
+        new IndexIdentity("knowledge-eval-v1", "sha256:index", 40, true, null),
+        "sha256:prices",
+        safety ? null : ThresholdsHash);
 
     private static EvaluationReport Report(string routing, double[]? vrr = null, double[]? fp = null, long p95 = 10_000, decimal? perValidated = 0.0100m, string status = AllInCost.Priced, string commit = "c1")
     {
@@ -51,6 +60,7 @@ public sealed class RoutingDecisionTests
             Cost = baseline.Cost with { AllIn = perValidated * 6, AllInPerValidatedInvestigation = perValidated, AllInStatus = status, Currency = "USD" },
             Source = new ReportSource(commit, "tree-1", false),
             Inputs = Inputs(routing),
+            Gate = new GateReport(GateReport.Passed, [], "eval/thresholds.json", new Dictionary<string, double>()),
         };
     }
 
@@ -61,11 +71,108 @@ public sealed class RoutingDecisionTests
         {
             System = EvaluationReport.SafetySystem,
             Runs = [.. baseline.Runs.Select(run => (change ?? (r => r))(run with { SafetyHardGates = new SafetyHardGates([], [], []) }))],
+            Inputs = Inputs("cascade", safety: true),
         };
     }
 
-    private static RoutingDecision.Result Decide(EvaluationReport? control = null, EvaluationReport? cascade = null, EvaluationReport? safety = null, Thresholds? thresholds = null, bool noSafety = false) =>
-        RoutingDecision.Decide(control ?? Report("off"), cascade ?? Report("cascade", perValidated: 0.0070m, p95: 12_000), noSafety ? null : safety ?? Safety(), thresholds ?? Frozen());
+    private static RoutingDecision.Result Decide(EvaluationReport? control = null, EvaluationReport? cascade = null, EvaluationReport? safety = null, Thresholds? thresholds = null, bool noSafety = false, RoutingEvidence? evidence = null) =>
+        RoutingDecision.Decide(control ?? Report("off"), cascade ?? Report("cascade", perValidated: 0.0070m, p95: 12_000), noSafety ? null : safety ?? Safety(), thresholds ?? Frozen(), evidence ?? Evidence);
+
+    private static EvaluationReport Cascade() => Report("cascade", perValidated: 0.0070m);
+
+    private static void Invalid(RoutingDecision.Result result) => Assert.Equal((RoutingDecision.Invalid, 2), (result.Verdict, result.ExitCode));
+
+    [Theory]
+    [InlineData("control")]
+    [InlineData("cascade")]
+    [InlineData("safety")]
+    public void Fewer_than_three_runs_on_any_side_is_invalid(string side)
+    {
+        static EvaluationReport Two(EvaluationReport r) => r with { Runs = [.. r.Runs.Take(2)] };
+
+        Invalid(side switch
+        {
+            "control" => Decide(control: Two(Report("off"))),
+            "cascade" => Decide(cascade: Two(Cascade())),
+            _ => Decide(safety: Two(Safety())),
+        });
+    }
+
+    [Theory]
+    [InlineData("control", 1, Vrr)]
+    [InlineData("cascade", 2, Fp)]
+    public void A_compared_metric_missing_from_any_run_is_invalid(string side, int run, string metric)
+    {
+        static EvaluationReport Without(EvaluationReport r, int run, string metric) => r with
+        {
+            Runs = [.. r.Runs.Select(x => x.Run == run ? x with { Metrics = x.Metrics.Where(m => m.Key != metric).ToDictionary() } : x)],
+        };
+
+        var result = side == "control" ? Decide(control: Without(Report("off"), run, metric)) : Decide(cascade: Without(Cascade(), run, metric));
+
+        Invalid(result);
+        Assert.Contains($"{side} run {run} didn't measure {metric}", Assert.Single(result.Checks, c => c.Step == "evidence").Findings);
+    }
+
+    [Theory]
+    [InlineData("missing from one run")]
+    [InlineData("missing from every run")]
+    [InlineData("repeated in a run")]
+    public void A_case_missing_or_repeated_is_invalid(string problem)
+    {
+        var cascade = Cascade();
+        cascade = problem switch
+        {
+            "missing from one run" => cascade with { Runs = [.. cascade.Runs.Select(r => r.Run == 3 ? r with { Cases = [.. r.Cases.Skip(1)] } : r)] },
+            "missing from every run" => cascade with { Runs = [.. cascade.Runs.Select(r => r with { Cases = [.. r.Cases.Skip(1)] })] },
+            _ => cascade with { Runs = [.. cascade.Runs.Select(r => r.Run == 1 ? r with { Cases = [.. r.Cases, r.Cases[0]] } : r)] },
+        };
+
+        Invalid(Decide(cascade: cascade));
+    }
+
+    [Theory]
+    [InlineData(GateReport.Failed)]
+    [InlineData(GateReport.ReportOnly)]
+    public void A_control_without_a_passing_release_verdict_is_invalid(string verdict)
+    {
+        var control = Report("off");
+
+        Invalid(Decide(control: control with { Gate = control.Gate with { Verdict = verdict } }));
+    }
+
+    [Fact]
+    public void An_altered_safety_dataset_is_invalid() =>
+        Invalid(Decide(evidence: Evidence with { SafetyDatasetSha256 = "sha256:edited" }));
+
+    [Fact]
+    public void Safety_cases_that_are_not_the_frozen_datasets_are_invalid() =>
+        Invalid(Decide(evidence: Evidence with { SafetyCases = new HashSet<string> { "reg-1", "held-1", "inj-9" } }));
+
+    // The same costs, priced from a different USD list, aren't comparable evidence.
+    [Fact]
+    public void Costs_from_different_price_lists_are_invalid()
+    {
+        var cascade = Cascade();
+
+        Invalid(Decide(cascade: cascade with { Inputs = cascade.Inputs! with { Pricing = "sha256:other-prices" } }));
+    }
+
+    [Fact]
+    public void A_substituted_thresholds_file_is_invalid() =>
+        Invalid(Decide(evidence: Evidence with { ThresholdsSha256 = "sha256:weaker" }));
+
+    [Fact]
+    public void A_cascade_gated_on_other_thresholds_is_invalid()
+    {
+        var cascade = Cascade();
+
+        Invalid(Decide(cascade: cascade with { Inputs = cascade.Inputs! with { Thresholds = "sha256:weaker" } }));
+    }
+
+    [Fact]
+    public void Retrieval_thresholds_are_not_compared_here() =>
+        Assert.DoesNotContain(MetricNames.RetrievalRecallAt5, RoutingDecision.Compared(Frozen()));
 
     [Fact]
     public void Adopts_when_every_condition_holds()
@@ -136,7 +243,7 @@ public sealed class RoutingDecisionTests
         {
             "control" => Decide(control: Report("cascade")),
             "cascade" => Decide(cascade: Report("off")),
-            _ => Decide(safety: Safety() with { Inputs = Inputs("off") }),
+            _ => Decide(safety: Safety() with { Inputs = Inputs("off", safety: true) }),
         };
 
         Assert.Equal(RoutingDecision.Invalid, result.Verdict);
@@ -170,7 +277,7 @@ public sealed class RoutingDecisionTests
             "missing run" => Decide(safety: safety with { Runs = [.. safety.Runs.Take(2)] }),
             "spoiled run" => Decide(safety: Safety(run => run with { Cases = [run.Cases[0] with { InfrastructureFailure = "busy" }, .. run.Cases.Skip(1)] })),
             "other tree" => Decide(safety: safety with { Source = new ReportSource("c3", "tree-2", false) }),
-            _ => Decide(safety: safety with { Inputs = Inputs("off") }),
+            _ => Decide(safety: safety with { Inputs = Inputs("off", safety: true) }),
         };
 
         Assert.Equal((RoutingDecision.Invalid, 2), (result.Verdict, result.ExitCode));
@@ -262,11 +369,21 @@ public sealed class RoutingDecisionTests
     public async Task The_command_reads_the_reports_and_exits_with_the_verdict(string cascadeCost, int exit)
     {
         var thresholds = Temp(Frozen().ToJson());
+        var dataset = Temp("""{ "cases": [ { "id": "reg-1" }, { "id": "held-1" } ] }""");
+        EvaluationReport Bound(EvaluationReport r, bool safety = false) => r with
+        {
+            Inputs = r.Inputs! with
+            {
+                Thresholds = safety ? null : ReportInputs.Sha256Of(thresholds),
+                Datasets = safety ? new Dictionary<string, string> { ["safety.json"] = ReportInputs.Sha256Of(dataset) } : r.Inputs.Datasets,
+            },
+        };
         var cascade = Report("cascade", perValidated: decimal.Parse(cascadeCost, System.Globalization.CultureInfo.InvariantCulture));
         var (output, summary) = (Path.GetTempFileName(), Path.GetTempFileName());
 
         var code = await RoutingDecisionCommand.RunAsync(
-            ["--control", Temp(Report("off").ToJson()), "--cascade", Temp(cascade.ToJson()), "--cascade-safety", Temp(Safety().ToJson()), "--thresholds", thresholds, "--out", output, "--summary", summary]);
+            ["--control", Temp(Bound(Report("off")).ToJson()), "--cascade", Temp(Bound(cascade).ToJson()), "--cascade-safety", Temp(Bound(Safety(), safety: true).ToJson()),
+             "--thresholds", thresholds, "--safety-dataset", dataset, "--out", output, "--summary", summary]);
 
         Assert.Equal(exit, code);
         Assert.Contains(exit == 0 ? "adopt" : "reject", File.ReadAllText(output), StringComparison.Ordinal);

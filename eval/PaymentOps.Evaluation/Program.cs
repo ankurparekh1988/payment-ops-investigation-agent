@@ -14,7 +14,7 @@
 //        PaymentOps.Evaluation retrieval-eval --endpoint <url> --ai <dir> --sources <dir> --dataset <file> [--thresholds <file>] [--index live|evaluation] --out <file> --summary <file>
 //        PaymentOps.Evaluation thresholds --investigations <report.json> --retrieval <report.json> --out <file>
 //        PaymentOps.Evaluation kill-test --agent <report.json> --challenger <report.json> --out <file> --summary <file>
-//        PaymentOps.Evaluation routing-decision --control <report.json> --cascade <report.json> --cascade-safety <report.json> --thresholds <file> --out <file> --summary <file>
+//        PaymentOps.Evaluation routing-decision --control <report.json> --cascade <report.json> --cascade-safety <report.json> --thresholds <file> --safety-dataset <file> --out <file> --summary <file>
 //        PaymentOps.Evaluation retrieval-compare --endpoint <url> --ai <dir> --dataset <file> --sources <dir> --out <file> --summary <file>
 //        PaymentOps.Evaluation classify-change --changed <file> --base-manifest <file> --head-manifest <file> --same-repository true|false --actor-type <User|Bot> --github-output <file>
 //        PaymentOps.Evaluation record-evaluation --investigations <report.json> --retrieval <report.json> --safety <report.json> --ingestion-endpoint <url> --rule <immutable id> --evaluation-id <id> --trigger schedule|workflow_dispatch

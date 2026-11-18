@@ -14,20 +14,23 @@ namespace PaymentOps.Evaluation.Commands;
 internal static class RoutingDecisionCommand
 {
     public const string Usage =
-        "routing-decision --control <report.json> --cascade <report.json> --cascade-safety <report.json> --thresholds <file> --out <file> --summary <file>";
+        "routing-decision --control <report.json> --cascade <report.json> --cascade-safety <report.json> --thresholds <file> --safety-dataset <file> --out <file> --summary <file>";
 
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, WriteIndented = true };
 
     public static Task<int> RunAsync(string[] args) => ExitCodes.GuardAsync("Routing decision", Usage, async () =>
     {
-        var options = Options.Parse(args, ["control", "cascade", "cascade-safety", "thresholds", "out", "summary"], []);
+        var options = Options.Parse(args, ["control", "cascade", "cascade-safety", "thresholds", "safety-dataset", "out", "summary"], []);
         var (outPath, summaryPath) = (options.OutputFile("out"), options.OutputFile("summary"));
         var control = EvaluationReport.Load(options.One("control"));
         var cascade = EvaluationReport.Load(options.One("cascade"));
         var safety = EvaluationReport.Load(options.One("cascade-safety"));
-        var thresholds = Thresholds.Load(options.One("thresholds"));
+        var thresholdsPath = options.One("thresholds");
+        var thresholds = Thresholds.Load(thresholdsPath);
+        var safetyDataset = options.One("safety-dataset");
+        var evidence = new RoutingEvidence(ReportInputs.Sha256Of(thresholdsPath), ReportInputs.Sha256Of(safetyDataset), SafetyCaseIds(safetyDataset));
 
-        var result = RoutingDecision.Decide(control, cascade, safety, thresholds);
+        var result = RoutingDecision.Decide(control, cascade, safety, thresholds, evidence);
         await File.WriteAllTextAsync(outPath, JsonSerializer.Serialize(
             new
             {
@@ -44,6 +47,13 @@ internal static class RoutingDecisionCommand
         Console.WriteLine($"Routing decision: {result.Verdict}.");
         return result.ExitCode;
     });
+
+    // The frozen safety cases by id, read from the dataset file whose hash the safety report must also carry.
+    private static HashSet<string> SafetyCaseIds(string path)
+    {
+        using var file = JsonDocument.Parse(File.ReadAllBytes(path));
+        return file.RootElement.GetProperty("cases").EnumerateArray().Select(c => c.GetProperty("id").GetString()!).ToHashSet(StringComparer.Ordinal);
+    }
 
     private static object Side(EvaluationReport report) => new
     {
@@ -76,8 +86,9 @@ internal static class RoutingDecisionCommand
 
         var runs = cascade.Runs.Count;
         md.AppendLine().AppendLine("| Metric | Threshold | Margin | Control median | Cascade median | Cascade runs |").AppendLine("|---|---|---|---|---|---|");
-        foreach (var (metric, entry) in thresholds.Metrics.Where(m => ThresholdRule.Gating.Contains(m.Key)).OrderBy(m => m.Key, StringComparer.Ordinal))
+        foreach (var metric in RoutingDecision.Compared(thresholds))
         {
+            var entry = thresholds.Metrics[metric];
             if (RoutingDecision.Median(cascade, metric) is not { } median)
             {
                 continue;

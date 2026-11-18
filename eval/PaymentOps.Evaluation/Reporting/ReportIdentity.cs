@@ -65,6 +65,8 @@ internal sealed record IndexIdentity(string Name, string? Fingerprint, int Docum
 /// <param name="Datasets">File name to the SHA-256 of its bytes, for each dataset the run read.</param>
 /// <param name="Release">The SHA-256 of the AI release manifest.</param>
 /// <param name="Routing">The routing mode the run used: the release's, or the evaluation's override.</param>
+/// <param name="Pricing">The SHA-256 of the price list the run's costs came from.</param>
+/// <param name="Thresholds">The SHA-256 of the frozen thresholds the run was gated on; null when it ran without them.</param>
 internal sealed record ReportInputs(
     IReadOnlyDictionary<string, string> Datasets,
     IReadOnlyList<PromptHash> Prompts,
@@ -73,9 +75,11 @@ internal sealed record ReportInputs(
     ModelIdentity? Small,
     ModelIdentity? Screen,
     string Routing,
-    IndexIdentity Index)
+    IndexIdentity Index,
+    string Pricing,
+    string? Thresholds)
 {
-    public static ReportInputs From(AiRelease release, string aiDirectory, IEnumerable<string> datasets, IndexIdentity index)
+    public static ReportInputs From(AiRelease release, string aiDirectory, IEnumerable<string> datasets, IndexIdentity index, string pricing, string? thresholds)
     {
         ArgumentNullException.ThrowIfNull(release);
         return new ReportInputs(
@@ -86,10 +90,12 @@ internal sealed record ReportInputs(
             ModelIdentity.From(release, release.SmallDeployment),
             ModelIdentity.From(release, release.ScreenDeployment),
             release.RoutingMode == RoutingMode.Cascade ? "cascade" : "off",
-            index);
+            index,
+            Sha256Of(pricing),
+            thresholds is null ? null : Sha256Of(thresholds));
     }
 
-    private static string Sha256Of(string path) => "sha256:" + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
+    public static string Sha256Of(string path) => "sha256:" + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
 }
 
 internal static class IndexFingerprint

@@ -114,7 +114,7 @@ internal static class InvestigationEvalCommand
         }
 
         var indexAtEnd = await IndexFingerprint.ReadAsync(release.KnowledgeIndex, index, CancellationToken.None);
-        context = context with { Inputs = ReportInputs.From(release, settings.Ai, settings.Datasets, indexAtStart.Ended(indexAtEnd)) };
+        context = context with { Inputs = ReportInputs.From(release, settings.Ai, settings.Datasets, indexAtStart.Ended(indexAtEnd), settings.Pricing, settings.Thresholds) };
 
         var byId = cases.Cases.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var judged = new List<IReadOnlyDictionary<string, JudgeScore>>();
