@@ -82,6 +82,47 @@ public sealed class InvestigationRegistrationTests
     }
 
     [Fact]
+    public void Small_and_chat_clients_call_their_own_deployments()
+    {
+        using var provider = Services().BuildServiceProvider();
+        var release = provider.GetRequiredService<AiRelease>();
+
+        var routing = provider.GetRequiredService<ModelRouting>();
+
+        Assert.Equal(release.RoutingMode, routing.Mode);
+        Assert.Equal(release.ActiveChatDeployment, routing.For(ModelTier.Chat).GetService<ChatClientMetadata>()?.DefaultModelId);
+        Assert.Equal(release.SmallDeployment, routing.For(ModelTier.Small).GetService<ChatClientMetadata>()?.DefaultModelId);
+    }
+
+    [Fact]
+    public void Off_starts_on_chat_and_cascade_on_the_small_model()
+    {
+        var chat = new ScriptedChatClient();
+        var small = new ScriptedChatClient();
+
+        Assert.Equal(ModelTier.Chat, new ModelRouting(RoutingMode.Off, chat, small).FirstTier);
+        Assert.Equal(ModelTier.Small, new ModelRouting(RoutingMode.Cascade, chat, small).FirstTier);
+    }
+
+    [Fact]
+    public void A_release_without_a_small_model_has_no_small_client()
+    {
+        var services = Services();
+        var release = AiReleaseLoader.Load(new EmbeddedAiReleaseSource());
+        services.AddSingleton(release with { SmallDeployment = null });
+
+        using var provider = services.BuildServiceProvider();
+        var routing = provider.GetRequiredService<ModelRouting>();
+
+        Assert.Null(routing.Small);
+        Assert.Equal(ModelTier.Chat, routing.FirstTier);
+    }
+
+    [Fact]
+    public void Cascade_without_a_small_client_is_refused() =>
+        Assert.Throws<ArgumentException>(() => new ModelRouting(RoutingMode.Cascade, new ScriptedChatClient(), null));
+
+    [Fact]
     public void The_investigation_is_gated_and_scoped()
     {
         var services = Services();

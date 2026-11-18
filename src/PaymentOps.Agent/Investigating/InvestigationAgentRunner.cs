@@ -22,7 +22,7 @@ namespace PaymentOps.Agent.Investigating;
 /// it checks out against this turn's evidence. Earlier turns come in as plain text and register no evidence.
 /// </summary>
 internal sealed class InvestigationAgentRunner(
-    IChatClient model,
+    ModelRouting models,
     IEnumerable<IInvestigationTool> tools,
     FixedPrompt fixedPrompt,
     IInvestigationClock clock,
@@ -97,7 +97,7 @@ internal sealed class InvestigationAgentRunner(
         List<AITool> readTools = [.. tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).Select(guard.Wrap)];
 
         // No default tools: tools passed per run are added to an agent's defaults, and the correction run must offer only submit_assessment.
-        var agent = new ChatClientAgent(InvestigationPipeline.FunctionInvoking(model, _limits), new ChatClientAgentOptions
+        var agent = new ChatClientAgent(InvestigationPipeline.FunctionInvoking(models.Chat, _limits), new ChatClientAgentOptions
         {
             Name = "ops-investigation",
             UseProvidedChatClientAsIs = true,

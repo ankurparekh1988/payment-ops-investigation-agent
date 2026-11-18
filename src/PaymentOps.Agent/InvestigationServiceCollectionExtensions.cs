@@ -57,10 +57,20 @@ public static class InvestigationServiceCollectionExtensions
         services.AddSingleton(sp => KnowledgeSectionReader.Create(endpoints.SearchEndpoint, sp.GetRequiredService<AiRelease>().KnowledgeIndex, sp.GetRequiredService<TokenCredential>()));
         services.AddSingleton(sp => TraceContext.From(sp.GetRequiredService<AiRelease>()));
         services.AddSingleton<IKnowledgeLookup, ReleaseKnowledgeLookup>();
+        IChatClient Investigation(IServiceProvider sp, string deployment)
+        {
+            var model = ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), deployment);
+            return Traced(ContentFilter.Checked(observeModel is null ? model : observeModel(model)));
+        }
+
+        services.AddSingleton(sp => Investigation(sp, sp.GetRequiredService<AiRelease>().ActiveChatDeployment));
         services.AddSingleton(sp =>
         {
-            var model = ModelClient.Create(endpoints.FoundryEndpoint, endpoints.FoundryTokenScope, sp.GetRequiredService<TokenCredential>(), sp.GetRequiredService<AiRelease>().ActiveChatDeployment);
-            return Traced(ContentFilter.Checked(observeModel is null ? model : observeModel(model)));
+            var release = sp.GetRequiredService<AiRelease>();
+            return new ModelRouting(
+                release.RoutingMode,
+                sp.GetRequiredService<IChatClient>(),
+                release.SmallDeployment is { } small ? Investigation(sp, small) : null);
         });
         services.AddInvestigationTools();
 
