@@ -8,8 +8,8 @@ using PaymentOps.Agent.Investigating;
 using PaymentOps.Agent.Model;
 using PaymentOps.Agent.Telemetry;
 using PaymentOps.Agent.Tests.Telemetry;
-using PaymentOps.Tools;
 using PaymentOps.Tests.Shared;
+using PaymentOps.Tools;
 
 namespace PaymentOps.Agent.Tests;
 

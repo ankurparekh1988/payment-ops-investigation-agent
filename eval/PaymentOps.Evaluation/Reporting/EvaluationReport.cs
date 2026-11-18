@@ -214,7 +214,8 @@ internal sealed record EvaluationReport(
             Percentiles.Of(results.Where(r => r.TtfpMs is not null).Select(r => r.TtfpMs!.Value)),
             CostOf(context, results, judgeScores, prices),
             GateFor(metrics, summary, thresholds, thresholdsFile, Applicable(n)),
-            []) { Source = context.Source, Inputs = context.Inputs };
+            [])
+        { Source = context.Source, Inputs = context.Inputs };
     }
 
     /// <summary>The safety cases over N runs, gated by <see cref="SafetyGate"/>, never by the investigation thresholds.</summary>
@@ -263,7 +264,8 @@ internal sealed record EvaluationReport(
             Percentiles.Of(results.Where(r => r.TtfpMs is not null).Select(r => r.TtfpMs!.Value)),
             CostOf(context, results, [], prices),
             new GateReport(!verdict.Passed ? GateReport.Failed : verdict.ReportOnly ? GateReport.ReportOnly : GateReport.Passed, verdict.Failures, thresholdsFile, shown),
-            []) { Source = context.Source, Inputs = context.Inputs };
+            [])
+        { Source = context.Source, Inputs = context.Inputs };
     }
 
     public static EvaluationReport ForRetrieval(ReportContext context, RetrievalResult result, Thresholds? thresholds, string? thresholdsFile)
@@ -292,7 +294,8 @@ internal sealed record EvaluationReport(
             Percentiles.Of([]),
             new CostReport(null, null, null, null, 0, TokenUse.Zero, TokenUse.Zero, null),
             GateFor([result.Metrics], summary, thresholds, thresholdsFile, Applicable(n)),
-            result.Cases) { Source = context.Source, Inputs = context.Inputs };
+            result.Cases)
+        { Source = context.Source, Inputs = context.Inputs };
     }
 
     public static EvaluationReport Load(string path)
