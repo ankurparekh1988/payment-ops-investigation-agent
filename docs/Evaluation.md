@@ -143,7 +143,9 @@ The pinned `judge` deployment scores each creditable result on an evidence-score
 
 ### Cost
 
-`eval/pricing.json` holds dated, sourced prices per model, version and deployment type, read from the Azure Retail Prices API; a run never fetches them. Reports show the estimated model cost per validated investigation (the system's own chat cost over validated results) and the judge's cost separately. A model with no price shows "not priced". Cost gates nothing.
+`eval/pricing.json` holds dated, sourced prices per model, version and deployment type, and per 1,000 Content Safety text records for Prompt Shields and harm analysis, read from the Azure Retail Prices API; a run never fetches them. Reports show the estimated chat cost per validated investigation and the judge's cost separately, and an all-in estimate: every model call of every attempt, the classifier calls and the Content Safety records, from the app's own usage snapshot, each at its own price, input and cached input apart. The all-in figure is given only when every case's usage is complete and every part is priced in one currency; otherwise the report names the first reason (`usage_incomplete`, `usage_missing`, `unpriced:<part>`, `currency_mismatch`, `no_validated_results`). A model with no price shows "not priced". Cost gates nothing in the release gate.
+
+Every report records what it ran (schema 3): the commit and its Git tree, whether tracked files were dirty, the hashes of the datasets, prompts and release manifest, the chat, small and screen deployments, the routing mode, and the evaluation index with a fingerprint of every field of every section, read back at the start and at the end of the run. An index that couldn't be read, read inconsistently or changed during the run is recorded as such.
 
 ### Agent against a fixed workflow: the kill test
 
@@ -156,6 +158,20 @@ Both systems run the same cases three times. The rule, fixed before either ran:
 - **Keep the agent, mixed** otherwise, with the result recorded.
 
 `kill-test` compares only three-run reports of the same cases, commit, chat deployment and screen deployment. The result is recorded whichever way it falls. The gate's thresholds come only from the agent's baseline.
+
+### Model routing
+
+[ADR 0023](adr/0023-route-to-a-small-model-first-by-a-pre-registered-rule.md) fixes, before any measurement, when a cascade from a small model to chat may be turned on. The control is a release gate run with routing off. The measurement runs the same source in a clean checkout, three investigation runs and three safety runs with `--routing cascade` against the deployed small model, with no judge, and `routing-decision` applies the rule in order:
+
+1. **Identity.** Control, cascade and cascade safety reports share the Git tree (commits may differ: a pull request's evaluation runs on its merge commit and the measurement on the squash merge), are clean, and match on dataset and prompt hashes, release configuration, model identities, index name and fingerprint; each index stayed the same through its run. Control is `off`, the other two `cascade`. Otherwise **invalid**.
+2. **Safety.** The safety report holds every case in every run, with nothing spoiled by the environment; otherwise **invalid**. A failed safety hard gate **rejects**.
+3. **Hard gates** in every cascade run.
+4. **Each cascade run** passes every threshold on its own, stricter than the release gate's median of three, which is unchanged.
+5. **Quality margin.** Each gating metric's cascade median is within `max(1.6 × s, 1/N)` of the control's, in the metric's direction.
+6. **Cost.** The all-in estimated cost per validated investigation is at least 25% lower; unpriced or incomplete on either side is **inconclusive**.
+7. **Latency.** p95 at most 25% higher.
+
+The command exits 0 to adopt, 1 to reject and 2 when the evidence is invalid or inconclusive, which never adopts. Tool recall and argument accuracy count the calls of the attempt whose result the case is, so a discarded attempt's calls earn the answer nothing; the safety checks count every attempt's calls. The result is recorded below whichever way it falls, and nothing is tuned in response to it. The measurement has to run while the evaluation index still holds the measured source's corpus; the fingerprint check makes a republished index an invalid comparison rather than a wrong one.
 
 ### Safety evaluation
 
@@ -221,7 +237,7 @@ dotnet run --project eval/PaymentOps.Evaluation -c Release -- safety-eval \
 
 Every run calls the model and Content Safety, and costs money; run locally only what CI can't answer.
 
-`--content-safety` is required: without Prompt Shields the app withholds every untrusted value, and a run would measure that rather than the system. `--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the frozen thresholds, `--no-judge` skips the judge, and `--index evaluation` reads the release's evaluation index (`knowledge-eval-v1`) instead of the live one; every report names the index it read. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
+`--content-safety` is required: without Prompt Shields the app withholds every untrusted value, and a run would measure that rather than the system. `--routing off|cascade` runs the investigation or safety evaluation under that routing mode for this run only; the app has no such switch. `routing-decision --control control.json --cascade cascade.json --cascade-safety cascade-safety.json --thresholds eval/thresholds.json --out routing.json --summary routing.md` applies ADR 0023's rule. `--system fixed-workflow` runs the challenger, `--thresholds eval/thresholds.json` applies the frozen thresholds, `--no-judge` skips the judge, and `--index evaluation` reads the release's evaluation index (`knowledge-eval-v1`) instead of the live one; every report names the index it read. `thresholds --investigations agent.json --retrieval retrieval.json --out eval/thresholds.json` derives the thresholds, and `kill-test --agent agent.json --challenger challenger.json --out kill-test.json --summary kill-test.md` applies the decision rule. Every command, `retrieval-compare` included, exits 0 when it passed or only reported, 1 when the evaluation failed, 2 for a wrong command line or a malformed dataset, thresholds or pricing file, and 3 when the evaluation environment was unavailable after the one repeat.
 
 ### Running in CI
 
