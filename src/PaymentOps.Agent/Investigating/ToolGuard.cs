@@ -31,7 +31,8 @@ internal sealed class ToolGuard(
     Guid investigationId = default,
     MerchantSources? merchants = null,
     string? searchIndex = null,
-    InvestigationBudget? budget = null)
+    InvestigationBudget? budget = null,
+    ReadCache? reads = null)
 {
     // A guard built without a screen can check nothing, so it withholds every untrusted value: fail closed.
     private readonly IUntrustedTextScreen _screen = screen ?? new UnavailableScreen();
@@ -83,7 +84,7 @@ internal sealed class ToolGuard(
         var refused = request is null ? null : Unnamed(tool, request);
         var result = request is null
             ? new ToolResult.Failed(ToolErrorCode.InvalidArgument, "The arguments don't match this tool's parameters.")
-            : refused ?? await SearchOrRunAsync(tool, request, cancellationToken);
+            : refused ?? await ReadAsync(tool, request, cancellationToken);
         var outcome = result is ToolResult.Ok ? "ok" : refused is not null ? "refused" : "error";
         span?.SetTag("paymentops.tool.outcome", outcome);
         TurnUsage.RecordTool(tool.Name, outcome);
@@ -168,6 +169,26 @@ internal sealed class ToolGuard(
     /// <summary>One verdict for several screened values: theirs when they agree, <c>mixed</c> when they don't.</summary>
     internal static string VerdictSummary(IReadOnlyCollection<ScreenVerdict> verdicts) =>
         verdicts.Distinct().Count() == 1 ? ToolJson.Word(verdicts.First()) : "mixed";
+
+    // Only the source call is skipped for a read this investigation already made; what it returned is recorded and
+    // screened below exactly as a fresh read is.
+    private async Task<ToolResult> ReadAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)
+    {
+        var key = $"{tool.Name}({Canonical(tool, request)})";
+        if (reads is not null && reads.TryGet(key, out var cached))
+        {
+            TurnUsage.RecordCacheHit(ReadCache.Name);
+            return cached;
+        }
+
+        var result = await SearchOrRunAsync(tool, request, cancellationToken);
+        if (result is ToolResult.Ok ok)
+        {
+            reads?.Remember(key, ok);
+        }
+
+        return result;
+    }
 
     // A knowledge search gets its own span, so retrieval is visible apart from screening what it returned.
     private async Task<ToolResult> SearchOrRunAsync(IInvestigationTool tool, object request, CancellationToken cancellationToken)

@@ -97,10 +97,11 @@ internal sealed class InvestigationAgentRunner(
 
         // One budget for the whole investigation: every attempt shares its deadline, tool calls, model calls and tokens.
         using var budget = new InvestigationBudget(_limits, time);
+        var reads = new ReadCache();
         var named = new MerchantSources([question, .. history.Where(m => m.Role == ChatRole.User).Select(m => m.Text)]);
         List<ChatMessage> messages = [.. history, new ChatMessage(ChatRole.User, question)];
 
-        var first = Prepare(models.FirstTier, progress, investigationId, named, budget);
+        var first = Prepare(models.FirstTier, progress, investigationId, named, budget, reads);
         var result = await first.RunAsync(messages, budget, progress, timer, cancellationToken);
         TurnUsage.RecordAttempt(new AttemptRecord(first.Tier, first.Turn.Failure));
         if (first.Tier != ModelTier.Small || !Escalation.IsEligible(first.Turn.Failure))
@@ -110,7 +111,7 @@ internal sealed class InvestigationAgentRunner(
         }
 
         // A fresh attempt: chat never sees the small model's submission, tool calls or evidence ids.
-        var second = Prepare(ModelTier.Chat, progress, investigationId, named, budget);
+        var second = Prepare(ModelTier.Chat, progress, investigationId, named, budget, reads);
         var refused = budget.RefuseEscalation(RequestSizeEstimate.FirstCall(messages, second.FirstRequestOptions));
         var decision = refused is null ? "escalated" : $"refused:{refused}";
         TurnUsage.RecordEscalation(decision);
@@ -125,11 +126,11 @@ internal sealed class InvestigationAgentRunner(
         return (result, second.Turn.Gaps.Count);
     }
 
-    private Attempt Prepare(ModelTier tier, IProgress<InvestigationProgress>? progress, Guid investigationId, MerchantSources named, InvestigationBudget budget)
+    private Attempt Prepare(ModelTier tier, IProgress<InvestigationProgress>? progress, Guid investigationId, MerchantSources named, InvestigationBudget budget, ReadCache reads)
     {
         var turn = new TurnState();
         var submit = new SubmitAssessmentFunction(turn, clock.Today, progress);
-        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId, named, trace?.KnowledgeIndex, budget);
+        var guard = new ToolGuard(turn, _limits, time, user, progress, screen, logger, investigationId, named, trace?.KnowledgeIndex, budget, reads);
         List<AITool> readTools = [.. tools.Where(tool => ToolAuthorization.Allows(user, tool.Name)).Select(guard.Wrap)];
         var instructions = fixedPrompt.Instructions();
 
