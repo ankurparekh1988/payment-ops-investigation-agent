@@ -20,7 +20,7 @@ The agent performs the cross-referencing, cites every piece of evidence, states 
 |---|---|---|
 | Ops Analyst | `Ops.Reader` | Ask questions, run investigations, view citations |
 | Ops Engineer | `Ops.Engineer` | Everything above, plus approve state-changing actions |
-| Platform Admin | `Ops.Admin` | Everything above, plus pause and resume investigations for everyone, re-index knowledge and switch the demo dataset |
+| Platform Admin | `Ops.Admin` | Everything above, plus pause and resume investigations for everyone |
 | Risk & Compliance *(security group)* | — | Additionally retrieve **Restricted** knowledge documents |
 
 ## Scenarios
@@ -46,16 +46,27 @@ Every tool must be required by at least one scenario.
 6. **Show the work.** The UI shows a live timeline of the agent's tool calls, written by the server, and renders the final assessment only after server-side validation.
 7. **No financial or risk actions.** Releasing or holding payouts, changing merchant status and retrying settlements have no tool at all.
 
-## Targets
+## Targets and outcomes
 
-| Area | Requirement |
-|---|---|
-| Latency | p95 time to first progress ≤ 3 s (from submitting a question to the first tool call or submission the agent makes); p95 full investigation ≤ 20 s |
-| Reliability | Tool error rate < 2% with fault injection off; at most 10 tool calls and 60 s per turn |
-| Security | 0 authorization leaks on the authorization evaluation set; 0 injected actions executed; key-based authentication disabled on every Azure AI and data service |
-| Quality | Groundedness ≥ 4.0/5; retrieval recall@5 ≥ 0.85; citation precision ≥ 0.95; tool selection accuracy ≥ 0.90 |
-| Cost | Per-user rate limiting; per-turn cost estimate; budget alerts |
-| Privacy | Raw prompts and completions are not logged by default |
+The targets below were set when the product was designed, before anything was measured. They aren't the release gate: the gate's thresholds come from the measured run-to-run spread of a baseline ([Evaluation](Evaluation.md#the-threshold-rule)).
+
+Measured outcomes come from the release evaluation of 2026-11-18 ([summary](evidence/release-evaluation-2026-11-18.md)), 37 labelled cases × 3 runs, 26 held-out retrieval questions and 87 safety cases in one run, unless a row says otherwise. They're results on those evaluated cases, not guarantees. Where the evaluation measures something close to a target but not the same thing, the row says so.
+
+| Area | Design target | Outcome | Kind |
+|---|---|---|---|
+| Latency | p95 time to first progress ≤ 3 s (from submitting a question to the first tool call or submission the agent makes) | 2.4 s | Measured, reported, not gating |
+| Latency | p95 full investigation ≤ 20 s | 13.1 s | Measured, reported, not gating |
+| Reliability | Tool error rate < 2% with fault injection off | Not measured as a rate. A failed or cut-short source is recorded as a gap in the assessment | — |
+| Reliability | At most 10 tool calls and 60 s per turn | Enforced, with limits on model calls and tokens ([Architecture](Architecture.md#limits)) | Implemented control |
+| Security | 0 authorization leaks on the authorization evaluation set | 0 across every run of the investigation and safety cases | Measured, gating |
+| Security | 0 injected actions executed | 0 unauthorized state changes and 0 planted instructions followed | Measured, gating |
+| Security | Key-based authentication disabled on every Azure AI and data service | Disabled; every call uses an Entra identity ([Security](Security.md)) | Implemented control |
+| Quality | Groundedness ≥ 4.0/5 | 4 from the judge on 2026-10-25 ([record](Evaluation.md#proving-the-gate-2026-10-25)); the judge doesn't gate and wasn't run on 2026-11-18 | Measured once, not gating |
+| Quality | Retrieval recall@5 ≥ 0.85 | 0.769 on held-out questions, below the design target; the gate's threshold is 0.76 | Measured, gating at 0.76 |
+| Quality | Citation precision ≥ 0.95 | Not measured as defined. The server rejects any citation this investigation didn't retrieve; expected-section precision, a stricter comparison with labelled sections, is 0.773 | Implemented control; related metric gating |
+| Quality | Tool selection accuracy ≥ 0.90 | Not measured as defined. Required-tool recall is 0.791 and tool-argument accuracy 0.630 | Related metrics, gating |
+| Cost | Per-user rate limiting; per-turn cost estimate; budget alerts | Daily limits per person and in total, an estimated cost per investigation, budget and anomaly alerts ([ADR 0021](adr/0021-bounded-usage-and-observable-cost.md)) | Implemented control |
+| Privacy | Raw prompts and completions are not logged by default | Logs and decision records hold ids, counts and timings, never the question, tool output or model text | Implemented control |
 
 ## How success is measured
 
