@@ -2,6 +2,10 @@
 
 Published derivations of measurements that the rest of the documentation cites. Each is generated from machine-written reports and checked against them. None is a raw report: the raw reports hold prices, per-case transcripts and service endpoints, and are kept privately. Each file lists the SHA-256 of the reports it came from.
 
+## Release evaluation, 2026-11-18
+
+[`release-evaluation-2026-11-18.md`](release-evaluation-2026-11-18.md) and [`.json`](release-evaluation-2026-11-18.json): the passing release gate run for the change that added model routing, switched off. It is the latest full evaluation of the shipped configuration and the routing measurement's control. It covers the investigation gate (37 cases × 3 runs), retrieval (26 held-out questions) and one safety run (87 cases), with latency and time to first progress. The same checks and omissions apply as below; the retrieval report records only its commit, so it is matched by commit rather than tree.
+
 ## Routing decision, 2026-11-18
 
 [`routing-decision-2026-11-18.md`](routing-decision-2026-11-18.md) (readable) and [`routing-decision-2026-11-18.json`](routing-decision-2026-11-18.json) (the same content as data): the measurement of the small-model-first cascade under [ADR 0023](../adr/0023-route-to-a-small-model-first-by-a-pre-registered-rule.md), recorded in [Evaluation](../Evaluation.md#measurement-2026-11-18-rejected). The verdict was **reject**, and routing stays off.
