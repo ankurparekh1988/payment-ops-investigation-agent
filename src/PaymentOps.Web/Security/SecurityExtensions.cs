@@ -40,6 +40,7 @@ internal static class SecurityExtensions
         services.AddScoped<CurrentUserAccessor>();
         services.AddScoped<IUserContext, ClaimsUserContext>();
         services.AddScoped<IRecentAuthentication, RecentAuthenticationCheck>();
+        services.AddScoped<ActivityReporter>();
         services.AddScoped<CircuitHandler, UserCircuitHandler>();
 
         return services;

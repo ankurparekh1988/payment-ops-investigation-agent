@@ -78,7 +78,8 @@
 
             @if (assessed.Proposal is { } proposal)
             {
-                <TicketCard Proposal="proposal" Deciding="Deciding" Approve="Approve" Reject="Reject" />
+                <TicketCard Proposal="proposal" Deciding="Deciding" Approve="Approve" Reject="Reject"
+                            NeedsConfirmation="NeedsConfirmation" Confirmed="Confirmed" />
             }
             else if (assessed.ProposalWithheld)
             {
@@ -100,6 +101,12 @@
 
     [Parameter]
     public EventCallback<(RejectionReason Reason, string? Note)> Reject { get; set; }
+
+    [Parameter]
+    public bool NeedsConfirmation { get; set; }
+
+    [Parameter]
+    public EventCallback Confirmed { get; set; }
 
     private static string OutcomeWord(AssessmentOutcome outcome) => outcome switch
     {

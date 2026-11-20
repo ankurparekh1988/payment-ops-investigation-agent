@@ -66,7 +66,8 @@
                     }
                     else if (current is { } result)
                     {
-                        <AssessmentView Result="result" Deciding="Session.Deciding" Approve="Session.ApproveAsync" Reject="RejectAsync" />
+                        <AssessmentView Result="result" Deciding="Session.Deciding" Approve="Session.ApproveAsync" Reject="RejectAsync"
+                                        NeedsConfirmation="Session.NeedsConfirmation" Confirmed="Session.IdentityConfirmed" />
                         @if (Session.DecisionFailed)
                         {
                             <p class="notice notice-error" role="alert">The ticket couldn't be created right now. The proposal is still pending; please try again.</p>

@@ -7,6 +7,10 @@
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
+@if (CurrentUser.IsAuthenticated && AssignedRenderMode is not null)
+{
+    <IdleWatch />
+}
 
 <MudLayout>
     @* Not fixed, so on a phone the bar can wrap to a second row instead of hiding Sign out. *@

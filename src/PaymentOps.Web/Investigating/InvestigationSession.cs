@@ -247,6 +247,17 @@ internal sealed partial class InvestigationSession(
     public Task RejectAsync(RejectionReason reason, string? note) =>
         DecideAsync(id => approvals.RejectAsync(id, reason, note, CancellationToken.None), reason, approving: false);
 
+    /// <summary>The person confirmed it's them: Approve is offered again, and isn't clicked for them.</summary>
+    public void IdentityConfirmed()
+    {
+        lock (_lock)
+        {
+            NeedsConfirmation = false;
+        }
+
+        Changed?.Invoke();
+    }
+
     /// <summary>Whether the card may offer Approve and Reject: the stored proposal is pending and unexpired now.</summary>
     public bool IsActionable(TicketProposal proposal)
     {

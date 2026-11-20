@@ -401,6 +401,42 @@ public sealed partial class SignInFlowTests
     }
 
     [Fact]
+    public async Task Confirm_page_posts_its_flow_to_reauthenticate()
+    {
+        using var app = new OidcCallbackFactory();
+        var (jar, _) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+
+        using var page = await jar.SendAsync(app.Client(), HttpMethod.Get, $"/account/confirm?flow={Flow}");
+        var html = await page.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("action=\"/account/reauthenticate\"", html, StringComparison.Ordinal);
+        Assert.Contains($"name=\"flow\" value=\"{Flow}\"", html, StringComparison.Ordinal);
+        var token = WebUtility.HtmlDecode(AntiforgeryField().Match(html).Groups["token"].Value);
+        using var stepUp = await jar.SendAsync(
+            app.Client(), HttpMethod.Post, "/account/reauthenticate", Form(("__RequestVerificationToken", token), ("flow", Flow)));
+        Assert.Equal(Flow, StateOf(app, Authorize(stepUp)).Items[SignInFlow.FlowKey]);
+
+        using var bad = await jar.SendAsync(app.Client(), HttpMethod.Get, "/account/confirm?flow=0123");
+        var badHtml = await bad.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("name=\"flow\"", badHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("/account/reauthenticate", badHtml, StringComparison.Ordinal);
+    }
+
+    // The window reports an ended session to the page that opened it, rather than starting a fresh sign-in.
+    [Fact]
+    public async Task Confirm_page_without_a_live_session_reports_ended()
+    {
+        using var app = new OidcCallbackFactory();
+        using var client = app.Client();
+
+        using var response = await client.GetAsync(Relative($"/account/confirm?flow={Flow}"));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.EndsWith($"/account/confirm-result?flow={Flow}&result=ended", response.Headers.Location?.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Popup_message_is_not_authority()
     {
         using var app = new OidcCallbackFactory();

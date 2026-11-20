@@ -1,0 +1,138 @@
+@using System.Security.Cryptography
+@using PaymentOps.Web.Security
+@implements IAsyncDisposable
+@inject IRecentAuthentication Recent
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@* The browser opens the sign-in window from its own click handler in session.js: a window opened after a server
+   round trip would be blocked. What comes back from it is display only; freshness is read from the server. *@
+@if (_live)
+{
+    <div class="confirm-identity" role="group" aria-label="@($"Confirm it's you to {Action}")">
+        <p class="confirm-text">For this you need to have signed in within the last 15 minutes.</p>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" data-po-confirm="@_flow">Confirm it's you</MudButton>
+        @if (_message is { } message)
+        {
+            <p class="notice notice-info confirm-message" role="status">@message</p>
+        }
+        @if (_blocked)
+        {
+            <a href="/account/confirm?flow=@_flow" target="paymentops-confirm-@_flow">Open the sign-in window</a>
+        }
+    </div>
+}
+
+@code {
+    private const string Blocked = "blocked";
+    private const string NotConfirmedText = "Not confirmed. Try again.";
+    private const string BlockedText = "Your browser blocked the sign-in window. Allow pop-ups for this site and try again.";
+
+    private string _flow = NewFlow();
+    private string? _registered;
+    private string? _message;
+    private bool _blocked;
+    private bool _live = true;
+    private bool _disposed;
+    private DotNetObjectReference<ConfirmIdentity>? _self;
+
+    /// <summary>What the confirmation is for, such as "approve the ticket".</summary>
+    [Parameter, EditorRequired]
+    public string Action { get; set; } = string.Empty;
+
+    /// <summary>Raised once the server holds a recent sign-in. The action itself is left to the person.</summary>
+    [Parameter]
+    public EventCallback Confirmed { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // A session that has ended can't be confirmed back to life.
+        if (!Recent.Status.IsLive)
+        {
+            SignOut("inactive");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_live || _disposed || _registered == _flow)
+        {
+            return;
+        }
+
+        _self ??= DotNetObjectReference.Create(this);
+        if (_registered is { } previous)
+        {
+            await JS.InvokeVoidAsync("poSession.cancel", previous);
+        }
+
+        _registered = _flow;
+        await JS.InvokeVoidAsync("poSession.register", _flow, _self);
+    }
+
+    /// <summary>How the sign-in window ended, as the browser reports it. A result for another flow is ignored.</summary>
+    [JSInvokable]
+    public async Task OnConfirmResult(string flow, string result)
+    {
+        if (_disposed || !_live || flow != _flow)
+        {
+            return;
+        }
+
+        switch (result)
+        {
+            case Blocked:
+                (_blocked, _message) = (true, BlockedText);
+                break;
+            case SignInFlow.StepUpResults.DifferentAccount or SignInFlow.StepUpResults.AccessChanged:
+                SignOut(result);
+                return;
+            case SignInFlow.StepUpResults.Ended:
+                SignOut("inactive");
+                return;
+            default:
+                if (!Recent.Status.IsLive)
+                {
+                    SignOut("inactive");
+                    return;
+                }
+
+                var confirmed = result == SignInFlow.StepUpResults.Confirmed && Recent.IsFresh;
+                (_flow, _blocked, _message) = (NewFlow(), false, confirmed ? null : NotConfirmedText);
+                if (confirmed)
+                {
+                    await Confirmed.InvokeAsync();
+                }
+
+                break;
+        }
+
+        StateHasChanged();
+    }
+
+    private void SignOut(string reason)
+    {
+        _live = false;
+        Navigation.NavigateTo($"/signed-out?reason={reason}", forceLoad: true);
+    }
+
+    private static string NewFlow() => Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_registered is { } flow)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("poSession.cancel", flow);
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit has gone, and the page with it.
+            }
+        }
+
+        _self?.Dispose();
+    }
+}
