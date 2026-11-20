@@ -18,7 +18,9 @@ public sealed class InvestigationSessionTests
 
     private readonly RecordingLogger<InvestigationSession> _log = new();
 
-    private InvestigationSession Session() => new(_investigation, _approvals, _time, _log);
+    private readonly SwitchableUserContext _user = new();
+
+    private InvestigationSession Session() => new(_investigation, _approvals, _user, _time, _log);
 
     // A failure is shown like a refusal before the run: the earlier result stays under its own question. Whether the
     // failed run got far enough to supersede the earlier proposal isn't known, so it's no longer offered for a decision.
@@ -36,6 +38,58 @@ public sealed class InvestigationSessionTests
         Assert.Equal(previousResult.Proposal!.ProposalId, shown.Proposal.ProposalId);
         Assert.False(session.IsActionable(shown.Proposal));
         Assert.Equal(0, _approvals.Approvals);
+    }
+
+    [Fact]
+    public async Task Absolute_limit_during_a_run_publishes_nothing()
+    {
+        await using var session = Session();
+        _investigation.Hold = true;
+        var run = session.StartAsync("Why was M-1042 not paid?");
+
+        // The registry ends the session at the absolute limit while the run is still going.
+        _user.IsAuthenticated = false;
+        _investigation.LastProgress!.Report(new InvestigationProgress.ToolStarted("get_payout", "Payout P-1"));
+        _investigation.Complete(Results.WithPendingTicket());
+        await run;
+
+        Assert.Empty(session.Steps);
+        Assert.Empty(session.Questions);
+        Assert.Null(session.Current);
+        Assert.Equal(NotAssessedReason.NotAuthorized, session.Notice!.Reason);
+        Assert.False(session.Busy);
+    }
+
+    [Fact]
+    public async Task A_run_that_throws_after_the_session_ended_is_shown_as_not_authorized()
+    {
+        await using var session = Session();
+        _investigation.Hold = true;
+        var run = session.StartAsync("Why was M-1042 not paid?");
+
+        _user.IsAuthenticated = false;
+        _investigation.Fail(new InvalidOperationException("boom"));
+        await run;
+
+        Assert.Equal(NotAssessedReason.NotAuthorized, session.Notice!.Reason);
+        Assert.Empty(session.Questions);
+    }
+
+    [Fact]
+    public async Task A_live_session_publishes_as_before()
+    {
+        await using var session = Session();
+        _investigation.Hold = true;
+        var run = session.StartAsync("Why was M-1042 not paid?");
+
+        _investigation.LastProgress!.Report(new InvestigationProgress.ToolStarted("get_payout", "Payout P-1"));
+        _investigation.Complete(Results.WithPendingTicket());
+        await run;
+
+        Assert.Single(session.Steps);
+        Assert.Single(session.Questions);
+        Assert.Null(session.Notice);
+        Assert.True(session.IsActionable(Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!));
     }
 
     [Fact]
@@ -345,7 +399,7 @@ public sealed class InvestigationSessionTests
     public async Task A_failed_decision_leaves_the_card_pending_and_says_so()
     {
         var approvals = new CountingApprovalService(new ApprovalResult.Unavailable());
-        await using var session = new InvestigationSession(_investigation, approvals, _time, NullLogger<InvestigationSession>.Instance);
+        await using var session = new InvestigationSession(_investigation, approvals, _user, _time, NullLogger<InvestigationSession>.Instance);
         _investigation.Answer = _ => Results.WithPendingTicket();
         await session.StartAsync("Why was M-1042 not paid?");
 

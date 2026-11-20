@@ -1,4 +1,5 @@
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Domain.Security;
 
 namespace PaymentOps.Web.Investigating;
 
@@ -14,7 +15,7 @@ public sealed record SessionNotice(NotAssessedReason Reason, string Question);
 /// the approval service, and a card shows only what the server answered.
 /// </summary>
 public sealed partial class InvestigationSession(
-    IInvestigationService investigation, IApprovalService approvals, TimeProvider time, ILogger<InvestigationSession> logger) : IAsyncDisposable
+    IInvestigationService investigation, IApprovalService approvals, IUserContext user, TimeProvider time, ILogger<InvestigationSession> logger) : IAsyncDisposable
 {
     private readonly Lock _lock = new();
     private readonly List<InvestigationProgress> _steps = [];
@@ -125,7 +126,11 @@ public sealed partial class InvestigationSession(
             {
                 if (sequence == _sequence)
                 {
-                    Record(question, previousQuestion, result);
+                    if (!SessionEnded(question, previousQuestion))
+                    {
+                        Record(question, previousQuestion, result);
+                    }
+
                     Completed++;
                 }
             }
@@ -145,8 +150,12 @@ public sealed partial class InvestigationSession(
             {
                 if (sequence == _sequence)
                 {
-                    Refuse(new SessionNotice(cancelled ? NotAssessedReason.Cancelled : NotAssessedReason.ModelUnavailable, question), previousQuestion);
-                    EndPending(ProposalStatus.Unavailable);
+                    if (!SessionEnded(question, previousQuestion))
+                    {
+                        Refuse(new SessionNotice(cancelled ? NotAssessedReason.Cancelled : NotAssessedReason.ModelUnavailable, question), previousQuestion);
+                        EndPending(ProposalStatus.Unavailable);
+                    }
+
                     Completed++;
                 }
             }
@@ -170,6 +179,23 @@ public sealed partial class InvestigationSession(
             _conversation = investigation.Conversation;
             Changed?.Invoke();
         }
+    }
+
+    private bool SignedIn => user.IsAuthenticated;
+
+    // The circuit can outlive the server-owned session, so a run that finishes after it ended shows nothing of its own.
+    // Called under the lock.
+    private bool SessionEnded(string question, string? previousQuestion)
+    {
+        if (SignedIn)
+        {
+            return false;
+        }
+
+        _steps.Clear();
+        Refuse(new SessionNotice(NotAssessedReason.NotAuthorized, question), previousQuestion);
+        EndPending(ProposalStatus.Unavailable);
+        return true;
     }
 
     private void Record(string question, string? previousQuestion, AssessmentResult result)
@@ -351,7 +377,7 @@ public sealed partial class InvestigationSession(
         {
             lock (session._lock)
             {
-                if (sequence != session._sequence)
+                if (sequence != session._sequence || !session.SignedIn)
                 {
                     return;
                 }

@@ -128,6 +128,23 @@ public sealed partial class SessionEnforcementTests(PaymentOpsWebApplicationFact
         Assert.Equal(T + TimeSpan.FromSeconds(10), Registry(app).Find(sid)!.LastActivity);
     }
 
+    // The premise behind the circuit's check: activity lands at submit, and idle (15 min) outlasts the longest turn (60 s).
+    [Fact]
+    public async Task Submitting_renews_so_idle_cannot_fall_inside_a_turn()
+    {
+        using var app = AppWithClock();
+        using var client = SignedIn(app);
+        var (sid, oid) = PaymentOpsWebApplicationFactory.SessionOf(client);
+        _time.Advance(TimeSpan.FromMinutes(14));
+
+        using (await client.GetAsync(Relative("/investigate"))) { }
+        var submitted = _time.GetUtcNow();
+        _time.Advance(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(submitted, Registry(app).Find(sid)!.LastActivity);
+        Assert.True(Registry(app).Status(sid, oid).IsLive);
+    }
+
     [Fact]
     public async Task Stale_cookie_after_expiry_is_signed_out()
     {
