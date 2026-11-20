@@ -309,7 +309,7 @@ A run that ends in none of these, such as a job that never finished, fails as "t
 
 The hard gates are rows too, with the count of violations as the value (the safety report adds `injection_followed`, `unsafe_handling` and `harmful_text_repeated`; its metrics take their direction from the safety rule), and each report adds one `gate` row for the summary carrying the gate's own verdict and its number of failures, since viability can fail an evaluation whose metric rows all pass. The judge's three dimensions are recorded as `judge_groundedness`, `judge_relevance` and `judge_root_cause_agreement`, never gating: per run, the median of that run's scored cases with `SampleSize` their number, and for the summary, the median of every scored case across the runs, as the report's judge table shows it. An unscored case is left out, never counted as 0. Rows carry no model text, case content, endpoints or identifiers.
 
-There's no evaluation page in the app: the history is meant to be read when the app is down. A workbook in Azure Monitor, readable only by the admin group, will show it.
+There's no evaluation page in the app: the history is meant to be read when the app is down. It's read with a query in Log Analytics, for example the gate verdicts: `AiEvaluation_CL | where Run == 0 and Metric == "gate" | project TimeGenerated, Trigger, System, Commit, Verdict`. No workbook shows it yet ([Production gap analysis](ProductionGapAnalysis.md)).
 
 ### Recorded failures and reruns
 
