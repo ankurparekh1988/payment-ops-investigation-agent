@@ -33,7 +33,8 @@ internal static class SecurityExtensions
         services.AddAuthorization(AuthorizationPolicies.Configure);
         services.AddCascadingAuthenticationState();
 
-        services.Configure<AccessOptions>(access);
+        services.AddOptions<AccessOptions>().Bind(access).Validate(AccessOptions.HasValidTimes, AccessOptions.InvalidTimesMessage).ValidateOnStart();
+        services.AddSingleton<SessionRegistry>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<AuthenticationStateProvider, SignInSessionRevalidator>();
         services.AddScoped<CurrentUserAccessor>();
