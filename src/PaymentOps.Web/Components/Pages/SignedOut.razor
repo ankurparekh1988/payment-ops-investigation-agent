@@ -6,5 +6,23 @@
 
 @* Signing in again goes through company sign-in from any page that needs it. *@
 <StatusCard Title="You're signed out">
+    @if (ReasonText is { } text)
+    {
+        <p class="status-text">@text</p>
+    }
     <a href="/" class="status-action">Sign in</a>
 </StatusCard>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Reason { get; set; }
+
+    private string? ReasonText => Reason switch
+    {
+        "inactive" => "You were signed out after 15 minutes without activity.",
+        "sign-in-failed" => "Sign-in didn't complete. Try again.",
+        "access-changed" => "Your access has changed. Sign in again to continue.",
+        "different-account" => "A different account signed in, so this session ended. Sign in again.",
+        _ => null,
+    };
+}

@@ -44,6 +44,8 @@ internal sealed class SessionRegistry(TimeProvider time, IOptions<AccessOptions>
 
     public SessionRecord? Find(string sid) => _sessions.GetValueOrDefault(sid);
 
+    public int Count => _sessions.Count;
+
     public SessionStatus Status(string? sid, string? userId)
     {
         if (sid is null || userId is null || !_sessions.TryGetValue(sid, out var record) || record.UserId != userId)
@@ -87,6 +89,9 @@ internal sealed class SessionRegistry(TimeProvider time, IOptions<AccessOptions>
 
         return false;
     }
+
+    /// <summary>Whether a record would be live now, for a commit that may have waited since it was staged.</summary>
+    public bool IsLive(SessionRecord record) => IsLive(record, time.GetUtcNow());
 
     private bool IsLive(SessionRecord record, DateTimeOffset now) =>
         now < record.LastActivity + _idleTimeout && now < record.AbsoluteExpiry;

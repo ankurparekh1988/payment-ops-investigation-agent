@@ -1,0 +1,36 @@
+@page "/account/confirm-result"
+@attribute [ExcludeFromInteractiveRouting]
+@attribute [AllowAnonymous]
+@using PaymentOps.Web.Security
+
+<PageTitle>Confirm it's you · Contoso Payments</PageTitle>
+
+@* The popup's last page. What it reports to the opener is display only; the opener re-reads freshness from the server. *@
+<StatusCard Title="Confirm it's you">
+    <div id="confirm-result" data-flow="@ShownFlow" data-result="@ShownResult">
+        <p class="status-text">@Text</p>
+    </div>
+</StatusCard>
+<script src="@Assets["js/confirm-result.js"]"></script>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Flow { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Result { get; set; }
+
+    private string ShownFlow => SignInFlow.IsFlow(Flow) ? Flow! : string.Empty;
+
+    private string ShownResult => Result is not null && SignInFlow.StepUpResults.All.Contains(Result) ? Result : SignInFlow.StepUpResults.NotConfirmed;
+
+    private string Text => ShownResult switch
+    {
+        SignInFlow.StepUpResults.Confirmed => "Confirmed. Return to the other tab and choose the action again.",
+        SignInFlow.StepUpResults.Cancelled => "Sign-in was cancelled. Nothing changed; you can try again.",
+        SignInFlow.StepUpResults.DifferentAccount => "A different account signed in, so your session has ended. Sign in again.",
+        SignInFlow.StepUpResults.AccessChanged => "Your access has changed, so your session has ended. Sign in again.",
+        SignInFlow.StepUpResults.Ended => "Your session has ended. Sign in again.",
+        _ => "We couldn't confirm it was you. Nothing changed; you can try again.",
+    };
+}

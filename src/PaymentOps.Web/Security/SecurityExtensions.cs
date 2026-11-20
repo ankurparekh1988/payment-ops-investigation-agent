@@ -79,6 +79,9 @@ internal static class SecurityExtensions
             return Results.Redirect("/signed-out");
         }).AllowAnonymous();
 
+        // Anonymous so that an ended session gets a 401 the popup can report, not a sign-in redirect.
+        endpoints.MapPost("/account/reauthenticate", SignInFlow.ReauthenticateAsync).AllowAnonymous();
+
         return endpoints;
     }
 
@@ -99,18 +102,13 @@ internal static class SecurityExtensions
 
             // Roles and groups come from the token, so a sign-in lasts a fixed time and changes
             // made in Entra apply at the next one.
-            var tokenValidated = options.Events.OnTokenValidated;
-            options.Events.OnTokenValidated = async context =>
-            {
-                await tokenValidated(context);
-                var expiresAt = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow() + access.SessionLifetime;
-                context.Properties!.ExpiresUtc = expiresAt;
-                context.Properties.AllowRefresh = false;
-                context.Principal!.Identities.First().AddClaim(SignInSession.ExpiryClaim(expiresAt));
-            };
+            SignInFlow.Configure(options, access);
         });
 
         services.Configure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, options =>
-            options.AccessDeniedPath = "/access-denied");
+        {
+            options.AccessDeniedPath = "/access-denied";
+            SignInFlow.Configure(options);
+        });
     }
 }
