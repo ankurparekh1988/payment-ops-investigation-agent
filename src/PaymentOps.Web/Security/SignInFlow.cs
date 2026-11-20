@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Identity.Web;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
@@ -53,6 +54,8 @@ internal static partial class SignInFlow
     private const string GroupsClaim = "groups";
     private const string PreferredUsernameClaim = "preferred_username";
     private const string AccessDeniedError = "access_denied";
+    private const string PreviousSessionCookie = "paymentops.previous";
+    private const string PreviousSessionPurpose = "PaymentOps.Web.Security.PreviousSession";
     private const string SignInFailedUrl = "/signed-out?reason=sign-in-failed";
 
     public static bool IsFlow(string? flow) => flow is not null && FlowPattern().IsMatch(flow);
@@ -99,7 +102,7 @@ internal static partial class SignInFlow
             }
             else
             {
-                await ValidateSignInAsync(context, access);
+                ValidateSignIn(context, access);
             }
         };
 
@@ -150,7 +153,7 @@ internal static partial class SignInFlow
             if (context.HttpContext.Items[PendingCommitItem] is Dictionary<string, string?> pending
                 && pending.GetValueOrDefault(CommitKey) is { } commit)
             {
-                Commit(context.HttpContext.RequestServices.GetRequiredService<SessionRegistry>(), pending, commit);
+                Commit(context.HttpContext, pending, commit);
             }
         };
     }
@@ -194,7 +197,7 @@ internal static partial class SignInFlow
         return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
     }
 
-    private static async Task ValidateSignInAsync(TokenValidatedContext context, AccessOptions access)
+    private static void ValidateSignIn(TokenValidatedContext context, AccessOptions access)
     {
         var services = context.HttpContext.RequestServices;
         var principal = context.Principal!;
@@ -225,8 +228,7 @@ internal static partial class SignInFlow
             new SessionRecord(sid, oid, tid, expiresAt, now, authTime, AccessFingerprint(principal)));
 
         // Whoever the browser was signed in as before, that session ends when this one starts.
-        var previous = await context.HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        if (previous.Principal is { } previousUser && SessionClaims.SidOf(previousUser) is { } previousSid)
+        if (PreviousSid(context.HttpContext) is { } previousSid)
         {
             context.Properties.Items[ReplacesKey] = previousSid;
         }
@@ -274,8 +276,9 @@ internal static partial class SignInFlow
         properties.Items[CommitKey] = JsonSerializer.Serialize(new StepUpCommit(session.Sid, session.UserId, authTime!.Value));
     }
 
-    private static void Commit(SessionRegistry sessions, Dictionary<string, string?> pending, string commit)
+    private static void Commit(HttpContext context, Dictionary<string, string?> pending, string commit)
     {
+        var sessions = context.RequestServices.GetRequiredService<SessionRegistry>();
         if (pending.GetValueOrDefault(PurposeKey) == StepUpPurpose)
         {
             // A no-op unless the session is still live: sign-out or expiry since validation wins.
@@ -288,6 +291,7 @@ internal static partial class SignInFlow
         if (sessions.IsLive(record))
         {
             sessions.Add(record);
+            RememberPreviousSession(context, record);
         }
 
         if (pending.GetValueOrDefault(ReplacesKey) is { } replaced && replaced != record.Sid)
@@ -295,6 +299,47 @@ internal static partial class SignInFlow
             sessions.Remove(replaced);
         }
     }
+
+    /// <summary>Ends the browser's remembered session cookie; sign-out leaves no session for a later sign-in to replace.</summary>
+    public static void ForgetPreviousSession(HttpContext context) =>
+        context.Response.Cookies.Delete(PreviousSessionCookie, PreviousSessionCookieOptions(expires: null));
+
+    // Entra's callback is a cross-site form post, which never carries the Lax sign-in cookie; this one, like
+    // the correlation cookie, is SameSite=None so the next sign-in can end the session it names.
+    private static void RememberPreviousSession(HttpContext context, SessionRecord record) =>
+        context.Response.Cookies.Append(
+            PreviousSessionCookie, PreviousSessionProtector(context).Protect(record.Sid), PreviousSessionCookieOptions(record.AbsoluteExpiry));
+
+    private static string? PreviousSid(HttpContext context)
+    {
+        if (!context.Request.Cookies.TryGetValue(PreviousSessionCookie, out var value) || string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return PreviousSessionProtector(context).Unprotect(value);
+        }
+        catch (CryptographicException)
+        {
+            // Tampered or from an old key: there is no previous session to end.
+            return null;
+        }
+    }
+
+    private static IDataProtector PreviousSessionProtector(HttpContext context) =>
+        context.RequestServices.GetRequiredService<IDataProtectionProvider>().CreateProtector(PreviousSessionPurpose);
+
+    private static CookieOptions PreviousSessionCookieOptions(DateTimeOffset? expires) => new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.None,
+        Path = "/",
+        Expires = expires,
+        IsEssential = true,
+    };
 
     // The session's id and fixed end go into the cookie, which lasts exactly as long as the session may.
     private static void Stamp(TokenValidatedContext context, string sid, DateTimeOffset expiresAt)

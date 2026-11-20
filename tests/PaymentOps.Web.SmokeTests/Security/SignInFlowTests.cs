@@ -18,6 +18,7 @@ public sealed partial class SignInFlowTests
 {
     private const string Flow = "0123456789abcdef0123456789abcdef";
     private const string AuthCookie = ".AspNetCore.Cookies";
+    private const string PreviousCookie = "paymentops.previous";
     private const string UserA = "aaaaaaaa-0000-0000-0000-000000000001";
     private const string UserB = "bbbbbbbb-0000-0000-0000-000000000002";
     private const string OtherTenant = "99999999-9999-9999-9999-999999999999";
@@ -359,6 +360,44 @@ public sealed partial class SignInFlowTests
         Assert.Null(app.Registry.Find(first));
         Assert.NotNull(app.Registry.Find(second));
         Assert.Equal(1, app.Registry.Count);
+    }
+
+    [Fact]
+    public async Task Tampered_previous_cookie_is_ignored()
+    {
+        using var app = new OidcCallbackFactory();
+        var (jar, sidA) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+        jar.Set(PreviousCookie, "not-a-protected-value", crossSite: true);
+
+        var (_, sidB) = await SignInAsync(app, UserB, [OpsRoles.Reader], jar: jar);
+
+        Assert.NotNull(app.Registry.Find(sidA));
+        Assert.NotNull(app.Registry.Find(sidB));
+        Assert.Equal(2, app.Registry.Count);
+    }
+
+    [Fact]
+    public async Task Sign_out_clears_the_previous_session_cookie()
+    {
+        using var app = new OidcCallbackFactory();
+        var jar = new CookieJar();
+        using (var signIn = await app.CallbackAsync(SignInItems(), app.IdToken(UserA, roles: [OpsRoles.Admin], authTime: app.AuthTime(TimeSpan.Zero))))
+        {
+            var header = Assert.Single(signIn.Headers.GetValues("Set-Cookie"), h => h.StartsWith(PreviousCookie + "=", StringComparison.Ordinal));
+            Assert.Contains("samesite=none", header, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("secure", header, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("httponly", header, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("path=/", header, StringComparison.OrdinalIgnoreCase);
+            jar.Apply(signIn);
+        }
+
+        Assert.NotNull(jar.Get(PreviousCookie));
+        var token = await AntiforgeryTokenAsync(app, jar);
+
+        using var signOut = await jar.SendAsync(app.Client(), HttpMethod.Post, "/account/sign-out", Form(("__RequestVerificationToken", token)));
+
+        Assert.Contains(CookieJar.SetCookies(signOut), c => c.Name == PreviousCookie && c.Deleted);
+        Assert.Null(jar.Get(PreviousCookie));
     }
 
     [Fact]

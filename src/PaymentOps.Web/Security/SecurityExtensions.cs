@@ -69,6 +69,8 @@ internal static class SecurityExtensions
                 sessions.Remove(sid);
             }
 
+            SignInFlow.ForgetPreviousSession(context);
+
             if (tokenIsValid)
             {
                 return Results.SignOut(

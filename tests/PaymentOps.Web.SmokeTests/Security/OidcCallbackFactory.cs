@@ -192,7 +192,8 @@ public sealed class OidcCallbackFactory : WebApplicationFactory<Program>
     {
         var correlationId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
         var correlationCookie = OidcOptions().CorrelationCookie.Name + correlationId + "=N";
-        var header = cookies?.Header() is { Length: > 0 } existing ? existing + "; " + correlationCookie : correlationCookie;
+        // Entra's form post is cross-site: a browser sends only the SameSite=None cookies with it.
+        var header = cookies?.CrossSiteHeader() is { Length: > 0 } existing ? existing + "; " + correlationCookie : correlationCookie;
         return (correlationId, header);
     }
 
@@ -216,28 +217,34 @@ public sealed class OidcCallbackFactory : WebApplicationFactory<Program>
 /// <summary>A browser's cookies, kept by hand so a test can copy, replay or drop them.</summary>
 public sealed class CookieJar
 {
-    private readonly Dictionary<string, string> _cookies = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string Value, bool CrossSite)> _cookies = new(StringComparer.Ordinal);
 
     public CookieJar Copy()
     {
         var copy = new CookieJar();
-        foreach (var (name, value) in _cookies)
+        foreach (var (name, cookie) in _cookies)
         {
-            copy._cookies[name] = value;
+            copy._cookies[name] = cookie;
         }
 
         return copy;
     }
 
-    public string? Get(string name) => _cookies.GetValueOrDefault(name);
+    public string? Get(string name) => _cookies.TryGetValue(name, out var cookie) ? cookie.Value : null;
 
-    public string Header() => string.Join("; ", _cookies.Select(c => c.Key + "=" + c.Value));
+    /// <summary>Sets a cookie as if the server had, for a test that forges one.</summary>
+    public void Set(string name, string value, bool crossSite) => _cookies[name] = (value, crossSite);
+
+    public string Header() => string.Join("; ", _cookies.Select(c => c.Key + "=" + c.Value.Value));
+
+    /// <summary>The cookies a browser sends on a cross-site request: only those set with SameSite=None.</summary>
+    public string CrossSiteHeader() => string.Join("; ", _cookies.Where(c => c.Value.CrossSite).Select(c => c.Key + "=" + c.Value.Value));
 
     /// <summary>Applies a response's <c>Set-Cookie</c> headers, including deletions.</summary>
     public CookieJar Apply(HttpResponseMessage response)
     {
         ArgumentNullException.ThrowIfNull(response);
-        foreach (var (name, value, deleted) in SetCookies(response))
+        foreach (var (name, value, deleted, crossSite) in SetCookies(response))
         {
             if (deleted)
             {
@@ -245,15 +252,15 @@ public sealed class CookieJar
             }
             else
             {
-                _cookies[name] = value;
+                _cookies[name] = (value, crossSite);
             }
         }
 
         return this;
     }
 
-    /// <summary>The cookies a response sets, each with whether it deletes the cookie.</summary>
-    public static IEnumerable<(string Name, string Value, bool Deleted)> SetCookies(HttpResponseMessage response)
+    /// <summary>The cookies a response sets, each with whether it deletes the cookie and whether it is sent cross-site.</summary>
+    public static IEnumerable<(string Name, string Value, bool Deleted, bool CrossSite)> SetCookies(HttpResponseMessage response)
     {
         ArgumentNullException.ThrowIfNull(response);
         if (!response.Headers.TryGetValues("Set-Cookie", out var headers))
@@ -268,11 +275,12 @@ public sealed class CookieJar
             var name = pair[..separator].Trim();
             var value = pair[(separator + 1)..].Trim();
             var deleted = value.Length == 0 || header.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase);
-            yield return (name, value, deleted);
+            var crossSite = header.Split(';').Any(attribute => attribute.Trim().Equals("samesite=none", StringComparison.OrdinalIgnoreCase));
+            yield return (name, value, deleted, crossSite);
         }
     }
 
-    /// <summary>Sends a request carrying these cookies, and keeps what the response sets.</summary>
+    /// <summary>Sends a same-site request carrying these cookies, and keeps what the response sets.</summary>
     public async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method, string path, HttpContent? content = null)
     {
         ArgumentNullException.ThrowIfNull(client);
