@@ -72,7 +72,7 @@ flowchart LR
   CD["GitHub Actions<br/>CI, CD, AI evaluation"] -->|"Terraform, publish,<br/>deploy (OIDC, no keys)"| APP
 ```
 
-Every Azure call uses Entra identities; no keys are stored or passed. The AI release manifest (`ai/manifest.yaml`) names the models, prompts and filters, and both the infrastructure and the app read it. The detailed diagrams, covering the platform, the investigation loop, retrieval, screening and approval, are in [Architecture](docs/Architecture.md), and the pipelines are in [Deployment](docs/Deployment.md).
+Every service-to-service call uses an Entra identity. API-key and shared-key authentication is disabled, and no code uses or passes a key; some key material that can't authenticate still sits in Terraform state ([Security](docs/Security.md)). The AI release manifest (`ai/manifest.yaml`) names the models, prompts and filters, and both the infrastructure and the app read it. The detailed diagrams, covering the platform, the investigation loop, retrieval, screening and approval, are in [Architecture](docs/Architecture.md), and the pipelines are in [Deployment](docs/Deployment.md).
 
 | Operations workbook: model tokens per day | Evaluation history in Log Analytics |
 |---|---|

@@ -75,7 +75,7 @@ Measured outcomes come from the release evaluation of 2026-11-18 ([summary](evid
 - **Escalation rate:** investigations that end as escalated. A very low rate can signal overconfidence.
 - **Cost per resolved investigation.**
 
-There are no real users, so these are measured on the demo scenarios and should be read as indicative.
+These are the measures for real operational use. There are no real users, so none of them has been measured. What is measured is the evaluation on labelled cases: outcomes, tool use, evidence, safety and the modelled cost per validated investigation ([Evaluation](Evaluation.md)).
 
 ## Out of scope
 
