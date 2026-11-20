@@ -23,7 +23,7 @@ public sealed class OperationsPanelTests : InteractiveTestContext
         Context.Services.AddSingleton<IPauseStore>(_store);
         Context.Services.AddSingleton<IUserContext>(admin);
         Context.Services.AddSingleton<TimeProvider>(TimeProvider.System);
-        Context.Services.AddSingleton<IPauseSwitch>(sp => new PauseSwitch(_store, admin, TimeProvider.System, NullLogger<PauseSwitch>.Instance));
+        Context.Services.AddSingleton<IPauseSwitch>(sp => new PauseSwitch(_store, admin, new TestRecentAuthentication(), TimeProvider.System, NullLogger<PauseSwitch>.Instance));
     }
 
     private static OperationsView View(bool pausedByConfiguration = false, PauseState? pause = null) =>

@@ -23,6 +23,9 @@ public abstract record PauseResult
 
     public sealed record NotAuthorized : PauseResult;
 
+    /// <summary>The Admin last signed in too long ago; nothing was read or changed.</summary>
+    public sealed record ReauthenticationRequired : PauseResult;
+
     /// <summary>Someone else changed it first, or it was already in the asked-for state; this is the state now.</summary>
     public sealed record Conflict(PauseState Current) : PauseResult;
 

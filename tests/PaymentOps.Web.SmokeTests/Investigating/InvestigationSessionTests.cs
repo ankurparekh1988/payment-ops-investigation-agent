@@ -20,7 +20,9 @@ public sealed class InvestigationSessionTests
 
     private readonly SwitchableUserContext _user = new();
 
-    private InvestigationSession Session() => new(_investigation, _approvals, _user, _time, _log);
+    private readonly TestRecentAuthentication _recent = new();
+
+    private InvestigationSession Session() => new(_investigation, _approvals, _user, _recent, _time, _log);
 
     // A failure is shown like a refusal before the run: the earlier result stays under its own question. Whether the
     // failed run got far enough to supersede the earlier proposal isn't known, so it's no longer offered for a decision.
@@ -396,10 +398,84 @@ public sealed class InvestigationSessionTests
     }
 
     [Fact]
+    public async Task Stale_click_keeps_the_card_pending_and_asks_for_confirmation()
+    {
+        await using var session = Session();
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+        _recent.Recent = false;
+
+        await session.ApproveAsync();
+
+        var proposal = Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!;
+        Assert.Equal(0, _approvals.Approvals);
+        Assert.True(session.NeedsConfirmation);
+        Assert.False(session.DecisionFailed);
+        Assert.Equal(ProposalStatus.Pending, proposal.Status);
+        Assert.True(session.IsActionable(proposal));
+
+        // The person confirms with a fresh sign-in, then clicks again; nothing was approved for them meanwhile.
+        _recent.Recent = true;
+        Assert.Equal(0, _approvals.Approvals);
+        await session.ApproveAsync();
+
+        Assert.False(session.NeedsConfirmation);
+        Assert.Equal(1, _approvals.Approvals);
+        Assert.Equal(ProposalStatus.Approved, Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!.Status);
+    }
+
+    [Fact]
+    public async Task Going_stale_during_the_click_keeps_the_card_pending()
+    {
+        var approvals = new StalingApprovalService(_recent);
+        await using var session = new InvestigationSession(_investigation, approvals, _user, _recent, _time, NullLogger<InvestigationSession>.Instance);
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+
+        await session.ApproveAsync();
+
+        Assert.Equal(1, approvals.Approvals);
+        Assert.True(session.NeedsConfirmation);
+        Assert.Equal(ProposalStatus.Pending, Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!.Status);
+    }
+
+    // Only a stale sign-in is worth confirming; any other refusal ends the card as before.
+    [Fact]
+    public async Task Not_authorized_with_a_recent_sign_in_ends_the_card()
+    {
+        var approvals = new CountingApprovalService(new ApprovalResult.NotAuthorized());
+        await using var session = new InvestigationSession(_investigation, approvals, _user, _recent, _time, NullLogger<InvestigationSession>.Instance);
+        _investigation.Answer = _ => Results.WithPendingTicket();
+        await session.StartAsync("Why was M-1042 not paid?");
+
+        await session.ApproveAsync();
+
+        Assert.Equal(1, approvals.Approvals);
+        Assert.False(session.NeedsConfirmation);
+        Assert.Equal(ProposalStatus.Unavailable, Assert.IsType<AssessmentResult.Assessed>(session.Current).Proposal!.Status);
+    }
+
+    // The decorator's own check fails: the sign-in went stale after the session's check passed.
+    private sealed class StalingApprovalService(TestRecentAuthentication recent) : IApprovalService
+    {
+        public int Approvals { get; private set; }
+
+        public Task<ApprovalResult> ApproveAsync(Guid proposalId, CancellationToken cancellationToken)
+        {
+            Approvals++;
+            recent.Recent = false;
+            return Task.FromResult<ApprovalResult>(new ApprovalResult.NotAuthorized());
+        }
+
+        public Task<ApprovalResult> RejectAsync(Guid proposalId, RejectionReason reason, string? note, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    [Fact]
     public async Task A_failed_decision_leaves_the_card_pending_and_says_so()
     {
         var approvals = new CountingApprovalService(new ApprovalResult.Unavailable());
-        await using var session = new InvestigationSession(_investigation, approvals, _user, _time, NullLogger<InvestigationSession>.Instance);
+        await using var session = new InvestigationSession(_investigation, approvals, _user, _recent, _time, NullLogger<InvestigationSession>.Instance);
         _investigation.Answer = _ => Results.WithPendingTicket();
         await session.StartAsync("Why was M-1042 not paid?");
 

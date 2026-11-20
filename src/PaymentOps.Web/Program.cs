@@ -132,6 +132,9 @@ else
     builder.Services.AddScoped<IApprovalService, UnconfiguredApprovalService>();
 }
 
+// Approving creates a ticket, so whichever approval service is registered needs a recent sign-in.
+builder.Services.RequireRecentAuthenticationForApproval();
+
 // The Admin's pause is checked on every change; without the usage guard (Development) it's kept in memory.
 builder.Services.TryAddSingleton<IPauseStore, InMemoryPauseStore>();
 builder.Services.AddScoped<IPauseSwitch, PauseSwitch>();

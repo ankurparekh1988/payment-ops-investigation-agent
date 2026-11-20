@@ -1,21 +1,24 @@
 using PaymentOps.Domain.Security;
+using PaymentOps.Web.Security;
 
 namespace PaymentOps.Web.Usage;
 
 /// <summary>
-/// Pauses or resumes investigations for everyone, for Admins only: the role is checked here on every call, like an
-/// approval, so hiding the button is never the control. The change is decided from a fresh read, so asking for the
-/// state it's already in reports it as it is; each change is logged with a pseudonymous actor and the reason's length.
+/// Pauses or resumes investigations for everyone, for Admins who signed in recently: both are checked here on every
+/// call, like an approval, so hiding the button is never the control. The change is decided from a fresh read, so
+/// asking for the state it's already in reports it as it is; each change is logged with a pseudonymous actor and the
+/// reason's length.
 /// </summary>
-internal sealed partial class PauseSwitch(IPauseStore store, IUserContext user, TimeProvider time, ILogger<PauseSwitch> logger) : IPauseSwitch
+internal sealed partial class PauseSwitch(
+    IPauseStore store, IUserContext user, IRecentAuthentication recent, TimeProvider time, ILogger<PauseSwitch> logger) : IPauseSwitch
 {
     public const int MaxReasonLength = 200;
 
     public async Task<PauseResult> SetAsync(bool paused, string? reason, CancellationToken cancellationToken)
     {
-        if (!user.IsAuthenticated || !user.IsInRole(OpsRoles.Admin))
+        if (Refusal() is { } refused)
         {
-            return new PauseResult.NotAuthorized();
+            return refused;
         }
 
         PauseState current;
@@ -26,6 +29,12 @@ internal sealed partial class PauseSwitch(IPauseStore store, IUserContext user, 
         catch (PauseUnavailableException)
         {
             return new PauseResult.Unavailable();
+        }
+
+        // Again, with nothing awaited before the write: the session can end or go stale while the read is pending.
+        if (Refusal() is { } late)
+        {
+            return late;
         }
 
         if (current.Paused == paused)
@@ -46,6 +55,12 @@ internal sealed partial class PauseSwitch(IPauseStore store, IUserContext user, 
                 return new PauseResult.Unavailable();
         }
     }
+
+    // A signed-in Admin first, then a recent sign-in; neither reads the store.
+    private PauseResult? Refusal() =>
+        !user.IsAuthenticated || !user.IsInRole(OpsRoles.Admin) ? new PauseResult.NotAuthorized()
+        : !recent.IsFresh ? new PauseResult.ReauthenticationRequired()
+        : null;
 
     // Stored and shown as plain text; only its length is logged.
     private static string? Clean(string? reason)

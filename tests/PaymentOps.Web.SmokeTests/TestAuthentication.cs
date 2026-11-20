@@ -95,3 +95,15 @@ internal static class TestSessions
         return registry;
     }
 }
+
+/// <summary>A sign-in the test makes recent, stale or ended, without a registry.</summary>
+internal sealed class TestRecentAuthentication : IRecentAuthentication
+{
+    public bool Live { get; set; } = true;
+
+    public bool Recent { get; set; } = true;
+
+    public bool IsFresh => Live && Recent;
+
+    public SessionStatus Status => Live ? new SessionStatus(true, TimeSpan.FromMinutes(15), null) : SessionStatus.SignedOut;
+}

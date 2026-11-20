@@ -1,5 +1,6 @@
 using PaymentOps.Agent.Contracts;
 using PaymentOps.Domain.Security;
+using PaymentOps.Web.Security;
 
 namespace PaymentOps.Web.Investigating;
 
@@ -14,8 +15,13 @@ public sealed record SessionNotice(NotAssessedReason Reason, string Question);
 /// It decides nothing the server owns: the conversation stays in <see cref="IInvestigationService"/>, proposals in
 /// the approval service, and a card shows only what the server answered.
 /// </summary>
-public sealed partial class InvestigationSession(
-    IInvestigationService investigation, IApprovalService approvals, IUserContext user, TimeProvider time, ILogger<InvestigationSession> logger) : IAsyncDisposable
+internal sealed partial class InvestigationSession(
+    IInvestigationService investigation,
+    IApprovalService approvals,
+    IUserContext user,
+    IRecentAuthentication recent,
+    TimeProvider time,
+    ILogger<InvestigationSession> logger) : IAsyncDisposable
 {
     private readonly Lock _lock = new();
     private readonly List<InvestigationProgress> _steps = [];
@@ -87,6 +93,12 @@ public sealed partial class InvestigationSession(
     /// <summary>The last decision couldn't be stored; the proposal is still pending.</summary>
     public bool DecisionFailed { get; private set; }
 
+    /// <summary>
+    /// An approval wasn't made because the sign-in isn't recent; the card stays pending until the person signs in
+    /// again and clicks Approve once more.
+    /// </summary>
+    public bool NeedsConfirmation { get; private set; }
+
     /// <summary>Counts finished runs, so a page can tell a new result from one it has already shown.</summary>
     public int Completed { get; private set; }
 
@@ -113,6 +125,7 @@ public sealed partial class InvestigationSession(
             run = _run = new CancellationTokenSource();
             Busy = true;
             DecisionFailed = false;
+            NeedsConfirmation = false;
             Notice = null;
             CurrentQuestion = question;
             Draft = string.Empty;
@@ -229,10 +242,10 @@ public sealed partial class InvestigationSession(
         }
     }
 
-    public Task ApproveAsync() => DecideAsync(id => approvals.ApproveAsync(id, CancellationToken.None), null);
+    public Task ApproveAsync() => DecideAsync(id => approvals.ApproveAsync(id, CancellationToken.None), null, approving: true);
 
     public Task RejectAsync(RejectionReason reason, string? note) =>
-        DecideAsync(id => approvals.RejectAsync(id, reason, note, CancellationToken.None), reason);
+        DecideAsync(id => approvals.RejectAsync(id, reason, note, CancellationToken.None), reason, approving: false);
 
     /// <summary>Whether the card may offer Approve and Reject: the stored proposal is pending and unexpired now.</summary>
     public bool IsActionable(TicketProposal proposal)
@@ -260,6 +273,7 @@ public sealed partial class InvestigationSession(
             Draft = string.Empty;
             CurrentQuestion = null;
             DecisionFailed = false;
+            NeedsConfirmation = false;
         }
 
         Changed?.Invoke();
@@ -278,11 +292,12 @@ public sealed partial class InvestigationSession(
     }
 
     // The card shows what the server answered, never what the click hoped for.
-    private async Task DecideAsync(Func<Guid, Task<ApprovalResult>> decide, RejectionReason? reason)
+    private async Task DecideAsync(Func<Guid, Task<ApprovalResult>> decide, RejectionReason? reason, bool approving)
     {
         SessionTurn turn;
         AssessmentResult.Assessed assessed;
         TicketProposal proposal;
+        bool confirm;
         lock (_lock)
         {
             if (Deciding || Busy || _turns.Count == 0)
@@ -300,11 +315,22 @@ public sealed partial class InvestigationSession(
 
             (assessed, proposal) = (shown, pending);
 
-            Deciding = true;
-            DecisionFailed = false;
+            // A stale click is never sent, and never carried out later: the person signs in again and clicks once more.
+            confirm = approving && !recent.IsFresh;
+            NeedsConfirmation = confirm;
+            if (!confirm)
+            {
+                Deciding = true;
+                DecisionFailed = false;
+            }
         }
 
         Changed?.Invoke();
+        if (confirm)
+        {
+            return;
+        }
+
         try
         {
             var outcome = await decide(proposal.ProposalId!.Value);
@@ -313,6 +339,13 @@ public sealed partial class InvestigationSession(
                 // The page moved on while the decision ran; the card it was made from is gone.
                 if (_turns.Count == 0 || !ReferenceEquals(_turns[^1], turn))
                 {
+                    return;
+                }
+
+                // The sign-in went stale after the check above; the proposal is still pending, so ask again.
+                if (approving && outcome is ApprovalResult.NotAuthorized && recent.Status.IsLive && !recent.IsFresh)
+                {
+                    NeedsConfirmation = true;
                     return;
                 }
 
