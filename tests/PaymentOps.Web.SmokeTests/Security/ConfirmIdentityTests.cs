@@ -51,6 +51,7 @@ public sealed partial class ConfirmIdentityTests : InteractiveTestContext
     [Fact]
     public async Task Closing_the_popup_without_a_result_re_enables_confirm()
     {
+        _recent.Recent = false;
         var confirm = RenderConfirm();
         var flow = Flow(confirm);
 
@@ -69,6 +70,7 @@ public sealed partial class ConfirmIdentityTests : InteractiveTestContext
     [InlineData("anything-else")]
     public async Task An_unconfirmed_result_asks_to_try_again(string result)
     {
+        _recent.Recent = false;
         var confirm = RenderConfirm();
 
         await Report(confirm, Flow(confirm), result);
@@ -100,6 +102,33 @@ public sealed partial class ConfirmIdentityTests : InteractiveTestContext
         Assert.DoesNotContain(NotConfirmed, confirm.Markup, StringComparison.Ordinal);
     }
 
+    // A lost message must not hide freshness the server holds: the registry decides, whatever the window reported.
+    [Theory]
+    [InlineData("closed")]
+    [InlineData("cancelled")]
+    [InlineData("not-confirmed")]
+    public async Task Closed_while_the_registry_is_fresh_confirms(string result)
+    {
+        var confirm = RenderConfirm();
+
+        await Report(confirm, Flow(confirm), result);
+
+        Assert.Equal(1, _confirmed);
+        Assert.DoesNotContain(NotConfirmed, confirm.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Closed_while_not_fresh_says_not_confirmed()
+    {
+        _recent.Recent = false;
+        var confirm = RenderConfirm();
+
+        await Report(confirm, Flow(confirm), "closed");
+
+        Assert.Equal(0, _confirmed);
+        Assert.Contains(NotConfirmed, confirm.Markup, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Confirm_button_carries_a_fresh_flow_per_attempt()
     {
@@ -129,6 +158,7 @@ public sealed partial class ConfirmIdentityTests : InteractiveTestContext
         Assert.Equal("Open the sign-in window", link.TextContent.Trim());
         Assert.Equal($"/account/confirm?flow={flow}", link.GetAttribute("href"));
         Assert.Equal($"paymentops-confirm-{flow}", link.GetAttribute("target"));
+        Assert.Equal(flow, link.GetAttribute("data-po-confirm-link"));
         Assert.Equal(flow, Flow(confirm));
     }
 
@@ -150,6 +180,7 @@ public sealed partial class ConfirmIdentityTests : InteractiveTestContext
     [Fact]
     public async Task Two_components_keep_separate_flows()
     {
+        _recent.Recent = false;
         var first = RenderConfirm();
         var second = RenderConfirm();
         var firstFlow = Flow(first);

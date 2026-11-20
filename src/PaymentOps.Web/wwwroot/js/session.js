@@ -76,7 +76,27 @@ window.poSession = (() => {
         if (attempt) {
             clearInterval(attempt.timer);
             window.removeEventListener("message", attempt.listener);
+            if (attempt.onReturn) {
+                window.removeEventListener("focus", attempt.onReturn);
+                document.removeEventListener("visibilitychange", attempt.onReturn);
+            }
         }
+    }
+
+    // A link-opened window can't be polled, and its message can be lost; coming back to this tab makes the
+    // component ask the server, which alone knows whether the sign-in happened.
+    function watchReturn(attempt, flow) {
+        if (attempt.onReturn) {
+            return;
+        }
+
+        attempt.onReturn = () => {
+            if (document.visibilityState === "visible") {
+                finish(flow, "closed");
+            }
+        };
+        window.addEventListener("focus", attempt.onReturn);
+        document.addEventListener("visibilitychange", attempt.onReturn);
     }
 
     function report(entry, flow, result) {
@@ -120,6 +140,16 @@ window.poSession = (() => {
     }
 
     function onClick(event) {
+        const link = event.target instanceof Element ? event.target.closest("[data-po-confirm-link]") : null;
+        if (link) {
+            const attempt = confirms.get(link.dataset.poConfirmLink)?.attempt;
+            if (attempt && !attempt.popup) {
+                watchReturn(attempt, link.dataset.poConfirmLink);
+            }
+
+            return;
+        }
+
         const button = event.target instanceof Element ? event.target.closest("[data-po-confirm]") : null;
         const flow = button?.dataset.poConfirm;
         const entry = flow ? confirms.get(flow) : undefined;

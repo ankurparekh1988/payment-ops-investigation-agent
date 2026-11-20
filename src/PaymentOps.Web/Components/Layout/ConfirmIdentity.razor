@@ -18,7 +18,7 @@
         }
         @if (_blocked)
         {
-            <a href="/account/confirm?flow=@_flow" target="paymentops-confirm-@_flow">Open the sign-in window</a>
+            <a href="/account/confirm?flow=@_flow" target="paymentops-confirm-@_flow" data-po-confirm-link="@_flow">Open the sign-in window</a>
         }
     </div>
 }
@@ -97,7 +97,8 @@
                     return;
                 }
 
-                var confirmed = result == SignInFlow.StepUpResults.Confirmed && Recent.IsFresh;
+                // The registry decides, whatever the window reported: its message can be lost on the way back.
+                var confirmed = Recent.IsFresh;
                 (_flow, _blocked, _message) = (NewFlow(), false, confirmed ? null : NotConfirmedText);
                 if (confirmed)
                 {
