@@ -58,6 +58,8 @@ public sealed partial class SignInFlowTests
     [InlineData("https://x", "/")]
     [InlineData("", "/")]
     [InlineData(null, "/")]
+    [InlineData("/\t/evil", "/")]
+    [InlineData("/\n/evil", "/")]
     [InlineData("/investigate", "/investigate")]
     public void Return_urls_stay_local(string? url, string expected) =>
         Assert.Equal(expected, SignInFlow.LocalReturnUrl(url));
@@ -135,18 +137,25 @@ public sealed partial class SignInFlowTests
     [Theory]
     [InlineData(null)]
     [InlineData("abc")]
-    [InlineData("future")]
     public async Task Normal_callback_without_auth_time_starts_a_session_that_is_not_fresh(string? authTime)
     {
         using var app = new OidcCallbackFactory();
-        var claim = authTime == "future" ? app.AuthTime(TimeSpan.FromMinutes(3)) : authTime;
 
-        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin], authTime: claim);
+        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin], authTime: authTime);
 
         Assert.Null(app.Registry.Find(sid)!.AuthenticatedAt);
         using var home = await jar.SendAsync(app.Client(), HttpMethod.Get, "/");
         Assert.Equal(HttpStatusCode.OK, home.StatusCode);
     }
+
+    // prompt=login can be stripped in the browser; an auth_time from an earlier sign-in shows no credential was entered.
+    [Fact]
+    public async Task Normal_sign_in_with_a_stale_auth_time_is_refused() =>
+        await AssertSignInRefusedAsync(TimeSpan.FromMinutes(-6));
+
+    [Fact]
+    public async Task Normal_sign_in_with_a_future_auth_time_is_refused() =>
+        await AssertSignInRefusedAsync(TimeSpan.FromMinutes(3));
 
     [Fact]
     public async Task Step_up_keeps_sid_and_original_expiry()
@@ -325,8 +334,8 @@ public sealed partial class SignInFlowTests
             return;
         }
 
-        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin], authTime: app.AuthTime(TimeSpan.FromMinutes(-20)));
-        app.Time.Advance(TimeSpan.FromMinutes(1));
+        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+        StayActive(app, sid, UserA, TimeSpan.FromMinutes(20));
         var before = app.Registry.Find(sid);
         app.BeforeCookieSignIn = () => app.Time.Advance(TimeSpan.FromMinutes(15));
 
@@ -400,6 +409,53 @@ public sealed partial class SignInFlowTests
         Assert.Null(jar.Get(PreviousCookie));
     }
 
+    // A cross-site form post carries only the SameSite=None cookie: no sign-in, no token.
+    [Fact]
+    public async Task Cross_site_sign_out_without_cookie_or_token_changes_nothing()
+    {
+        using var app = new OidcCallbackFactory();
+        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+        Assert.NotNull(jar.Get(PreviousCookie));
+        using var request = new HttpRequestMessage(HttpMethod.Post, Relative("/account/sign-out")) { Content = Form() };
+        request.Headers.Add("Cookie", jar.CrossSiteHeader());
+        request.Headers.Add("Sec-Fetch-Site", "cross-site");
+
+        using var response = await app.Client().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        Assert.True(app.Registry.Status(sid, UserA).IsLive);
+    }
+
+    [Fact]
+    public async Task Confirm_page_refuses_a_cross_site_request()
+    {
+        using var app = new OidcCallbackFactory();
+        var (jar, _) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+
+        async Task<HttpResponseMessage> ConfirmAsync(string site)
+        {
+            // A top-level navigation carries the Lax sign-in cookie, whichever site started it.
+            using var request = new HttpRequestMessage(HttpMethod.Get, Relative($"/account/confirm?flow={Flow}"));
+            request.Headers.Add("Cookie", jar.Header());
+            request.Headers.Add("Sec-Fetch-Site", site);
+            return await app.Client().SendAsync(request);
+        }
+
+        using var crossSite = await ConfirmAsync("cross-site");
+        var crossSiteHtml = await crossSite.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.Redirect, crossSite.StatusCode);
+        Assert.EndsWith($"/account/confirm-result?flow={Flow}&result=not-confirmed", crossSite.Headers.Location?.OriginalString, StringComparison.Ordinal);
+        Assert.DoesNotContain("__RequestVerificationToken", crossSiteHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("/account/reauthenticate", crossSiteHtml, StringComparison.Ordinal);
+
+        using var sameOrigin = await ConfirmAsync("same-origin");
+        var sameOriginHtml = await sameOrigin.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, sameOrigin.StatusCode);
+        Assert.Contains("action=\"/account/reauthenticate\"", sameOriginHtml, StringComparison.Ordinal);
+        Assert.Matches(AntiforgeryField(), sameOriginHtml);
+    }
+
     [Fact]
     public async Task Confirm_page_posts_its_flow_to_reauthenticate()
     {
@@ -440,7 +496,8 @@ public sealed partial class SignInFlowTests
     public async Task Popup_message_is_not_authority()
     {
         using var app = new OidcCallbackFactory();
-        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin], authTime: app.AuthTime(TimeSpan.FromMinutes(-20)));
+        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+        StayActive(app, sid, UserA, TimeSpan.FromMinutes(20));
         var before = app.Registry.Find(sid)!.AuthenticatedAt;
 
         using var page = await jar.SendAsync(app.Client(), HttpMethod.Get, $"/account/confirm-result?flow={Flow}&result=confirmed");
@@ -537,7 +594,8 @@ public sealed partial class SignInFlowTests
     public async Task Concurrent_step_ups_on_one_session_both_commit()
     {
         using var app = new OidcCallbackFactory();
-        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin], authTime: app.AuthTime(TimeSpan.FromMinutes(-20)));
+        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+        StayActive(app, sid, UserA, TimeSpan.FromMinutes(20));
         StayActive(app, sid, UserA, TimeSpan.FromMinutes(2));
         var later = app.Time.GetUtcNow() - TimeSpan.FromSeconds(30);
 
@@ -574,7 +632,8 @@ public sealed partial class SignInFlowTests
     public async Task Step_up_racing_sign_out_records_nothing()
     {
         using var app = new OidcCallbackFactory();
-        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin], authTime: app.AuthTime(TimeSpan.FromMinutes(-20)));
+        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+        StayActive(app, sid, UserA, TimeSpan.FromMinutes(20));
         app.BeforeCookieSignIn = () => app.Registry.Remove(sid);
 
         using var response = await StepUpAsync(app, jar, sid, UserA, app.IdToken(UserA, roles: [OpsRoles.Admin], authTime: app.AuthTime(TimeSpan.Zero)));
@@ -583,6 +642,17 @@ public sealed partial class SignInFlowTests
         Assert.Equal(0, app.Registry.Count);
         using var next = await jar.Apply(response).SendAsync(app.Client(), HttpMethod.Get, "/");
         AssertChallenged(next);
+    }
+
+    private static async Task AssertSignInRefusedAsync(TimeSpan authTimeOffset)
+    {
+        using var app = new OidcCallbackFactory();
+
+        using var response = await app.CallbackAsync(SignInItems(), app.IdToken(UserA, roles: [OpsRoles.Admin], authTime: app.AuthTime(authTimeOffset)));
+
+        Assert.Equal("/signed-out?reason=sign-in-failed", response.Headers.Location?.OriginalString);
+        AssertNoSignInCookie(response);
+        Assert.Equal(0, app.Registry.Count);
     }
 
     private static Dictionary<string, string?> SignInItems() => new() { [SignInFlow.PurposeKey] = SignInFlow.SignInPurpose };

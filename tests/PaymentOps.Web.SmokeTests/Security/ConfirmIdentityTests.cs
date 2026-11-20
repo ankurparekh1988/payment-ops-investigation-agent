@@ -129,6 +129,43 @@ public sealed partial class ConfirmIdentityTests : InteractiveTestContext
         Assert.Contains(NotConfirmed, confirm.Markup, StringComparison.Ordinal);
     }
 
+    // The window can look closed while the person is still signing in; coming back to the tab asks the server again.
+    [Fact]
+    public async Task Returning_after_a_closed_window_confirms_once_the_registry_is_fresh()
+    {
+        _recent.Recent = false;
+        var confirm = RenderConfirm();
+        await Report(confirm, Flow(confirm), "closed");
+        var flow = Flow(confirm);
+
+        var notYet = await confirm.InvokeAsync(() => confirm.Instance.RecheckConfirmation());
+
+        Assert.False(notYet);
+        Assert.Equal(flow, Flow(confirm));
+        Assert.Equal(0, _confirmed);
+
+        _recent.Recent = true;
+        var done = await confirm.InvokeAsync(() => confirm.Instance.RecheckConfirmation());
+
+        Assert.True(done);
+        Assert.Equal(1, _confirmed);
+        Assert.DoesNotContain(NotConfirmed, confirm.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Returning_after_the_session_ended_signs_out()
+    {
+        var confirm = RenderConfirm();
+        _recent.Live = false;
+
+        var done = await confirm.InvokeAsync(() => confirm.Instance.RecheckConfirmation());
+
+        Assert.True(done);
+        Assert.Equal(0, _confirmed);
+        var navigation = Assert.Single(Navigations());
+        Assert.EndsWith("/signed-out?reason=inactive", navigation.Uri, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Confirm_button_carries_a_fresh_flow_per_attempt()
     {

@@ -57,10 +57,10 @@ internal static class SecurityExtensions
             var sid = signIn is null ? null : SessionClaims.SidOf(signIn);
             var isLive = signIn is not null && sessions.Status(sid, signIn.GetObjectId()).IsLive;
 
-            // Antiforgery tokens are bound to the signed-in user, so a page loaded before expiry can't pass;
-            // ending a session that is already dead can't be abused.
+            // Antiforgery tokens are bound to the signed-in user, so a page loaded before expiry can't pass; only a
+            // presented, already-dead sign-in may end without one, so a cross-site post with no cookie changes nothing.
             var tokenIsValid = await antiforgery.IsRequestValidAsync(context);
-            if (!tokenIsValid && isLive)
+            if (!tokenIsValid && (isLive || sid is null))
             {
                 return Results.BadRequest();
             }

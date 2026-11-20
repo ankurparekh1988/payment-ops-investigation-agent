@@ -16,7 +16,7 @@ internal sealed class ClaimsUserContext(CurrentUserAccessor accessor, IOptions<A
     private const string NameClaim = "name";
     private const string GroupsClaim = "groups";
 
-    // Derived once per signed-in user; the accessor's user changes only when they sign in or out.
+    // Derived once per principal, and again whenever the user seen changes, including to signed out when the session ends.
     private ClaimsPrincipal? _derivedFrom;
     private IReadOnlySet<string> _roles = new HashSet<string>();
     private IReadOnlySet<string> _groupIds = new HashSet<string>();

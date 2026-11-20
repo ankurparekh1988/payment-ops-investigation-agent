@@ -7,9 +7,10 @@
 
 <PageTitle>Confirm it's you · Contoso Payments</PageTitle>
 
-@* The sign-in window's first page. A form post, not a link, so no other site can start a step-up for this session. *@
+@* The sign-in window's first page. Its form submits itself, so it is rendered only when the browser reports that this
+   site opened it: a navigation from another site would otherwise carry the Lax cookie and start a step-up. *@
 <StatusCard Title="Confirm it's you">
-    @if (SignInFlow.IsFlow(Flow))
+    @if (SignInFlow.IsFlow(Flow) && !_refused)
     {
         <form id="confirm-form" method="post" action="/account/reauthenticate">
             <AntiforgeryToken />
@@ -28,13 +29,25 @@
 </StatusCard>
 
 @code {
+    private bool _refused;
+
     [SupplyParameterFromQuery]
     public string? Flow { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
 
     // Anonymous so that an ended session is reported to the page that opened this window, not sent to sign-in.
     protected override void OnInitialized()
     {
-        if (!Recent.Status.IsLive)
+        // A browser that sends no Sec-Fetch-Site gets the form; every current browser sends it.
+        var site = HttpContext?.Request.Headers["Sec-Fetch-Site"].ToString();
+        if (!string.IsNullOrEmpty(site) && site != "same-origin")
+        {
+            _refused = true;
+            Navigation.NavigateTo(SignInFlow.ConfirmResultUrl(Flow, SignInFlow.StepUpResults.NotConfirmed));
+        }
+        else if (!Recent.Status.IsLive)
         {
             Navigation.NavigateTo(SignInFlow.ConfirmResultUrl(Flow, SignInFlow.StepUpResults.Ended));
         }

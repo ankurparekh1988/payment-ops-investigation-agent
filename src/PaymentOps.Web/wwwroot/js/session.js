@@ -7,6 +7,9 @@ window.poSession = (() => {
 
     // flow -> { ref, attempt }, one per ConfirmIdentity on this page.
     const confirms = new Map();
+
+    // finished flow -> return listener; outlives its entry, since the component moves to a new flow straight away.
+    const rechecks = new Map();
     let reporter = null;
     let lastReport = 0;
     let warning = false;
@@ -99,6 +102,39 @@ window.poSession = (() => {
         document.addEventListener("visibilitychange", attempt.onReturn);
     }
 
+    // Entra's pages can cut this tab off from the window, which then looks closed while the person is still signing in;
+    // each return to this tab asks the component to re-read the server until it has nothing left to wait for.
+    function recheckOnReturn(ref, flow) {
+        let asking = false;
+        const listener = () => {
+            if (document.visibilityState !== "visible" || asking) {
+                return;
+            }
+
+            asking = true;
+            ref.invokeMethodAsync("RecheckConfirmation").then(
+                done => {
+                    asking = false;
+                    if (done !== false) {
+                        dropRecheck(flow);
+                    }
+                },
+                () => dropRecheck(flow));
+        };
+        rechecks.set(flow, listener);
+        window.addEventListener("focus", listener);
+        document.addEventListener("visibilitychange", listener);
+    }
+
+    function dropRecheck(flow) {
+        const listener = rechecks.get(flow);
+        if (listener) {
+            window.removeEventListener("focus", listener);
+            document.removeEventListener("visibilitychange", listener);
+            rechecks.delete(flow);
+        }
+    }
+
     function report(entry, flow, result) {
         entry.ref.invokeMethodAsync("OnConfirmResult", flow, result).catch(() => { });
     }
@@ -111,6 +147,10 @@ window.poSession = (() => {
 
         clear(entry.attempt);
         confirms.delete(flow);
+        if (result === "closed" && entry.attempt.popup) {
+            recheckOnReturn(entry.ref, flow);
+        }
+
         report(entry, flow, result);
     }
 

@@ -111,6 +111,35 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Asked when the person comes back to this tab after a window was seen closed, which can happen while they are
+    /// still signing in. Changes nothing until the server holds a recent sign-in; true once there is nothing left to wait for.
+    /// </summary>
+    [JSInvokable]
+    public async Task<bool> RecheckConfirmation()
+    {
+        if (_disposed || !_live)
+        {
+            return true;
+        }
+
+        if (!Recent.Status.IsLive)
+        {
+            SignOut("inactive");
+            return true;
+        }
+
+        if (!Recent.IsFresh)
+        {
+            return false;
+        }
+
+        (_flow, _blocked, _message) = (NewFlow(), false, null);
+        await Confirmed.InvokeAsync();
+        StateHasChanged();
+        return true;
+    }
+
     private void SignOut(string reason)
     {
         _live = false;

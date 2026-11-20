@@ -60,9 +60,9 @@ internal static partial class SignInFlow
 
     public static bool IsFlow(string? flow) => flow is not null && FlowPattern().IsMatch(flow);
 
-    /// <summary>Only a path on this site: a leading single <c>/</c> not followed by <c>/</c> or <c>\</c>.</summary>
+    /// <summary>Only a path on this site: a leading single <c>/</c> not followed by <c>/</c> or <c>\</c>, with no control characters.</summary>
     public static string LocalReturnUrl(string? url) =>
-        url is ['/'] or ['/', not ('/' or '\\'), ..] ? url : "/";
+        url is ['/'] or ['/', not ('/' or '\\'), ..] && !url.Any(char.IsControl) ? url : "/";
 
     public static string ConfirmResultUrl(string? flow, string result) =>
         IsFlow(flow) ? $"/account/confirm-result?flow={flow}&result={result}" : $"/account/confirm-result?result={result}";
@@ -211,14 +211,17 @@ internal static partial class SignInFlow
 
         var now = services.GetRequiredService<TimeProvider>().GetUtcNow();
         var authTime = RecentAuthentication.Parse(principal.FindFirst(SessionClaims.AuthTime)?.Value);
+        var logger = Logger(services);
 
-        // A future auth_time is treated as missing: the session then reads but is never fresh.
-        if (authTime > now + RecentAuthentication.Skew)
+        // prompt=login can be stripped in the browser, so an auth_time that isn't recent shows no credential was entered.
+        if (authTime is not null && !RecentAuthentication.IsJustAuthenticated(authTime, now))
         {
-            authTime = null;
+            LogSignInAuthTime(logger, "not recent");
+            context.Fail(new SignInRefusedException("The ID token's auth_time is not a sign-in just made."));
+            return;
         }
 
-        var logger = Logger(services);
+        // Without a readable auth_time the session starts but is never fresh.
         LogSignInAuthTime(logger, authTime is null ? "absent" : "present");
 
         var sid = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
@@ -382,7 +385,7 @@ internal static partial class SignInFlow
 
     private sealed record StepUpCommit(string Sid, string Oid, DateTimeOffset AuthenticatedAt);
 
-    private sealed class SignInRefusedException() : Exception("The ID token has no object or tenant id.");
+    private sealed class SignInRefusedException(string message = "The ID token has no object or tenant id.") : Exception(message);
 
     private sealed class StepUpRefusedException(string? flow, string result) : Exception($"Step-up refused: {result}")
     {
