@@ -7,8 +7,11 @@ using PaymentOps.Domain.Security;
 
 namespace PaymentOps.Web.Security;
 
-/// <summary>Reads the signed-in user's identity, roles and groups from their Entra ID token claims.</summary>
-internal sealed class ClaimsUserContext(CurrentUserAccessor accessor, IOptions<AccessOptions> access) : IUserContext
+/// <summary>
+/// Reads the signed-in user's identity, roles and groups from their Entra ID token claims, but only while
+/// their session is live: an expired, revoked or unknown session reads as signed out.
+/// </summary>
+internal sealed class ClaimsUserContext(CurrentUserAccessor accessor, IOptions<AccessOptions> access, SessionRegistry sessions) : IUserContext
 {
     private const string NameClaim = "name";
     private const string GroupsClaim = "groups";
@@ -18,7 +21,11 @@ internal sealed class ClaimsUserContext(CurrentUserAccessor accessor, IOptions<A
     private IReadOnlySet<string> _roles = new HashSet<string>();
     private IReadOnlySet<string> _groupIds = new HashSet<string>();
 
-    private ClaimsPrincipal User => accessor.User;
+    private static readonly ClaimsPrincipal SignedOut = new(new ClaimsIdentity());
+
+    // Checked on every call, so a context held by an open circuit signs out the moment the session ends.
+    private ClaimsPrincipal User =>
+        accessor.User is var user && sessions.Status(SessionClaims.SidOf(user), user.GetObjectId()).IsLive ? user : SignedOut;
 
     public bool IsAuthenticated => User.Identity?.IsAuthenticated == true;
 
@@ -52,13 +59,14 @@ internal sealed class ClaimsUserContext(CurrentUserAccessor accessor, IOptions<A
 
     private void Derive()
     {
-        if (ReferenceEquals(_derivedFrom, User))
+        var user = User;
+        if (ReferenceEquals(_derivedFrom, user))
         {
             return;
         }
 
-        _roles = OpsRoles.Effective(User.Identities.SelectMany(identity => identity.FindAll(identity.RoleClaimType)).Select(claim => claim.Value));
-        _groupIds = User.FindAll(GroupsClaim).Select(claim => claim.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        _derivedFrom = User;
+        _roles = OpsRoles.Effective(user.Identities.SelectMany(identity => identity.FindAll(identity.RoleClaimType)).Select(claim => claim.Value));
+        _groupIds = user.FindAll(GroupsClaim).Select(claim => claim.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _derivedFrom = user;
     }
 }

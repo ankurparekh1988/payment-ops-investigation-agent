@@ -87,6 +87,9 @@ public sealed class AuthorizationTests
     private static Task<AuthorizationResult> Authorize(string policy, string role) =>
         Authorization.AuthorizeAsync(TestPrincipal.From([new Claim("roles", role)]), policy);
 
-    private static ClaimsUserContext UserContextFor(ClaimsPrincipal principal) =>
-        new(new CurrentUserAccessor { User = principal }, Options.Create(new AccessOptions { RestrictedGroupId = RestrictedGroupId }));
+    private static ClaimsUserContext UserContextFor(ClaimsPrincipal principal)
+    {
+        var access = new AccessOptions { RestrictedGroupId = RestrictedGroupId };
+        return new(new CurrentUserAccessor { User = principal }, Options.Create(access), TestSessions.LiveFor(principal, access));
+    }
 }

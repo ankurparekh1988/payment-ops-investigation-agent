@@ -166,6 +166,8 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
+// Before authorization, so a sign-in whose session has ended is treated as signed out.
+app.UseMiddleware<SessionActivityMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<CurrentUserMiddleware>();
 app.UseAntiforgery();

@@ -39,6 +39,7 @@ internal static class SecurityExtensions
         services.AddScoped<AuthenticationStateProvider, SignInSessionRevalidator>();
         services.AddScoped<CurrentUserAccessor>();
         services.AddScoped<IUserContext, ClaimsUserContext>();
+        services.AddScoped<IRecentAuthentication, RecentAuthenticationCheck>();
         services.AddScoped<CircuitHandler, UserCircuitHandler>();
 
         return services;
@@ -47,15 +48,35 @@ internal static class SecurityExtensions
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder endpoints)
     {
         // Anonymous so that a user whose role was removed can still end their session.
-        endpoints.MapPost("/account/sign-out", async (HttpContext context, IAntiforgery antiforgery) =>
+        endpoints.MapPost("/account/sign-out", async (HttpContext context, IAntiforgery antiforgery, SessionRegistry sessions) =>
         {
-            if (!await antiforgery.IsRequestValidAsync(context))
+            // The sign-in itself, read afresh: once a session has expired the request's own user is anonymous.
+            // In production the default scheme hands this to the cookie.
+            var signIn = (await context.AuthenticateAsync()).Principal;
+            var sid = signIn is null ? null : SessionClaims.SidOf(signIn);
+            var isLive = signIn is not null && sessions.Status(sid, signIn.GetObjectId()).IsLive;
+
+            // Antiforgery tokens are bound to the signed-in user, so a page loaded before expiry can't pass;
+            // ending a session that is already dead can't be abused.
+            var tokenIsValid = await antiforgery.IsRequestValidAsync(context);
+            if (!tokenIsValid && isLive)
             {
                 return Results.BadRequest();
             }
 
-            return Results.SignOut(
-                authenticationSchemes: [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]);
+            if (sid is not null)
+            {
+                sessions.Remove(sid);
+            }
+
+            if (tokenIsValid)
+            {
+                return Results.SignOut(
+                    authenticationSchemes: [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]);
+            }
+
+            await SessionActivityMiddleware.SignOutOfCookieAsync(context);
+            return Results.Redirect("/signed-out");
         }).AllowAnonymous();
 
         return endpoints;
