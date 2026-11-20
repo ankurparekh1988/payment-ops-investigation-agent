@@ -24,6 +24,13 @@ resource "azuread_application" "this" {
   # groups and keeps unrelated group IDs out of tokens.
   group_membership_claims = ["ApplicationGroup"]
 
+  # The app asks for a fresh sign-in before pausing or approving and needs to know when the person last signed in.
+  optional_claims {
+    id_token {
+      name = "auth_time"
+    }
+  }
+
   web {
     redirect_uris = var.redirect_uris
     logout_url    = var.logout_url
