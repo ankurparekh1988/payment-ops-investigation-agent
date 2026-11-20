@@ -133,6 +133,13 @@ public sealed partial class SessionEnforcementTests(PaymentOpsWebApplicationFact
     {
         using var app = AppWithClock();
         using var client = SignedIn(app);
+
+        // Control: the same request succeeds while the session is live, so the refusal below is the expiry's doing.
+        using (var liveNegotiate = await client.PostAsync(Relative("/_blazor/negotiate?negotiateVersion=1"), content: null))
+        {
+            Assert.Equal(HttpStatusCode.OK, liveNegotiate.StatusCode);
+        }
+
         _time.Advance(TimeSpan.FromMinutes(15));
 
         using var anonymous = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -168,6 +175,7 @@ public sealed partial class SessionEnforcementTests(PaymentOpsWebApplicationFact
         using var client = SignedIn(app);
         var (sid, _) = PaymentOpsWebApplicationFactory.SessionOf(client);
         var token = await AntiforgeryTokenFrom(client);
+        Assert.NotEmpty(token);
         _time.Advance(TimeSpan.FromMinutes(15));
 
         using var response = await SignOut(client, token);
