@@ -1,0 +1,140 @@
+@using PaymentOps.Web.Security
+@implements IAsyncDisposable
+@inject IRecentAuthentication Recent
+@inject ActivityReporter Activity
+@inject TimeProvider Time
+@inject IOptions<AccessOptions> Access
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@* Reads the server's record of the session; a read is never activity. Only the person's own input or Stay signed in is. *@
+<MudDialog Visible="_remaining is not null" Options="WarningOptions">
+    <TitleContent>Signing you out soon</TitleContent>
+    <DialogContent>
+        <p class="dialog-text">You'll be signed out in @Countdown without activity.</p>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StaySignedInAsync">Stay signed in</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly TimeSpan ReadPeriod = TimeSpan.FromSeconds(15);
+
+    // While the warning shows, the countdown moves each second and a renewal in another tab hides it promptly.
+    private static readonly TimeSpan WarningPeriod = TimeSpan.FromSeconds(1);
+
+    private static readonly DialogOptions WarningOptions = new()
+    {
+        MaxWidth = MaxWidth.ExtraSmall,
+        FullWidth = true,
+        BackdropClick = false,
+        CloseOnEscapeKey = false,
+        CloseButton = false,
+    };
+
+    private readonly CancellationTokenSource _stop = new();
+    private PeriodicTimer? _timer;
+    private DotNetObjectReference<ActivityReporter>? _reporter;
+    private TimeSpan? _remaining;
+    private bool _ended;
+
+    private string Countdown => _remaining is { } left
+        ? $"{(int)left.TotalMinutes}:{left.Seconds.ToString("00", CultureInfo.InvariantCulture)}"
+        : string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _reporter = DotNetObjectReference.Create(Activity);
+        await JS.InvokeVoidAsync("poSession.start", _reporter);
+        if (_ended)
+        {
+            return;
+        }
+
+        _timer = new PeriodicTimer(ReadPeriod, Time);
+        _ = WatchAsync(_timer, _stop.Token);
+        await ReadAsync();
+    }
+
+    private async Task WatchAsync(PeriodicTimer timer, CancellationToken stop)
+    {
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stop))
+            {
+                await InvokeAsync(ReadAsync);
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or JSDisconnectedException)
+        {
+            // Disposed or disconnected: the page has gone.
+        }
+    }
+
+    private async Task ReadAsync()
+    {
+        if (_ended)
+        {
+            return;
+        }
+
+        var status = Recent.Status;
+        if (!status.IsLive)
+        {
+            Stop();
+            Navigation.NavigateTo("/signed-out?reason=inactive", forceLoad: true);
+            return;
+        }
+
+        var warn = status.IdleRemaining <= Access.Value.IdleWarning;
+        var wasWarning = _remaining is not null;
+        _remaining = warn ? status.IdleRemaining : null;
+        if (warn != wasWarning)
+        {
+            _timer!.Period = warn ? WarningPeriod : ReadPeriod;
+            await JS.InvokeVoidAsync("poSession.warning", warn);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task StaySignedInAsync()
+    {
+        Activity.ReportActivity();
+        await ReadAsync();
+    }
+
+    private void Stop()
+    {
+        _ended = true;
+        _stop.Cancel();
+        _timer?.Dispose();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Stop();
+        _stop.Dispose();
+        if (_reporter is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("poSession.stop");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit has gone, and the page with it.
+        }
+
+        _reporter.Dispose();
+    }
+}

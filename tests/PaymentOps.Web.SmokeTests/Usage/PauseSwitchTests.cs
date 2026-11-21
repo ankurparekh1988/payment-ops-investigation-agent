@@ -1,10 +1,14 @@
+using System.Security.Claims;
+
 using Azure;
 using Azure.Data.Tables;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 using PaymentOps.Domain.Security;
+using PaymentOps.Web.Security;
 using PaymentOps.Web.Usage;
 
 namespace PaymentOps.Web.SmokeTests.Usage;
@@ -20,13 +24,15 @@ public sealed class PauseSwitchTests
     private readonly FakeEntityTable _table = new();
     private readonly FakeTimeProvider _time = new(Now);
     private readonly RecordingLogger<PauseSwitch> _log = new();
+    private readonly TestRecentAuthentication _recent = new();
 
     private static TestUser Admin(string id = "00000000-0000-0000-0000-00000000000a") =>
         TestUser.Engineer with { Roles = OpsRoles.Effective([OpsRoles.Admin]), UserId = id };
 
     private TablePauseStore Store() => new(_table, _time);
 
-    private PauseSwitch Switch(IUserContext user, IPauseStore? store = null) => new(store ?? Store(), user, _time, _log);
+    private PauseSwitch Switch(IUserContext user, IPauseStore? store = null, IRecentAuthentication? recent = null) =>
+        new(store ?? Store(), user, recent ?? _recent, _time, _log);
 
     [Theory]
     [InlineData("reader")]
@@ -246,6 +252,126 @@ public sealed class PauseSwitchTests
         Assert.True(Assert.IsType<PauseResult.Changed>(changed).State.Paused);
         Assert.Equal("why", Assert.IsType<PauseResult.Conflict>(again).Current.Reason);
         Assert.True((await store.ReadAsync(CancellationToken.None)).Paused);
+    }
+
+    [Fact]
+    public async Task Stale_resume_is_refused_without_touching_the_store()
+    {
+        _recent.Recent = false;
+
+        var result = await Switch(Admin()).SetAsync(false, null, CancellationToken.None);
+
+        Assert.IsType<PauseResult.ReauthenticationRequired>(result);
+        Assert.Equal(0, _table.Reads);
+        Assert.Equal(0, _table.Writes);
+    }
+
+    // Pausing only stops new investigations, so an Admin in an incident isn't asked to sign in again.
+    [Fact]
+    public async Task Stale_admin_can_still_pause()
+    {
+        _recent.Recent = false;
+
+        var result = await Switch(Admin()).SetAsync(true, "maintenance", CancellationToken.None);
+
+        Assert.True(Assert.IsType<PauseResult.Changed>(result).State.Paused);
+        Assert.Equal(1, _table.Writes);
+    }
+
+    [Fact]
+    public async Task Fresh_admin_changes_the_pause()
+    {
+        var result = await Switch(Admin()).SetAsync(true, "maintenance", CancellationToken.None);
+
+        Assert.True(Assert.IsType<PauseResult.Changed>(result).State.Paused);
+        Assert.Equal(1, _table.Writes);
+    }
+
+    [Fact]
+    public async Task Fresh_non_admin_is_not_authorized()
+    {
+        var result = await Switch(TestUser.Engineer).SetAsync(true, "maintenance", CancellationToken.None);
+
+        Assert.IsType<PauseResult.NotAuthorized>(result);
+        Assert.Equal(0, _table.Reads);
+        Assert.Equal(0, _table.Writes);
+    }
+
+    // The checks before the read can pass and the session still end, or go stale, while a resume's read is pending.
+    [Theory]
+    [InlineData("ended")]
+    [InlineData("stale")]
+    public async Task Session_ending_during_the_store_read_writes_nothing(string during)
+    {
+        const string sid = "session-1";
+        const string oid = "00000000-0000-0000-0000-00000000000a";
+        var access = new AccessOptions();
+        var registry = new SessionRegistry(_time, Options.Create(access));
+        registry.Add(TestSessions.Started(sid, oid, Now, access));
+        var accessor = new CurrentUserAccessor
+        {
+            User = TestPrincipal.From([new Claim("oid", oid), new Claim(SessionClaims.Sid, sid), new Claim("roles", OpsRoles.Admin)]),
+        };
+        var user = new ClaimsUserContext(accessor, Options.Create(access), registry);
+        var recent = new RecentAuthenticationCheck(accessor, registry, _time, Options.Create(access));
+
+        // Still recent when the change is asked for, with a minute of the window left.
+        _time.Advance(TimeSpan.FromMinutes(14));
+        Assert.True(registry.Touch(sid, oid));
+        var paused = new InMemoryPauseStore();
+        await paused.WriteAsync(PauseState.Running with { Paused = true }, null, CancellationToken.None);
+        var store = new GatedStore(paused);
+        var change = Switch(user, store, recent).SetAsync(false, null, CancellationToken.None);
+        await store.Reading.Task;
+
+        if (during == "ended")
+        {
+            registry.Remove(sid);
+        }
+        else
+        {
+            _time.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        store.Gate.SetResult();
+        var result = await change;
+
+        if (during == "ended")
+        {
+            Assert.IsType<PauseResult.NotAuthorized>(result);
+        }
+        else
+        {
+            Assert.IsType<PauseResult.ReauthenticationRequired>(result);
+        }
+
+        Assert.Equal(0, store.Writes);
+        Assert.True((await store.ReadAsync(CancellationToken.None)).Paused);
+    }
+
+    // Holds the fresh read until the test opens the gate.
+    private sealed class GatedStore(IPauseStore inner) : IPauseStore
+    {
+        public TaskCompletionSource Reading { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int Writes { get; private set; }
+
+        public Task<PauseState> ReadAsync(CancellationToken cancellationToken) => inner.ReadAsync(cancellationToken);
+
+        public async Task<PauseState> ReadFreshAsync(CancellationToken cancellationToken)
+        {
+            Reading.SetResult();
+            await Gate.Task;
+            return await inner.ReadFreshAsync(cancellationToken);
+        }
+
+        public Task<PauseWrite> WriteAsync(PauseState next, string? expectedVersion, CancellationToken cancellationToken)
+        {
+            Writes++;
+            return inner.WriteAsync(next, expectedVersion, cancellationToken);
+        }
     }
 
     // Another Admin's write lands between this switch's read and its write.
