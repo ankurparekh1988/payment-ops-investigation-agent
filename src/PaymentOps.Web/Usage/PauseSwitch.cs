@@ -4,8 +4,9 @@ using PaymentOps.Web.Security;
 namespace PaymentOps.Web.Usage;
 
 /// <summary>
-/// Pauses or resumes investigations for everyone, for Admins who signed in recently: both are checked here on every
-/// call, like an approval, so hiding the button is never the control. The change is decided from a fresh read, so
+/// Pauses or resumes investigations for everyone, for Admins; resuming also needs a recent sign-in. Both are checked
+/// here on every call, like an approval, so hiding the button is never the control. Pausing doesn't need one: it only
+/// stops new investigations, and an Admin in an incident shouldn't have to sign in again to do it. The change is decided from a fresh read, so
 /// asking for the state it's already in reports it as it is; each change is logged with a pseudonymous actor and the
 /// reason's length.
 /// </summary>
@@ -16,7 +17,7 @@ internal sealed partial class PauseSwitch(
 
     public async Task<PauseResult> SetAsync(bool paused, string? reason, CancellationToken cancellationToken)
     {
-        if (Refusal() is { } refused)
+        if (Refusal(paused) is { } refused)
         {
             return refused;
         }
@@ -32,7 +33,7 @@ internal sealed partial class PauseSwitch(
         }
 
         // Again, with nothing awaited before the write: the session can end or go stale while the read is pending.
-        if (Refusal() is { } late)
+        if (Refusal(paused) is { } late)
         {
             return late;
         }
@@ -56,10 +57,10 @@ internal sealed partial class PauseSwitch(
         }
     }
 
-    // A signed-in Admin first, then a recent sign-in; neither reads the store.
-    private PauseResult? Refusal() =>
+    // A signed-in Admin first, then a recent sign-in to resume; neither reads the store.
+    private PauseResult? Refusal(bool pausing) =>
         !user.IsAuthenticated || !user.IsInRole(OpsRoles.Admin) ? new PauseResult.NotAuthorized()
-        : !recent.IsFresh ? new PauseResult.ReauthenticationRequired()
+        : !pausing && !recent.IsFresh ? new PauseResult.ReauthenticationRequired()
         : null;
 
     // Stored and shown as plain text; only its length is logged.

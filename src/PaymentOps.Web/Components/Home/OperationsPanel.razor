@@ -71,7 +71,7 @@
             </MudButton>
             @if (_confirming)
             {
-                <ConfirmIdentity Action="@(_confirmingPause ? "pause investigations" : "resume investigations")" Confirmed="OnConfirmed" />
+                <ConfirmIdentity Action="resume investigations" Confirmed="OnConfirmed" />
             }
         }
         @if (_message is { } message)
@@ -100,7 +100,6 @@
     private MudButton? _trigger;
     private bool _changing;
     private bool _confirming;
-    private bool _confirmingPause;
     private bool _failed;
     private string? _message;
 
@@ -140,7 +139,7 @@
         try
         {
             var result = await Switch.SetAsync(pausing, answer.Data as string, CancellationToken.None);
-            (_confirming, _confirmingPause) = (result is PauseResult.ReauthenticationRequired, pausing);
+            _confirming = result is PauseResult.ReauthenticationRequired;
             (_pause, _message, _failed) = result switch
             {
                 PauseResult.Changed changed => (changed.State, changed.State.Paused ? "Investigations paused." : "Investigations resumed.", false),
@@ -160,7 +159,7 @@
     private void OnConfirmed()
     {
         _confirming = false;
-        (_message, _failed) = ($"Confirmed. Choose {(_confirmingPause ? "Pause" : "Resume")} again.", false);
+        (_message, _failed) = ("Confirmed. Choose Resume again.", false);
     }
 
     private double Percent(int total) => Math.Min(100, 100.0 * total / View.TotalLimit);

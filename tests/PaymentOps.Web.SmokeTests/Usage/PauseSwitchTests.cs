@@ -255,15 +255,27 @@ public sealed class PauseSwitchTests
     }
 
     [Fact]
-    public async Task Stale_pause_is_refused_without_touching_the_store()
+    public async Task Stale_resume_is_refused_without_touching_the_store()
+    {
+        _recent.Recent = false;
+
+        var result = await Switch(Admin()).SetAsync(false, null, CancellationToken.None);
+
+        Assert.IsType<PauseResult.ReauthenticationRequired>(result);
+        Assert.Equal(0, _table.Reads);
+        Assert.Equal(0, _table.Writes);
+    }
+
+    // Pausing only stops new investigations, so an Admin in an incident isn't asked to sign in again.
+    [Fact]
+    public async Task Stale_admin_can_still_pause()
     {
         _recent.Recent = false;
 
         var result = await Switch(Admin()).SetAsync(true, "maintenance", CancellationToken.None);
 
-        Assert.IsType<PauseResult.ReauthenticationRequired>(result);
-        Assert.Equal(0, _table.Reads);
-        Assert.Equal(0, _table.Writes);
+        Assert.True(Assert.IsType<PauseResult.Changed>(result).State.Paused);
+        Assert.Equal(1, _table.Writes);
     }
 
     [Fact]
@@ -285,7 +297,7 @@ public sealed class PauseSwitchTests
         Assert.Equal(0, _table.Writes);
     }
 
-    // The checks before the read can pass and the session still end, or go stale, while the read is pending.
+    // The checks before the read can pass and the session still end, or go stale, while a resume's read is pending.
     [Theory]
     [InlineData("ended")]
     [InlineData("stale")]
@@ -306,8 +318,10 @@ public sealed class PauseSwitchTests
         // Still recent when the change is asked for, with a minute of the window left.
         _time.Advance(TimeSpan.FromMinutes(14));
         Assert.True(registry.Touch(sid, oid));
-        var store = new GatedStore(new InMemoryPauseStore());
-        var change = Switch(user, store, recent).SetAsync(true, "maintenance", CancellationToken.None);
+        var paused = new InMemoryPauseStore();
+        await paused.WriteAsync(PauseState.Running with { Paused = true }, null, CancellationToken.None);
+        var store = new GatedStore(paused);
+        var change = Switch(user, store, recent).SetAsync(false, null, CancellationToken.None);
         await store.Reading.Task;
 
         if (during == "ended")
@@ -332,7 +346,7 @@ public sealed class PauseSwitchTests
         }
 
         Assert.Equal(0, store.Writes);
-        Assert.False((await store.ReadAsync(CancellationToken.None)).Paused);
+        Assert.True((await store.ReadAsync(CancellationToken.None)).Paused);
     }
 
     // Holds the fresh read until the test opens the gate.

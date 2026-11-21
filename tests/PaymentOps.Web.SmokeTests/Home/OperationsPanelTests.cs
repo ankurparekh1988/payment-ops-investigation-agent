@@ -132,8 +132,21 @@ public sealed class OperationsPanelTests : InteractiveTestContext
         dialogs.FindAll("button").Single(b => b.TextContent.Trim() == "Pause investigations").Click();
     }
 
+    private async Task<IRenderedComponent<OperationsPanel>> PausedPanel()
+    {
+        var written = await _store.WriteAsync(PauseState.Running with { Paused = true }, null, CancellationToken.None);
+        return Render<OperationsPanel>(p => p.Add(o => o.View, View(pause: Assert.IsType<PauseWrite.Written>(written).State)));
+    }
+
+    private static void AskToResume(IRenderedComponent<MudDialogProvider> dialogs, IRenderedComponent<OperationsPanel> panel)
+    {
+        panel.FindAll("button").Single(b => b.TextContent.Trim() == "Resume investigations").Click();
+        dialogs.WaitForAssertion(() => Assert.Contains(dialogs.FindAll("button"), b => b.TextContent.Trim() == "Resume investigations"));
+        dialogs.FindAll("button").Single(b => b.TextContent.Trim() == "Resume investigations").Click();
+    }
+
     [Fact]
-    public void Stale_pause_shows_confirm()
+    public void Stale_admin_pauses_without_confirming()
     {
         _recent.Recent = false;
         var dialogs = Render<MudDialogProvider>();
@@ -141,9 +154,22 @@ public sealed class OperationsPanelTests : InteractiveTestContext
 
         AskToPause(dialogs, panel);
 
+        panel.WaitForAssertion(() => Assert.True(_store.Current.Paused));
+        Assert.Empty(panel.FindAll("button[data-po-confirm]"));
+    }
+
+    [Fact]
+    public async Task Stale_resume_shows_confirm()
+    {
+        _recent.Recent = false;
+        var dialogs = Render<MudDialogProvider>();
+        var panel = await PausedPanel();
+
+        AskToResume(dialogs, panel);
+
         panel.WaitForAssertion(() => Assert.Contains("For this you need to have signed in within the last 15 minutes.", panel.Markup, StringComparison.Ordinal));
         Assert.Equal("Confirm it's you", panel.Find("button[data-po-confirm]").TextContent.Trim());
-        Assert.False(_store.Current.Paused);
+        Assert.True(_store.Current.Paused);
     }
 
     [Fact]
@@ -151,8 +177,8 @@ public sealed class OperationsPanelTests : InteractiveTestContext
     {
         _recent.Recent = false;
         var dialogs = Render<MudDialogProvider>();
-        var panel = Render<OperationsPanel>(p => p.Add(o => o.View, View()));
-        AskToPause(dialogs, panel);
+        var panel = await PausedPanel();
+        AskToResume(dialogs, panel);
         panel.WaitForAssertion(() => panel.Find("button[data-po-confirm]"));
         var calls = _switch!.Calls;
 
@@ -161,11 +187,11 @@ public sealed class OperationsPanelTests : InteractiveTestContext
         var flow = panel.Find("button[data-po-confirm]").GetAttribute("data-po-confirm")!;
         await confirm.InvokeAsync(() => confirm.Instance.OnConfirmResult(flow, "confirmed"));
 
-        panel.WaitForAssertion(() => Assert.Contains("Confirmed. Choose Pause again.", panel.Markup, StringComparison.Ordinal));
+        panel.WaitForAssertion(() => Assert.Contains("Confirmed. Choose Resume again.", panel.Markup, StringComparison.Ordinal));
         Assert.Empty(panel.FindAll("button[data-po-confirm]"));
         Assert.Equal(calls, _switch.Calls);
-        Assert.False(_store.Current.Paused);
-        Assert.DoesNotContain("New investigations stop within 10 seconds.", dialogs.Markup, StringComparison.Ordinal);
+        Assert.True(_store.Current.Paused);
+        Assert.DoesNotContain("New investigations can start again within 10 seconds.", dialogs.Markup, StringComparison.Ordinal);
     }
 
     private sealed class CountingPauseSwitch(IPauseSwitch inner) : IPauseSwitch
