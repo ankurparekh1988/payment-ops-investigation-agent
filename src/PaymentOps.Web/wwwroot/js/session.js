@@ -3,12 +3,16 @@
 window.poSession = (() => {
     const reportEvery = 30000;
     const pollEvery = 500;
+
+    // Long enough to finish signing in at Entra; after that the person chooses Confirm again.
+    const recheckFor = 10 * 60 * 1000;
     const activityEvents = ["keydown", "pointerdown"];
 
-    // flow -> { ref, attempt }, one per ConfirmIdentity on this page.
+    // flow -> { ref, owner, attempt }, one per ConfirmIdentity on this page.
     const confirms = new Map();
 
-    // finished flow -> return listener; outlives its entry, since the component moves to a new flow straight away.
+    // owner -> { flow, listener, timer }: at most one per component, for the window it last saw closed. It outlives that
+    // flow's entry, since the component moves to a new flow straight away.
     const rechecks = new Map();
     let reporter = null;
     let lastReport = 0;
@@ -104,34 +108,40 @@ window.poSession = (() => {
 
     // Entra's pages can cut this tab off from the window, which then looks closed while the person is still signing in;
     // each return to this tab asks the component to re-read the server until it has nothing left to wait for.
-    function recheckOnReturn(ref, flow) {
+    function recheckOnReturn(entry, flow) {
+        const owner = entry.owner;
+        dropRecheck(owner);
         let asking = false;
-        const listener = () => {
+        const recheck = { flow };
+        recheck.listener = () => {
             if (document.visibilityState !== "visible" || asking) {
                 return;
             }
 
             asking = true;
-            ref.invokeMethodAsync("RecheckConfirmation").then(
+            entry.ref.invokeMethodAsync("RecheckConfirmation", flow).then(
                 done => {
                     asking = false;
                     if (done !== false) {
-                        dropRecheck(flow);
+                        dropRecheck(owner, flow);
                     }
                 },
-                () => dropRecheck(flow));
+                () => dropRecheck(owner, flow));
         };
-        rechecks.set(flow, listener);
-        window.addEventListener("focus", listener);
-        document.addEventListener("visibilitychange", listener);
+        recheck.timer = setTimeout(() => dropRecheck(owner, flow), recheckFor);
+        rechecks.set(owner, recheck);
+        window.addEventListener("focus", recheck.listener);
+        document.addEventListener("visibilitychange", recheck.listener);
     }
 
-    function dropRecheck(flow) {
-        const listener = rechecks.get(flow);
-        if (listener) {
-            window.removeEventListener("focus", listener);
-            document.removeEventListener("visibilitychange", listener);
-            rechecks.delete(flow);
+    // With a flow, only that flow's recheck: a later one for the same owner stays.
+    function dropRecheck(owner, flow) {
+        const recheck = rechecks.get(owner);
+        if (recheck && (flow === undefined || recheck.flow === flow)) {
+            window.removeEventListener("focus", recheck.listener);
+            document.removeEventListener("visibilitychange", recheck.listener);
+            clearTimeout(recheck.timer);
+            rechecks.delete(owner);
         }
     }
 
@@ -148,14 +158,16 @@ window.poSession = (() => {
         clear(entry.attempt);
         confirms.delete(flow);
         if (result === "closed" && entry.attempt.popup) {
-            recheckOnReturn(entry.ref, flow);
+            recheckOnReturn(entry, flow);
         }
 
         report(entry, flow, result);
     }
 
+    // A new attempt supersedes the component's earlier closed window.
     function begin(entry, flow, popup) {
         clear(entry.attempt);
+        dropRecheck(entry.owner);
         const attempt = { popup, closedSeen: false };
         attempt.listener = event => {
             if (accepts(event, popup, flow)) {
@@ -212,12 +224,12 @@ window.poSession = (() => {
         }
     }
 
-    function register(flow, dotNetRef) {
+    function register(flow, dotNetRef, owner) {
         const entry = confirms.get(flow);
         if (entry) {
             entry.ref = dotNetRef;
         } else {
-            confirms.set(flow, { ref: dotNetRef, attempt: null });
+            confirms.set(flow, { ref: dotNetRef, owner, attempt: null });
         }
     }
 
@@ -229,7 +241,24 @@ window.poSession = (() => {
         }
     }
 
+    // Everything held for a component that has gone: its attempts and its recheck.
+    function release(owner) {
+        for (const [flow, entry] of confirms) {
+            if (entry.owner === owner) {
+                clear(entry.attempt);
+                confirms.delete(flow);
+            }
+        }
+
+        dropRecheck(owner);
+    }
+
+    // For checking from the console that nothing is left behind.
+    function pending() {
+        return { confirms: confirms.size, rechecks: rechecks.size };
+    }
+
     document.addEventListener("click", onClick);
 
-    return { start, stop, warning: setWarning, register, cancel, accepts };
+    return { start, stop, warning: setWarning, register, cancel, release, pending, accepts };
 })();

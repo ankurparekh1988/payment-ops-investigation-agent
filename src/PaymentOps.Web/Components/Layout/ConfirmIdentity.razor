@@ -25,11 +25,17 @@
 
 @code {
     private const string Blocked = "blocked";
+    private const string Closed = "closed";
     private const string NotConfirmedText = "Not confirmed. Try again.";
     private const string BlockedText = "Your browser blocked the sign-in window. Allow pop-ups for this site and try again.";
 
+    // The browser keeps what it holds for this component under one owner, so disposal can release all of it.
+    private readonly string _owner = NewFlow();
     private string _flow = NewFlow();
     private string? _registered;
+
+    // The window last seen closed before the server held a recent sign-in; only it may be rechecked.
+    private string? _recheck;
     private string? _message;
     private bool _blocked;
     private bool _live = true;
@@ -67,7 +73,7 @@
         }
 
         _registered = _flow;
-        await JS.InvokeVoidAsync("poSession.register", _flow, _self);
+        await JS.InvokeVoidAsync("poSession.register", _flow, _self, _owner);
     }
 
     /// <summary>How the sign-in window ended, as the browser reports it. A result for another flow is ignored.</summary>
@@ -100,6 +106,7 @@
                 // The registry decides, whatever the window reported: its message can be lost on the way back.
                 var confirmed = Recent.IsFresh;
                 (_flow, _blocked, _message) = (NewFlow(), false, confirmed ? null : NotConfirmedText);
+                _recheck = !confirmed && result == Closed ? flow : null;
                 if (confirmed)
                 {
                     await Confirmed.InvokeAsync();
@@ -112,13 +119,14 @@
     }
 
     /// <summary>
-    /// Asked when the person comes back to this tab after a window was seen closed, which can happen while they are
-    /// still signing in. Changes nothing until the server holds a recent sign-in; true once there is nothing left to wait for.
+    /// Asked when the person comes back to this tab after <paramref name="flow"/>'s window was seen closed, which can
+    /// happen while they are still signing in. Changes nothing until the server holds a recent sign-in; true once there
+    /// is nothing left to wait for, including when a later window has superseded this one.
     /// </summary>
     [JSInvokable]
-    public async Task<bool> RecheckConfirmation()
+    public async Task<bool> RecheckConfirmation(string flow)
     {
-        if (_disposed || !_live)
+        if (_disposed || !_live || flow != _recheck)
         {
             return true;
         }
@@ -134,7 +142,7 @@
             return false;
         }
 
-        (_flow, _blocked, _message) = (NewFlow(), false, null);
+        (_flow, _blocked, _message, _recheck) = (NewFlow(), false, null, null);
         await Confirmed.InvokeAsync();
         StateHasChanged();
         return true;
@@ -151,11 +159,11 @@
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
-        if (_registered is { } flow)
+        if (_registered is not null)
         {
             try
             {
-                await JS.InvokeVoidAsync("poSession.cancel", flow);
+                await JS.InvokeVoidAsync("poSession.release", _owner);
             }
             catch (JSDisconnectedException)
             {

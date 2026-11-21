@@ -148,7 +148,7 @@ public sealed class IdleWatchTests : InteractiveTestContext
 
         Assert.Equal(reads, _recent.Reads);
         Assert.Single(Context.JSInterop.Invocations, i => i.Identifier == "poSession.stop");
-        Assert.Single(Context.JSInterop.Invocations, i => i.Identifier == "poSession.cancel");
+        Assert.Single(Context.JSInterop.Invocations, i => i.Identifier == "poSession.release");
         Assert.Empty(Navigations());
     }
 

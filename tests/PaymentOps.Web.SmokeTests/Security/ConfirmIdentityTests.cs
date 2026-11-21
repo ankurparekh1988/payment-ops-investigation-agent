@@ -129,36 +129,102 @@ public sealed partial class ConfirmIdentityTests : InteractiveTestContext
         Assert.Contains(NotConfirmed, confirm.Markup, StringComparison.Ordinal);
     }
 
+    private static Task<bool> Recheck(IRenderedComponent<ConfirmIdentity> confirm, string flow) =>
+        confirm.InvokeAsync(() => confirm.Instance.RecheckConfirmation(flow));
+
     // The window can look closed while the person is still signing in; coming back to the tab asks the server again.
     [Fact]
     public async Task Returning_after_a_closed_window_confirms_once_the_registry_is_fresh()
     {
         _recent.Recent = false;
         var confirm = RenderConfirm();
-        await Report(confirm, Flow(confirm), "closed");
+        var closed = Flow(confirm);
+        await Report(confirm, closed, "closed");
         var flow = Flow(confirm);
 
-        var notYet = await confirm.InvokeAsync(() => confirm.Instance.RecheckConfirmation());
+        var notYet = await Recheck(confirm, closed);
 
         Assert.False(notYet);
         Assert.Equal(flow, Flow(confirm));
         Assert.Equal(0, _confirmed);
 
         _recent.Recent = true;
-        var done = await confirm.InvokeAsync(() => confirm.Instance.RecheckConfirmation());
+        var done = await Recheck(confirm, closed);
 
         Assert.True(done);
         Assert.Equal(1, _confirmed);
         Assert.DoesNotContain(NotConfirmed, confirm.Markup, StringComparison.Ordinal);
+        Assert.True(await Recheck(confirm, closed));
+        Assert.Equal(1, _confirmed);
+    }
+
+    // Only the latest closed window may be rechecked: an older one has been superseded and is told to stop.
+    [Fact]
+    public async Task Recheck_for_a_superseded_window_is_ignored()
+    {
+        _recent.Recent = false;
+        var confirm = RenderConfirm();
+        var older = Flow(confirm);
+        await Report(confirm, older, "closed");
+        var newer = Flow(confirm);
+        await Report(confirm, newer, "closed");
+        var current = Flow(confirm);
+        _recent.Recent = true;
+
+        var stale = await Recheck(confirm, older);
+
+        Assert.True(stale);
+        Assert.Equal(0, _confirmed);
+        Assert.Equal(current, Flow(confirm));
+
+        Assert.True(await Recheck(confirm, newer));
+        Assert.Equal(1, _confirmed);
+    }
+
+    [Theory]
+    [InlineData("confirmed")]
+    [InlineData("cancelled")]
+    public async Task Recheck_after_a_window_that_was_not_closed_is_ignored(string result)
+    {
+        _recent.Recent = false;
+        var confirm = RenderConfirm();
+        var flow = Flow(confirm);
+        await Report(confirm, flow, result);
+        _recent.Recent = true;
+
+        Assert.True(await Recheck(confirm, flow));
+        Assert.True(await Recheck(confirm, Flow(confirm)));
+        Assert.Equal(0, _confirmed);
+    }
+
+    // One owner per component, so the browser can drop everything it holds for it, rechecks included.
+    [Fact]
+    public async Task Disposal_releases_everything_registered_for_the_component()
+    {
+        _recent.Recent = false;
+        var confirm = RenderConfirm();
+        await Report(confirm, Flow(confirm), "closed");
+        confirm.WaitForAssertion(() => Assert.Equal(2, Context.JSInterop.Invocations.Count(i => i.Identifier == "poSession.register")));
+        var owners = Context.JSInterop.Invocations.Where(i => i.Identifier == "poSession.register").Select(i => (string)i.Arguments[2]!).Distinct().ToList();
+        var owner = Assert.Single(owners);
+        Assert.Matches(HexFlow(), owner);
+
+        await confirm.InvokeAsync(() => confirm.Instance.DisposeAsync().AsTask());
+
+        var release = Assert.Single(Context.JSInterop.Invocations, i => i.Identifier == "poSession.release");
+        Assert.Equal(owner, release.Arguments[0]);
     }
 
     [Fact]
     public async Task Returning_after_the_session_ended_signs_out()
     {
+        _recent.Recent = false;
         var confirm = RenderConfirm();
+        var closed = Flow(confirm);
+        await Report(confirm, closed, "closed");
         _recent.Live = false;
 
-        var done = await confirm.InvokeAsync(() => confirm.Instance.RecheckConfirmation());
+        var done = await Recheck(confirm, closed);
 
         Assert.True(done);
         Assert.Equal(0, _confirmed);

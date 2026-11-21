@@ -628,6 +628,28 @@ public sealed partial class SignInFlowTests
         AssertChallenged(replay);
     }
 
+    // A page left open past the idle limit still holds the cookie and the token it was given; signing out from it ends
+    // the sign-in locally and revokes it, even though the token no longer matches the now-anonymous user.
+    [Fact]
+    public async Task Signing_out_after_idle_expiry_revokes_the_session()
+    {
+        using var app = new OidcCallbackFactory();
+        var (jar, sid) = await SignInAsync(app, UserA, [OpsRoles.Admin]);
+        var token = await AntiforgeryTokenAsync(app, jar);
+        var copy = jar.Copy();
+        app.Time.Advance(TimeSpan.FromMinutes(15) + TimeSpan.FromSeconds(1));
+
+        using var signOut = await jar.SendAsync(app.Client(), HttpMethod.Post, "/account/sign-out", Form(("__RequestVerificationToken", token)));
+
+        Assert.Equal(HttpStatusCode.Redirect, signOut.StatusCode);
+        Assert.Equal("/signed-out", signOut.Headers.Location?.OriginalString);
+        Assert.Contains(CookieJar.SetCookies(signOut), c => c.Name.StartsWith(AuthCookie, StringComparison.Ordinal) && c.Deleted);
+        Assert.Null(app.Registry.Find(sid));
+        Assert.Equal(0, app.Registry.Count);
+        using var replay = await copy.SendAsync(app.Client(), HttpMethod.Get, "/");
+        AssertChallenged(replay);
+    }
+
     [Fact]
     public async Task Step_up_racing_sign_out_records_nothing()
     {
