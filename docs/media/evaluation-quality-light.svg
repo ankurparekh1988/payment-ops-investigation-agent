@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 456" width="100%" role="img" aria-label="Quality metrics, runs 2026-11-09 and 2026-11-18, against the release gate" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<title>Quality metrics, runs 2026-11-09 and 2026-11-18, against the release gate</title>
+<rect width="880" height="456" rx="8" fill="#ffffff"/>
+<text x="20" y="28" font-size="14" font-weight="600" text-anchor="start" fill="#1f2328">Quality: median of 3 runs over 37 labelled cases (retrieval: 26 questions)</text>
+<rect x="20" y="44" width="12" height="12" rx="3" fill="#86b6ef"/>
+<text x="38" y="54" font-size="12" font-weight="400" text-anchor="start" fill="#59636e">Run 2026-11-09</text>
+<rect x="170" y="44" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="188" y="54" font-size="12" font-weight="400" text-anchor="start" fill="#59636e">Run 2026-11-18</text>
+<line x1="326" y1="42" x2="326" y2="57" stroke="#1f2328" stroke-width="2"/>
+<text x="336" y="54" font-size="12" font-weight="400" text-anchor="start" fill="#59636e">Release gate</text>
+<line x1="220" y1="68" x2="220" y2="420" stroke="#d1d9e0" stroke-width="1"/>
+<text x="220" y="446" font-size="11" font-weight="400" text-anchor="middle" fill="#59636e">0.00</text>
+<line x1="375.0" y1="68" x2="375.0" y2="420" stroke="#d1d9e0" stroke-width="1"/>
+<text x="375.0" y="446" font-size="11" font-weight="400" text-anchor="middle" fill="#59636e">0.25</text>
+<line x1="530.0" y1="68" x2="530.0" y2="420" stroke="#d1d9e0" stroke-width="1"/>
+<text x="530.0" y="446" font-size="11" font-weight="400" text-anchor="middle" fill="#59636e">0.50</text>
+<line x1="685.0" y1="68" x2="685.0" y2="420" stroke="#d1d9e0" stroke-width="1"/>
+<text x="685.0" y="446" font-size="11" font-weight="400" text-anchor="middle" fill="#59636e">0.75</text>
+<line x1="840" y1="68" x2="840" y2="420" stroke="#d1d9e0" stroke-width="1"/>
+<text x="840" y="446" font-size="11" font-weight="400" text-anchor="middle" fill="#59636e">1.00</text>
+<text x="208" y="93" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Passed server validation</text>
+<rect x="220" y="74" width="586.5" height="14" rx="3" fill="#86b6ef"><title>Passed server validation, 2026-11-09: 0.946</title></rect>
+<text x="812.5" y="86" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.946</text>
+<rect x="220" y="90" width="620" height="14" rx="3" fill="#2a78d6"><title>Passed server validation, 2026-11-18: 1.000</title></rect>
+<text x="846" y="102" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">1.000</text>
+<line x1="790.4" y1="70" x2="790.4" y2="108" stroke="#1f2328" stroke-width="2"><title>Release gate 0.92</title></line>
+<text x="208" y="137" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Outcome allowed by the label</text>
+<rect x="220" y="118" width="553.0" height="14" rx="3" fill="#86b6ef"><title>Outcome allowed by the label, 2026-11-09: 0.892</title></rect>
+<text x="779.0" y="130" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.892</text>
+<rect x="220" y="134" width="569.8" height="14" rx="3" fill="#2a78d6"><title>Outcome allowed by the label, 2026-11-18: 0.919</title></rect>
+<text x="795.8" y="146" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.919</text>
+<line x1="740.8" y1="114" x2="740.8" y2="152" stroke="#1f2328" stroke-width="2"><title>Release gate 0.84</title></line>
+<text x="208" y="181" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Expected evidence cited</text>
+<rect x="220" y="162" width="450.7" height="14" rx="3" fill="#86b6ef"><title>Expected evidence cited, 2026-11-09: 0.727</title></rect>
+<text x="676.7" y="174" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.727</text>
+<rect x="220" y="178" width="441.4" height="14" rx="3" fill="#2a78d6"><title>Expected evidence cited, 2026-11-18: 0.712</title></rect>
+<text x="667.4" y="190" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.712</text>
+<line x1="629.2" y1="158" x2="629.2" y2="196" stroke="#1f2328" stroke-width="2"><title>Release gate 0.66</title></line>
+<text x="208" y="225" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Required tools called</text>
+<rect x="220" y="206" width="504.7" height="14" rx="3" fill="#86b6ef"><title>Required tools called, 2026-11-09: 0.814</title></rect>
+<text x="730.7" y="218" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.814</text>
+<rect x="220" y="222" width="490.4" height="14" rx="3" fill="#2a78d6"><title>Required tools called, 2026-11-18: 0.791</title></rect>
+<text x="716.4" y="234" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.791</text>
+<line x1="703.6" y1="202" x2="703.6" y2="240" stroke="#1f2328" stroke-width="2"><title>Release gate 0.78</title></line>
+<text x="208" y="269" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Tool arguments correct</text>
+<rect x="220" y="250" width="401.8" height="14" rx="3" fill="#86b6ef"><title>Tool arguments correct, 2026-11-09: 0.648</title></rect>
+<text x="627.8" y="262" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.648</text>
+<rect x="220" y="266" width="390.6" height="14" rx="3" fill="#2a78d6"><title>Tool arguments correct, 2026-11-18: 0.630</title></rect>
+<text x="616.6" y="278" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.630</text>
+<line x1="573.4" y1="246" x2="573.4" y2="284" stroke="#1f2328" stroke-width="2"><title>Release gate 0.57</title></line>
+<text x="208" y="313" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Runbook sections: precision</text>
+<rect x="220" y="294" width="475.5" height="14" rx="3" fill="#86b6ef"><title>Runbook sections: precision, 2026-11-09: 0.767</title></rect>
+<text x="701.5" y="306" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.767</text>
+<rect x="220" y="310" width="479.3" height="14" rx="3" fill="#2a78d6"><title>Runbook sections: precision, 2026-11-18: 0.773</title></rect>
+<text x="705.3" y="322" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.773</text>
+<line x1="666.4" y1="290" x2="666.4" y2="328" stroke="#1f2328" stroke-width="2"><title>Release gate 0.72</title></line>
+<text x="208" y="357" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Runbook sections: recall</text>
+<rect x="220" y="338" width="290.8" height="14" rx="3" fill="#86b6ef"><title>Runbook sections: recall, 2026-11-09: 0.469</title></rect>
+<text x="516.8" y="350" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.469</text>
+<rect x="220" y="354" width="271.6" height="14" rx="3" fill="#2a78d6"><title>Runbook sections: recall, 2026-11-18: 0.438</title></rect>
+<text x="497.6" y="366" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.438</text>
+<line x1="468.0" y1="334" x2="468.0" y2="372" stroke="#1f2328" stroke-width="2"><title>Release gate 0.40</title></line>
+<text x="208" y="401" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Retrieval recall@5, held out</text>
+<rect x="220" y="382" width="501.0" height="14" rx="3" fill="#86b6ef"><title>Retrieval recall@5, held out, 2026-11-09: 0.808</title></rect>
+<text x="727.0" y="394" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.808</text>
+<rect x="220" y="398" width="476.8" height="14" rx="3" fill="#2a78d6"><title>Retrieval recall@5, held out, 2026-11-18: 0.769</title></rect>
+<text x="702.8" y="410" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">0.769</text>
+<line x1="691.2" y1="378" x2="691.2" y2="416" stroke="#1f2328" stroke-width="2"><title>Release gate 0.76</title></line>
+</svg>
