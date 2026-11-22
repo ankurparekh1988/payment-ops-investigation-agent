@@ -293,6 +293,11 @@ h1:focus {
 .ticket-reject-fields { display: grid; gap: 6px; }
 .ticket-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* Confirm it's you: shown in place of an action that needs a recent sign-in */
+.confirm-identity { display: grid; justify-items: start; gap: 8px; margin-top: 12px; }
+.confirm-identity p { margin: 0; }
+.confirm-identity a { color: var(--mud-palette-primary); }
+
 @media (max-width: 599px) {
     .ticket-actions { flex-direction: column-reverse; }
     .ticket-actions .mud-button-root { width: 100%; min-height: 48px; }

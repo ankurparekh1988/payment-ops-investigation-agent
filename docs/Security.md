@@ -18,7 +18,12 @@ Users sign in with Entra ID ([ADR 0003](adr/0003-server-rendered-ui-and-sign-in.
 - **No stored sign-in credential in Azure.** The deployed app redeems codes as its managed identity, which the app registration trusts through a federated credential: no client secret, certificate or credential in the app settings. Local development uses a separate, short-lived secret kept in .NET user-secrets, which exists only while local addresses are configured.
 - **Demo users are opt-in.** They're ordinary tenant accounts, created only when `TF_VAR_create_demo_users=true` and assigned roles only on this application. Their passwords don't expire because they're shared for demonstrations, so remove them when not in use.
 - **Everything requires a role** unless it's explicitly public, and the interactive pages state it themselves, because navigating inside an open page isn't an HTTP request; a page whose sign-in has ended is sent back through a full load: `/health`, `/health/ready`, sign-out and the signed-out, access-denied, not-found and error pages. That includes the source pages behind citations. A signed-in user without a role sees the access-denied page.
+- **Every sign-in asks for a credential.** Sign-in and step-up send `prompt=login`, so Entra asks for a password, Windows Hello or a passkey, and its page lets the person choose another account. The browser can drop that parameter, so the server checks Entra's `auth_time` too: a sign-in or step-up whose credential wasn't entered in the last 5 minutes is refused. A sign-in without `auth_time` still starts, but can't resume or approve until the person confirms it's them.
 - **Sign-ins last a fixed time.** Roles and groups come from the token, so a sign-in ends after `PaymentOps:Authorization:SessionLifetime` (8 hours by default) without sliding, and changes made in Entra apply at the next one. Open pages are signed out at the same moment.
+- **Sessions expire when idle.** The server owns each session: a cookie is accepted only if it names a live session for the same user. After 15 minutes without activity the session ends, with a "Signing you out soon" warning and a Stay signed in button at 2 minutes left. Only keyboard or pointer input, page loads and Stay signed in count as activity. Expiry is enforced on every service call, every HTTP request and in open pages. A new sign-in in the same browser ends that browser's previous session, and signing out removes the session so the old cookie can't be replayed.
+- **Resuming and approving need a recent sign-in.** Resuming investigations and approving a ticket need a sign-in within the last 15 minutes, read from Entra's `auth_time` claim (an optional claim on the app registration). Otherwise the page shows "Confirm it's you", which opens a small sign-in window. Nothing is performed afterwards: the person clicks the action again. The pause switch checks this itself, again right before it writes, and approval is checked in front of the approval service. Pausing needs no recent sign-in: it only stops new investigations, and an Admin in an incident shouldn't have to sign in again first. A step-up by a different account, or with changed roles or groups, ends the session.
+- **Sessions are held in memory on one instance,** so a restart signs everyone out.
+- **A fresh sign-in isn't guaranteed fresh MFA.** The tenant uses security defaults, which prompt for MFA when Entra decides to. Requiring it for resume and approval needs a Conditional Access authentication context, which needs Entra ID P1 ([ProductionGapAnalysis](ProductionGapAnalysis.md)).
 
 | App role | Can |
 |---|---|
@@ -159,6 +164,7 @@ Creating an incident ticket is the only action that changes anything outside the
 | A platform incident forced into one processor's ticket | Prompt rule, and missing files from two processors reject the ticket | Rejected |
 | Card or account data in a ticket | `TicketContentPolicy`: card-number checksum, runs of eight or more digits, IBAN shapes; reports rule ids only | The correction, logs and result carry no digits from the input |
 | Role removed mid-session | The role is read from the signed-in user at call time; a change in Entra applies at the next sign-in | Demoted to Reader before the click: refused |
+| Approval from an unattended or stale session | `FreshApprovalService` refuses to approve unless the sign-in is within the last 15 minutes (`auth_time`); the page offers "Confirm it's you" instead | An approval with an older sign-in is refused and creates nothing |
 | Cross-site request forgery | No HTTP endpoint for approvals; decisions go through the signed-in circuit | Endpoint enumeration finds none |
 | Clickjacking | `frame-ancestors 'none'` on the interactive pages | A smoke test reads the header on `/` |
 | A cancel races completion | A cancelled investigation keeps nothing | Cancelled after the submission: no proposal, no turn |
@@ -167,6 +173,7 @@ Creating an incident ticket is the only action that changes anything outside the
 Known limits:
 
 - A role removed in Entra applies at the next sign-in, as for every check.
+- Approving needs a sign-in within the last 15 minutes; rejecting doesn't, because it creates nothing.
 - A person can approve a well-formed proposal that untrusted text steered. Flagged text is withheld and can't ground a ticket, but text the screen passes can still shape one; the approver sees the cited sources as they are ([Injection and content safety](#injection-and-content-safety)).
 - The content policy blocks card-like and account-like numbers. It isn't data-loss prevention for bank details ([ProductionGapAnalysis](ProductionGapAnalysis.md)).
 - Proposals and tickets are lost on restart, deploy or slot swap, and the app runs as one instance.

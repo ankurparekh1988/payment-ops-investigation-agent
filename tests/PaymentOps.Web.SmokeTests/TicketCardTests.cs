@@ -1,11 +1,39 @@
+using AngleSharp.Dom;
+
+using Bunit;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
+
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Domain.Security;
 using PaymentOps.Web.Components.Investigation;
+using PaymentOps.Web.Components.Layout;
+using PaymentOps.Web.Components.Pages;
+using PaymentOps.Web.Investigating;
+using PaymentOps.Web.Security;
+using PaymentOps.Web.SmokeTests.Investigating;
 
 namespace PaymentOps.Web.SmokeTests;
 
-public sealed class TicketCardTests
+public sealed class TicketCardTests : InteractiveTestContext
 {
     private static readonly Guid Id = Guid.Parse("0f0e0d0c-0000-4000-8000-000000000013");
+
+    private readonly ScriptedInvestigationService _investigation = new() { Answer = _ => Results.WithPendingTicket() };
+    private readonly CountingApprovalService _approvals = new(new ApprovalResult.Created("INC-0042"));
+    private readonly TestRecentAuthentication _recent = new();
+
+    public TicketCardTests()
+    {
+        Context.Services.AddSingleton<IInvestigationService>(_investigation);
+        Context.Services.AddSingleton<IApprovalService>(_approvals);
+        Context.Services.AddSingleton<TimeProvider>(new FakeTimeProvider(Results.Now));
+        Context.Services.AddSingleton<IUserContext>(TestUser.Engineer);
+        Context.Services.AddSingleton(new QuestionLimits(2000));
+        Context.Services.AddSingleton<IRecentAuthentication>(_recent);
+        Context.Services.AddScoped<InvestigationSession>();
+    }
 
     private static TicketProposal Proposal(ProposalStatus status, string title = "Fabrikam Pay settlement file missing for 9 November") => new(
         status == ProposalStatus.Draft || status == ProposalStatus.Unavailable ? null : Id,
@@ -119,5 +147,50 @@ public sealed class TicketCardTests
         var html = await ComponentHtml.RenderAsync<AssessmentView>(new() { [nameof(AssessmentView.Result)] = assessed });
 
         Assert.Contains("Draft prepared.", html, StringComparison.Ordinal);
+    }
+
+    private static IElement Button(IRenderedComponent<Investigate> page, string text) =>
+        page.FindAll("button").Single(b => b.TextContent.Trim() == text);
+
+    private IRenderedComponent<Investigate> PendingCard()
+    {
+        var page = Render<Investigate>();
+        page.Find("textarea#question").Input("Why was M-1042 not paid?");
+        Button(page, "Investigate").Click();
+        page.WaitForAssertion(() => Button(page, "Approve"));
+        return page;
+    }
+
+    [Fact]
+    public void Stale_approve_shows_confirm()
+    {
+        _recent.Recent = false;
+        var page = PendingCard();
+
+        Button(page, "Approve").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("For this you need to have signed in within the last 15 minutes.", page.Markup, StringComparison.Ordinal));
+        Assert.Equal("Confirm it's you", page.Find("button[data-po-confirm]").TextContent.Trim());
+        Assert.DoesNotContain(page.FindAll("button"), b => b.TextContent.Trim() == "Approve");
+        Assert.Equal(0, _approvals.Approvals);
+    }
+
+    [Fact]
+    public async Task Confirmed_does_not_perform_the_action()
+    {
+        _recent.Recent = false;
+        var page = PendingCard();
+        Button(page, "Approve").Click();
+        page.WaitForAssertion(() => page.Find("button[data-po-confirm]"));
+
+        _recent.Recent = true;
+        var confirm = page.FindComponent<ConfirmIdentity>();
+        var flow = page.Find("button[data-po-confirm]").GetAttribute("data-po-confirm")!;
+        await confirm.InvokeAsync(() => confirm.Instance.OnConfirmResult(flow, "confirmed"));
+
+        page.WaitForAssertion(() => Button(page, "Approve"));
+        Assert.Empty(page.FindAll("button[data-po-confirm]"));
+        Assert.Equal(0, _approvals.Approvals);
+        Assert.Contains("Awaiting approval", page.Markup, StringComparison.Ordinal);
     }
 }

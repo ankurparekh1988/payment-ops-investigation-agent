@@ -1,4 +1,5 @@
 using PaymentOps.Agent.Contracts;
+using PaymentOps.Domain.Security;
 
 namespace PaymentOps.Web.SmokeTests.Investigating;
 
@@ -108,6 +109,24 @@ internal sealed class CountingApprovalService(ApprovalResult answer) : IApproval
         Rejections++;
         return Throw is { } failure ? Task.FromException<ApprovalResult>(failure) : Task.FromResult(answer);
     }
+}
+
+/// <summary>A user context the test signs out, as the session registry does when the session ends.</summary>
+internal sealed class SwitchableUserContext : IUserContext
+{
+    public bool IsAuthenticated { get; set; } = true;
+
+    public string UserId => IsAuthenticated ? "user-1" : string.Empty;
+
+    public string DisplayName => IsAuthenticated ? "Riley Reader" : string.Empty;
+
+    public IReadOnlySet<string> Roles => IsAuthenticated ? new HashSet<string> { OpsRoles.Reader } : [];
+
+    public IReadOnlySet<string> GroupIds => new HashSet<string>();
+
+    public bool CanAccessRestrictedKnowledge => false;
+
+    public bool IsInRole(string role) => Roles.Contains(role);
 }
 
 internal static class Results

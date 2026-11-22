@@ -9,6 +9,7 @@ using PaymentOps.Agent.Contracts;
 using PaymentOps.Domain.Security;
 using PaymentOps.Web.Components.Pages;
 using PaymentOps.Web.Investigating;
+using PaymentOps.Web.Security;
 
 namespace PaymentOps.Web.SmokeTests.Investigating;
 
@@ -28,6 +29,7 @@ public sealed class InvestigatePageNavigationTests : InteractiveTestContext
         Context.Services.AddSingleton<TimeProvider>(new FakeTimeProvider(Results.Now));
         Context.Services.AddSingleton<IUserContext>(TestUser.Engineer);
         Context.Services.AddSingleton(new QuestionLimits(2000));
+        Context.Services.AddSingleton<IRecentAuthentication>(new TestRecentAuthentication());
         Context.Services.AddScoped<InvestigationSession>();
     }
 

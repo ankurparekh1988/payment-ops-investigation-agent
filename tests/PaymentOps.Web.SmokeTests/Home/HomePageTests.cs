@@ -15,6 +15,7 @@ using PaymentOps.Domain.Settlement;
 using PaymentOps.Web.Components.Pages;
 using PaymentOps.Web.Home;
 using PaymentOps.Web.Investigating;
+using PaymentOps.Web.Security;
 using PaymentOps.Web.SmokeTests.Investigating;
 using PaymentOps.Web.Usage;
 
@@ -102,6 +103,7 @@ public sealed class HomeInteractionTests : InteractiveTestContext
         Context.Services.AddSingleton<IUsageCounter>(new InMemoryUsageCounter());
         Context.Services.Configure<UsageOptions>(o => (o.DailyLimitPerUser, o.DailyLimitTotal) = (25, 150));
         Context.Services.AddSingleton(Options.Create(new UiOptions()));
+        Context.Services.AddSingleton<IRecentAuthentication>(new TestRecentAuthentication());
         Context.Services.AddScoped<InvestigationSession>();
         Context.Services.AddSingleton<IPauseStore, InMemoryPauseStore>();
         Context.Services.AddScoped<HomeOverview>();

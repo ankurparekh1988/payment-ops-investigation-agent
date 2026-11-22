@@ -40,9 +40,16 @@
                 </div>
                 <div class="ticket-actions">
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="RejectAsync" Disabled="Deciding">Reject</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Approve" Disabled="Deciding">Approve</MudButton>
+                    @if (!NeedsConfirmation)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Approve" Disabled="Deciding">Approve</MudButton>
+                    }
                 </div>
             </div>
+            @if (NeedsConfirmation)
+            {
+                <ConfirmIdentity Action="approve the ticket" Confirmed="Confirmed" />
+            }
             break;
         case ProposalStatus.Approved:
             <p class="ticket-status" role="status">Ticket @Proposal.TicketId created.</p>
@@ -80,6 +87,13 @@
 
     [Parameter]
     public EventCallback<(RejectionReason Reason, string? Note)> Reject { get; set; }
+
+    /// <summary>Approve wasn't sent because the sign-in isn't recent; the card asks the person to confirm first.</summary>
+    [Parameter]
+    public bool NeedsConfirmation { get; set; }
+
+    [Parameter]
+    public EventCallback Confirmed { get; set; }
 
     private Task RejectAsync() => Reject.InvokeAsync((_reason, _note));
 
