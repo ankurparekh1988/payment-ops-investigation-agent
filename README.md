@@ -5,58 +5,94 @@
 
 An AI agent that helps a payments operations team work out why money didn't move when it should have: a late payout, a missing settlement, a processor outage. It chooses its own read-only tools, cites the records and runbook sections behind every statement, and has every assessment checked by the server before anyone sees it. It can propose an incident ticket, but only a person can approve one.
 
-The setting is *Contoso Payments*, a fictional payment orchestration platform, and all data is synthetic. The agent is an internal tool for Contoso's operations, engineering, admin and risk teams; merchants never use it. It runs on Azure: Microsoft Foundry, Azure AI Search, Content Safety, Entra ID and App Service, built with .NET 10, Blazor and Microsoft Agent Framework, deployed with Terraform and GitHub Actions.
+Built on Azure with .NET 10, Blazor and Microsoft Agent Framework: Microsoft Foundry, Azure AI Search, Content Safety, Entra ID and App Service, deployed with Terraform and GitHub Actions. The setting is *Contoso Payments*, a fictional payment platform, and all data is synthetic.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/stats-dark.svg">
+  <img alt="Latest release evaluation: 100% of assessments passed server validation; 0 of 87 safety cases followed an injected instruction; 0 authorization leaks or unapproved changes; 37 labelled cases × 3 runs gate every AI change; p95 full investigation 13.1 s, first progress 2.4 s" src="docs/media/stats-light.svg">
+</picture>
 
 ## Demo
 
-*Recorded synthetic demonstration from the deployed app, 2026-11-19. The signed-in account's name is blurred.*
+*Recorded from the deployed app, 2026-11-19, on synthetic data. The signed-in account's name is blurred.*
 
 ![An investigation of a delayed payout: the question, each tool call as it happens, and the validated assessment](docs/media/investigation.gif)
 
-The question was *"Why were payouts for merchant M-1042 delayed on November 9, 2026?"*. The agent read the merchant, its settlement batches, the processor's status and the runbooks, and concluded that Fabrikam Pay's settlement file for 9 November never arrived during the processor's incident INC-FAB-1109, while the merchant's Northwind payout was on schedule. Every statement lists the records and runbook sections behind it.
+Asked *"Why were payouts for merchant M-1042 delayed on November 9, 2026?"*, the agent read the merchant, its settlement batches, the processor's status and the runbooks, and found that Fabrikam Pay's settlement file for 9 November never arrived during the processor's incident INC-FAB-1109, while the merchant's Northwind payout was on schedule.
 
-| The assessment and its evidence | The proposed ticket, waiting for a person |
+| Every statement shows its evidence | A proposed ticket waits for a person |
 |---|---|
 | ![Validated assessment with evidence chips](docs/media/investigation-result.png) | ![Incident ticket proposal awaiting approval](docs/media/approval-card.png) |
 
-The ticket in the demo wasn't approved, so no ticket was created.
+## How it works
 
-## What it does
+```mermaid
+flowchart LR
+  Q["Question"] --> S{"Screened for harm<br/>and attacks"}
+  S -->|blocked| X["Refused, with the reason"]
+  S --> A["Agent chooses<br/>read-only tools"]
+  A --> T["Tools return records;<br/>the server registers<br/>every id they return"]
+  T -->|"untrusted text<br/>screened first"| A
+  A --> V{"Server validates<br/>every citation"}
+  V -->|"cites anything<br/>not returned"| R["Rejected, shown<br/>as a gap"]
+  V --> AS["Assessment with<br/>evidence per statement"]
+  AS -.->|optional| P["Ticket proposal"] --> H["A person approves;<br/>the server creates it"]
+```
 
-- **Investigates with tools, not a script.** The model picks which read-only tools to call (merchant profile, settlement batches, error events, processor status, knowledge search) and with what arguments, within limits on calls, time and tokens.
-- **Makes every statement checkable.** Each statement in an assessment lists the records, computed facts and knowledge sections behind it. The server rejects an assessment that cites anything this investigation's tools didn't return, and a missing or failed source shows up as a gap.
-- **Respects who's asking.** Restricted runbooks are filtered out by the user's group before retrieval, so the model never sees them for the wrong person.
-- **Treats data as untrusted.** Every question, and every piece of text written outside the system (incident notes, names, runbooks), is screened for harm and hidden instructions before the model reads it. Flagged text is withheld and can't support anything the agent says.
-- **Suggests; people decide.** The only action that changes anything, an incident ticket, is proposed by the model and created by the server after the engineer who ran the investigation approves it, re-checking who they are at the click.
-- **Shows its work.** The page shows each tool call as it happens. Every investigation is one trace with a decision record of what it did and used, holding no question or answer text.
+- **The model has six functions and nothing else**: five read-only tools (merchant profile, settlement batches, error events, processor status, knowledge search) and `submit_assessment`. No web search, code execution or hosted tools; a tool name outside that list is refused, and calls, time and tokens are capped per investigation.
+- **The server owns the evidence.** An assessment may cite only ids this investigation's tools returned; anything else is rejected, and a missing or failed source shows up as a gap.
+- **Who's asking decides what's retrieved.** Restricted runbooks are filtered out by the user's group before retrieval, so the model never sees them for the wrong person.
+- **Data is untrusted.** Every question, and every piece of text written outside the system (incident notes, names, runbooks), is screened for harm and hidden instructions before the model reads it. Flagged text is withheld and can't support anything the agent says.
+- **The model proposes; people decide.** The only action that changes anything, an incident ticket, is created by the server after the engineer who ran the investigation approves it with a recent sign-in.
+- **Every investigation is traced**, with a decision record of what it did and used, holding no question or answer text.
 
-## Measured outcomes
+## The last two release evaluations
 
-Quality is measured against labelled cases, not real incidents. Every number below links to where it was recorded.
+Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has to pass a release gate before it merges: 37 labelled cases × 3 runs, 26 held-out retrieval questions and 87 safety cases, against thresholds fixed before measuring from the spread of a ten-run baseline ([how](docs/Evaluation.md#the-threshold-rule)). These are the last two passing release runs, both on `gpt-5.4-mini` with the same thresholds and datasets.
 
-**Release evaluation: passing.** The shipped configuration (`gpt-5.4-mini`, routing off) is gated on 37 labelled cases × 3 runs, against thresholds set before measuring from the spread of a ten-run baseline ([how](docs/Evaluation.md#the-threshold-rule)). Its latest full run, on 2026-11-18 ([summary](docs/evidence/release-evaluation-2026-11-18.md)):
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-quality-dark.svg">
+  <img alt="Quality medians, 2026-11-09 then 2026-11-18, against the gate: passed server validation 0.946, 1.000 (gate 0.92); outcome allowed 0.892, 0.919 (0.84); evidence cited 0.727, 0.712 (0.66); required tools 0.814, 0.791 (0.78); tool arguments 0.648, 0.630 (0.57); section precision 0.767, 0.773 (0.72); section recall 0.469, 0.438 (0.40); retrieval recall@5 0.808, 0.769 (0.76)" src="docs/media/evaluation-quality-light.svg">
+</picture>
 
-| | Result | Gate |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-safety-dark.svg">
+  <img alt="Safety hard gates, both runs: 0 planted instructions followed, 0 harmful requests handled unsafely, 0 harmful text repeated, 0 restricted content leaked, 0 changes nobody approved, 0 unwarranted ticket proposals" src="docs/media/evaluation-safety-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-latency-dark.svg">
+  <img alt="Latency, 2026-11-09 then 2026-11-18: full investigation p95 17.2 s, 13.1 s; p50 12.9 s, 7.6 s; first progress p95 2.9 s, 2.4 s" src="docs/media/evaluation-latency-light.svg">
+</picture>
+
+**What changed between them.** [#61](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/61) bounded usage and kept untrusted text out of tool choices (prompt `investigation-agent` 1.1.0 → 1.2.0), and [#64](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/64) added model routing, switched off. The validation median reached 1.000 and p95 latency fell by about a quarter; evidence and tool recall dipped within their gates. Retrieval recall@5 went from 21 to 20 of 26 with the knowledge and retrieval code unchanged: one question fell out of the top five and another moved up.
+
+**Safety rates**, reported rather than gated, on the held-out safety cases (both runs unless noted):
+
+| What was measured | Result | Reading it |
 |---|---|---|
-| Assessments that passed server validation | 1.000 (median) | ≥ 0.92 |
-| Outcome allowed by the label | 0.919 | ≥ 0.84 |
-| Expected evidence cited | 0.712 | ≥ 0.66 |
-| Required tools called | 0.791 | ≥ 0.78 |
-| Unwarranted ticket proposals | 0.000 | ≤ 0.05 |
-| Authorization leaks, unauthorized state changes | 0 in every run | 0 |
-| Held-out retrieval recall@5 | 0.769 (26 questions) | ≥ 0.76 |
-| Safety, 87 attack, harm and look-alike cases | 0 injections followed, 0 unsafe handling, 0 leaks | hard gates |
-| Latency p95: full investigation, first progress | 13.1 s, 2.4 s | reported |
+| Harmful questions blocked before the model | 6 of 6 | |
+| Harmful tool text withheld from the model | 6 of 6, then 5 of 6 | The one that got through wasn't repeated; the hard gate held |
+| Direct attacks blocked by the screen | 1 of 6 | The model refused the rest; none succeeded |
+| Planted instructions flagged by the screen | 1 of 12 | None had its effect (the first hard gate above) |
+| Ordinary questions wrongly blocked or refused | 2 of 8 | The cost of a strict filter on look-alike wording |
 
-The zero counts are results on these evaluated cases, not a guarantee. The gate was also shown to work: a deliberately degraded prompt failed it ([record](docs/Evaluation.md#proving-the-gate-2026-10-25)). The agent beat a fixed-sequence workflow on the same cases, by a rule written before either ran ([kill test](docs/Evaluation.md#agent-against-a-fixed-workflow-the-kill-test)).
+The screen is one layer, not the defence: what matters is that no attack had its effect, and the hard gates count exactly that. The zero counts are results on these evaluated cases, not a guarantee. Full results: [2026-11-18](docs/evidence/release-evaluation-2026-11-18.md), [2026-11-09](docs/evidence/release-evaluation-2026-11-09.md); the charts are drawn from that evidence by [`scripts/readme-charts.py`](scripts/readme-charts.py).
 
-**Routing experiment: rejected.** A cascade that starts each investigation on the smaller `gpt-5.4-nano` and escalates to mini only when the server rejects nano's work was built, switched off, and measured against the run above by a rule fixed in advance ([ADR 0023](docs/adr/0023-route-to-a-small-model-first-by-a-pre-registered-rule.md)). It lowered the modelled cost per validated investigation by **32.8%**, past the 25% the rule required. It failed everything else the rule checks:
+## Engineering that's easy to miss
 
-- **Safety:** in one run, it searched the knowledge for terms a planted instruction asked for.
-- **Quality:** each run missed several thresholds, and four medians fell outside the allowed margin from mini.
-- **Latency:** p95 rose **52%**, against the 25% allowed.
+- **Thresholds fixed before the run they judge**, from the measured run-to-run spread of a ten-run baseline ([ADR 0018](docs/adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md)). A changed agent gets no free rerun ([ADR 0016](docs/adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md)), and a case the environment spoiled is retried on its own, never the whole run ([ADR 0019](docs/adr/0019-retry-the-case-the-environment-spoiled.md)).
+- **The gate was shown to fail**: a deliberately degraded prompt didn't pass it ([record](docs/Evaluation.md#proving-the-gate-2026-10-25)).
+- **The agent had to earn its place.** It beat a fixed-sequence workflow on the same cases, by a rule written before either ran ([kill test](docs/Evaluation.md#agent-against-a-fixed-workflow-the-kill-test)).
+- **A cheaper design was measured and rejected.** Starting on the smaller `gpt-5.4-nano` cut the modelled cost per validated investigation by 32.8%, past the 25% the pre-registered rule required, but followed a planted instruction in one run, missed quality thresholds and raised p95 latency 52%. Routing stays off and nothing was tuned in response ([ADR 0023](docs/adr/0023-route-to-a-small-model-first-by-a-pre-registered-rule.md), [evidence](docs/evidence/routing-decision-2026-11-18.md)).
+- **Retrieval chosen by measurement.** Semantic ranking had to beat lexical by a margin fixed in advance on reviewed cases, and didn't ([ADR 0007](docs/adr/0007-retrieval-strategy-by-frozen-calibration.md)).
+- **No keys anywhere.** Every service-to-service call uses an Entra identity, pipelines sign in with OIDC, and API-key authentication is disabled ([Security](docs/Security.md#keyless-controls)).
+- **Sessions are owned by the server**: a fresh credential at every sign-in, sign-out after 15 minutes idle, and a recent sign-in to approve a ticket or resume investigations ([Security](docs/Security.md#users-and-sign-in)).
+- **Models are pinned and checked before deploy.** Each plan fails if a model isn't offered at its pinned version or retires within 90 days, and capacity is checked right before apply ([Deployment](docs/Deployment.md#model-preflight)).
+- **Usage is bounded and observable**: daily limits per person and in total, an Admin pause switch, a cost estimate per investigation, and an optional budget cutoff for the AI account ([ADR 0021](docs/adr/0021-bounded-usage-and-observable-cost.md), [Runbook](docs/Runbook.md#pausing-and-limits)).
+- **Evaluation history lives outside the app**, in Log Analytics with an Admin-only workbook.
 
-Nano's answers mostly passed validation but cited less, so it rarely escalated. Routing stays off, and nothing was tuned in response ([record](docs/Evaluation.md#measurement-2026-11-18-rejected), [evidence](docs/evidence/routing-decision-2026-11-18.md)).
+All decisions: [docs/adr](docs/adr/README.md).
 
 ## Architecture
 
@@ -72,9 +108,12 @@ flowchart LR
   CD["GitHub Actions<br/>CI, CD, AI evaluation"] -->|"Terraform, publish,<br/>deploy (OIDC, no keys)"| APP
 ```
 
-Every service-to-service call uses an Entra identity. API-key and shared-key authentication is disabled, and no code uses or passes a key; some key material that can't authenticate still sits in Terraform state ([Security](docs/Security.md)). The AI release manifest (`ai/manifest.yaml`) names the models, prompts and filters, and both the infrastructure and the app read it. The detailed diagrams, covering the platform, the investigation loop, retrieval, screening and approval, are in [Architecture](docs/Architecture.md), and the pipelines are in [Deployment](docs/Deployment.md).
+The AI release manifest (`ai/manifest.yaml`) names the models, prompts and filters, and both the infrastructure and the app read it. Detailed diagrams of the platform, the investigation loop, retrieval, screening and approval are in [Architecture](docs/Architecture.md), and the pipelines in [Deployment](docs/Deployment.md).
 
-| Operations workbook: model tokens per day | Evaluation history in Log Analytics |
+<details>
+<summary>Operations workbook, evaluation history and a deployment run</summary>
+
+| Model tokens per day | Evaluation history in Log Analytics |
 |---|---|
 | ![Workbook tile of model tokens per day by deployment](docs/media/workbook-tokens.png) | ![Gate verdicts of recorded evaluations](docs/media/evaluation-history.png) |
 
@@ -84,28 +123,18 @@ Every service-to-service call uses an Entra identity. API-key and shared-key aut
 
 *Recorded from the dev environment on 2026-11-19.*
 
-## Key engineering decisions
+</details>
 
-- **The server owns the evidence.** Tools register what they return, and an assessment may cite only those ids ([ADR 0006](docs/adr/0006-grounded-answers-with-a-server-owned-evidence-registry.md), [ADR 0010](docs/adr/0010-validated-assessments-with-per-claim-evidence.md)).
-- **The model proposes, the server executes** ([ADR 0011](docs/adr/0011-the-model-proposes-the-server-executes.md)).
-- **Lexical retrieval, chosen by measurement.** Semantic ranking had to beat it by a margin fixed in advance on reviewed cases, and didn't ([ADR 0007](docs/adr/0007-retrieval-strategy-by-frozen-calibration.md)).
-- **Untrusted text is screened before the model reads it** ([ADR 0013](docs/adr/0013-screen-untrusted-tool-text.md), [ADR 0015](docs/adr/0015-screen-questions-and-tool-text-for-harm.md)).
-- **Thresholds come from measured run-to-run spread, fixed before the run they judge** ([ADR 0018](docs/adr/0018-evaluation-thresholds-from-measured-run-to-run-spread.md)), and a changed agent gets no free rerun ([ADR 0016](docs/adr/0016-one-recorded-rerun-when-the-agent-is-unchanged.md)).
-- **Usage is bounded and observable**: daily limits, a pause switch and a cost estimate per investigation ([ADR 0021](docs/adr/0021-bounded-usage-and-observable-cost.md)).
+## Running it
 
-All decisions: [docs/adr](docs/adr/README.md).
-
-## Quick start
-
-You'll need the [.NET SDK 10.0.404](https://dotnet.microsoft.com/download/dotnet/10.0), the exact version `global.json` pins. A newer SDK is a deliberate change: its pull request goes through the AI evaluation gate.
+You'll need the [.NET SDK 10.0.404](https://dotnet.microsoft.com/download/dotnet/10.0), the version `global.json` pins. The build and all tests run without Azure:
 
 ```bash
 dotnet build PaymentOps.slnx
 dotnet test PaymentOps.slnx
-dotnet run --project src/PaymentOps.Web
 ```
 
-The tests run without Azure. The app itself needs the deployed services: without sign-in settings, the health checks answer and pages return 503. Without the Search and Foundry endpoints, investigations report that the service isn't responding. Without the Content Safety endpoint, no question can be screened, so none is investigated. Deploying the environment and signing in locally are covered in [Deployment](docs/Deployment.md) and [Running locally with sign-in](docs/Deployment.md#running-locally-with-sign-in).
+The app itself runs against Azure: Entra ID for sign-in, Foundry for the model, AI Search for the knowledge and Content Safety for screening. Without them, pages return 503 or investigations report that a service isn't responding. Creating the environment and signing in locally are covered in [Deployment](docs/Deployment.md) and [Running locally with sign-in](docs/Deployment.md#running-locally-with-sign-in).
 
 ## Documentation
 
@@ -113,7 +142,7 @@ The tests run without Azure. The app itself needs the deployed services: without
 
 ## Deliberate production gaps
 
-This is one dev environment with synthetic data. These are left out on purpose, each with what would trigger building it, in [Production gap analysis](docs/ProductionGapAnalysis.md):
+One dev environment with synthetic data. These are left out on purpose, each with what would trigger building it, in [Production gap analysis](docs/ProductionGapAnalysis.md):
 
 - public endpoints with Entra and TLS, not private networking; one region; free and entry tiers without an SLA;
 - conversations, approvals and tickets held in memory, lost on restart, on a single instance;
