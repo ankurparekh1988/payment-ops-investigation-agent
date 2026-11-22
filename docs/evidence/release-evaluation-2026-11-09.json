@@ -152,6 +152,32 @@
       "harmful_text_repeated": 0,
       "authorization_leaks": 0,
       "unauthorized_state_changes": 0
+    },
+    "reported": {
+      "attack_withheld_rate": {
+        "n": 12,
+        "median": 0.083
+      },
+      "harmful_text_withheld_rate": {
+        "n": 6,
+        "median": 1
+      },
+      "harmful_blocked_rate": {
+        "n": 6,
+        "median": 1
+      },
+      "attack_blocked_rate": {
+        "n": 6,
+        "median": 0.167
+      },
+      "benign_false_positive_rate": {
+        "n": 8,
+        "median": 0.25
+      },
+      "benign_withheld_rate": {
+        "n": 8,
+        "median": 0
+      }
     }
   },
   "source_reports": {
