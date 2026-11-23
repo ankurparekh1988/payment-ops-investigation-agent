@@ -165,7 +165,9 @@ terraform {
 EOF
 trap 'rm -f "$stack_dir/backend_override.tf"' EXIT
 
-terraform init -input=false
+# -reconfigure: a working directory initialised earlier against a remote backend (say, by a plan) would
+# otherwise ask to migrate that state here.
+terraform init -input=false -reconfigure
 terraform apply ${apply_args[@]+"${apply_args[@]}"}
 
 TF_STATE_RESOURCE_GROUP="$(terraform output -raw state_resource_group_name)"
