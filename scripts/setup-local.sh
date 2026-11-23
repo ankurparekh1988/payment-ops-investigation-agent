@@ -89,12 +89,25 @@ plan_file="$repo_root/infra/deployments/platform/platform.tfplan"
 # Saved plans hold sensitive values in plain text, so none outlives the run.
 trap 'rm -f "$plan_file"' EXIT
 
+retry_seconds="${SETUP_RETRY_SECONDS:-60}"
+
 # Plans, checks model quota and regional capacity against that plan, then applies exactly that plan.
+# Custom roles and role assignments made moments earlier can take minutes to become visible, so a
+# failed apply is planned and applied again; what already exists is kept.
 apply_platform() {
-  tf platform plan -input=false -out=platform.tfplan
-  "$repo_root/scripts/check-model-capacity.sh" platform platform.tfplan
-  tf platform apply -input=false platform.tfplan
-  rm -f "$plan_file"
+  local attempt
+  for attempt in 1 2 3; do
+    tf platform plan -input=false -out=platform.tfplan
+    "$repo_root/scripts/check-model-capacity.sh" platform platform.tfplan
+    if tf platform apply -input=false platform.tfplan; then
+      rm -f "$plan_file"
+      return 0
+    fi
+    rm -f "$plan_file"
+    (( attempt < 3 )) || fail "The platform apply failed three times. Rerun scripts/setup-local.sh; it carries on from here."
+    echo "Apply failed; new roles can take a few minutes to appear. Retrying in $retry_seconds seconds (attempt $attempt of 3)."
+    sleep "$retry_seconds"
+  done
 }
 
 step "1/7 Bootstrap: Terraform state, the resource group and your developer roles"

@@ -41,6 +41,10 @@ cat > "$work/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 dir="$(basename "$PWD")"
 echo "terraform $dir $* eval_foundry=${TF_VAR_eval_foundry_account_id:-}" >> "$STUB_LOG"
+# STUB_FAIL_APPLY_ONCE names a marker file: the first platform apply fails, as a new custom role not yet visible would.
+if [[ -n "${STUB_FAIL_APPLY_ONCE:-}" && "$dir" == platform && "$1" == apply && ! -f "$STUB_FAIL_APPLY_ONCE" ]]; then
+  touch "$STUB_FAIL_APPLY_ONCE"; exit 1
+fi
 case "$*" in
   "output -raw state_resource_group_name") echo rg-state ;;
   "output -raw state_storage_account_name") echo sttfstate ;;
@@ -101,6 +105,12 @@ check "search endpoint written" grep -qx "PaymentOps:Search:Endpoint=https://sea
 check "secret written through stdin" grep -q "\"AzureAd:ClientCredentials:0:ClientSecret\": \"$SECRET\"" "$secrets"
 check "secret never printed" bash -c "! grep -q '$SECRET' <<< \"\$1\"" _ "$out"
 check "secret never an argument" bash -c "! grep -q '$SECRET' '$log'"
+
+# --- A platform apply that fails once is retried ------------------------------------------------
+: > "$log"
+STUB_FAIL_APPLY_ONCE="$work/failed-once" SETUP_RETRY_SECONDS=0 STUB_RUN=1 bash "$root/scripts/setup-local.sh" > /dev/null 2>&1
+check "setup retries a failed platform apply" test $? -eq 0
+check "the retry plans again before applying"   bash -c "[[ \$(grep -c 'terraform platform plan' '$log') -ge 3 ]]"
 
 # --- Teardown, then a second setup: no stale ids survive ----------------------------------------
 : > "$log"
