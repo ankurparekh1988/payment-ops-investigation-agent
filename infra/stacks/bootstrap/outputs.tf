@@ -25,32 +25,32 @@ output "workload_resource_group_name" {
 
 output "plan_identity_client_id" {
   description = "Client ID for read-only plan jobs."
-  value       = module.plan_identity.client_id
+  value       = one(module.plan_identity[*].client_id)
 }
 
 output "deploy_identity_client_id" {
   description = "Client ID for approved apply and deploy jobs."
-  value       = module.deploy_identity.client_id
+  value       = one(module.deploy_identity[*].client_id)
 }
 
 output "federated_subjects" {
   description = "Exact GitHub OIDC subjects each identity trusts."
-  value = {
-    plan         = module.plan_identity.federated_subjects
-    deploy       = module.deploy_identity.federated_subjects
-    eval         = module.eval_identity.federated_subjects
-    eval_publish = module.eval_publish_identity.federated_subjects
+  value = !local.pipeline ? null : {
+    plan         = module.plan_identity[0].federated_subjects
+    deploy       = module.deploy_identity[0].federated_subjects
+    eval         = module.eval_identity[0].federated_subjects
+    eval_publish = module.eval_publish_identity[0].federated_subjects
   }
 }
 
 output "eval_identity_client_id" {
   description = "Client ID for evaluation runs: calls the model and reads the indexes."
-  value       = module.eval_identity.client_id
+  value       = one(module.eval_identity[*].client_id)
 }
 
 output "eval_publish_identity_client_id" {
   description = "Client ID for publishing the evaluation index and recording evaluation history."
-  value       = module.eval_publish_identity.client_id
+  value       = one(module.eval_publish_identity[*].client_id)
 }
 
 output "tenant_id" {

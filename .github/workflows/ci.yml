@@ -78,6 +78,14 @@ jobs:
             echo "::endgroup::"
           done
 
+      # Offline, with mock providers: the bootstrap with and without a GitHub repository. Uses the
+      # deployment's lock file, so the tests run the provider versions that are deployed.
+      - name: Test the bootstrap stack
+        run: |
+          cp infra/deployments/bootstrap/.terraform.lock.hcl infra/stacks/bootstrap/
+          terraform -chdir=infra/stacks/bootstrap init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/stacks/bootstrap test
+
       - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}

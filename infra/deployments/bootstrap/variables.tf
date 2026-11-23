@@ -16,18 +16,21 @@ variable "environment" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository (owner/name) allowed to sign in as the pipeline identities."
+  description = "GitHub repository (owner/name) allowed to sign in as the pipeline identities. Unset for an environment deployed from a workstation."
   type        = string
+  default     = null
 }
 
 variable "github_owner_id" {
   description = "Numeric ID of the repository owner (gh api repos/OWNER/NAME --jq .owner.id)."
   type        = number
+  default     = null
 }
 
 variable "github_repository_id" {
   description = "Numeric ID of the repository (gh api repos/OWNER/NAME --jq .id)."
   type        = number
+  default     = null
 }
 
 variable "bootstrap_operator_object_id" {
