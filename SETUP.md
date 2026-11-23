@@ -43,7 +43,7 @@ The script writes the app's settings to [.NET user-secrets](https://learn.micros
 ## Removing it
 
 ```bash
-scripts/teardown-local.sh        # asks you to type the name prefix
+scripts/teardown-local.sh --all  # asks you to type the name prefix
 ```
 
-That removes everything billed and the app registration. The bootstrap stays so you can run the setup again, and costs next to nothing: the Terraform state storage, two resource groups, four custom role definitions named after your prefix, and a cost anomaly alert on the subscription. To remove those too, delete the state storage's `protect-terraform-state` lock and the `rg-<prefix>-<environment>` and `rg-<prefix>-bootstrap` resource groups, then the role definitions (`az role definition list --custom-role-only --query "[?starts_with(roleName, '<prefix> ')]"`) and the `<prefix>-cost-anomaly` alert under Cost Management. [Removing the bootstrap](docs/Deployment.md#removing-the-bootstrap) explains why this isn't automated.
+That removes everything the setup created: the services, the app registration and the bootstrap (Terraform state storage, resource groups, custom roles and the cost anomaly alert). Without `--all` the bootstrap stays, costing next to nothing, so the setup can run again sooner. Azure keeps a deleted Log Analytics workspace recoverable for 14 days and Entra keeps deleted objects for 30, neither billed.

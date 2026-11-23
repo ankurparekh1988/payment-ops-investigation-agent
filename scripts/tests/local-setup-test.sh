@@ -35,6 +35,7 @@ case "$*" in
   "account show --query tenantId -o tsv") echo "22222222-2222-2222-2222-222222222222" ;;
   "ad signed-in-user show --query id -o tsv") echo "33333333-3333-3333-3333-333333333333" ;;
   rest*searchServices*) printf '%s\n' "${STUB_FREE_SEARCH:-}" ;;
+  "group exists --name "*) echo true ;;
 esac
 EOF
 cat > "$work/bin/terraform" <<'EOF'
@@ -61,6 +62,8 @@ case "$*" in
   "output -raw restricted_group_id") [[ -z "${STUB_FAIL_GROUP:-}" ]] && echo restricted-group || exit 1 ;;
   "output -json local_client_secret") printf '"%s"\n' "$STUB_SECRET" ;;
   output) ;;
+  "state list") printf '%s
+' module.bootstrap.azurerm_resource_group.bootstrap module.bootstrap.module.state.azurerm_storage_account.this                   module.bootstrap.module.state.azurerm_storage_container.this module.bootstrap.module.state.azurerm_storage_container.operator                   module.bootstrap.azurerm_resource_group.workload ;;
   output*) exit 1 ;;
 esac
 exit 0
@@ -126,6 +129,19 @@ check "second setup completes" test $? -eq 0
 check "first bootstrap of the second setup names no deleted account" \
   bash -c "grep -m1 'terraform bootstrap apply' '$log' | grep -q 'eval_foundry=\$'"
 check "second bootstrap uses the new account" grep -q "terraform bootstrap apply -auto-approve eval_foundry=/subscriptions/x/foundry-2" "$log"
+
+# --- Removing everything, the bootstrap included ------------------------------------------------
+: > "$log"
+STUB_PLATFORM_EXISTS=1 bash "$root/scripts/teardown-local.sh" --all <<< "forktest" > /dev/null 2>&1
+check "teardown --all completes" test $? -eq 0
+check "--all removes identity, platform, bootstrap, then the state's resource group"   bash -c "grep -E '^terraform (identity|platform|bootstrap) destroy|^az group delete' '$log' | awk '{print \$2}' | paste -sd' ' | grep -qx 'identity platform bootstrap group'"
+check "--all deletes the bootstrap resource group" grep -q "^az group delete --name rg-forktest-bootstrap --yes" "$log"
+check "--all leaves the protected state storage to the group delete"   grep -q "terraform bootstrap state rm module.bootstrap.module.state.azurerm_storage_account.this" "$log"
+check "--all keeps the workload group in Terraform's destroy" bash -c "! grep -q 'state rm.*azurerm_resource_group.workload' '$log'"
+check "--all forgets the state storage" bash -c "! grep -q '^TF_STATE_STORAGE_ACCOUNT=.\+' '$root/.env'"
+check "--all leaves no local state behind"   bash -c "! ls '$root/infra/deployments/bootstrap/backend_override.tf' '$root/infra/deployments/bootstrap/terraform.tfstate' 2>/dev/null | grep -q ."
+out="$(STUB_RUN=4 bash "$root/scripts/setup-local.sh" 2>&1)"
+check "setup after --all starts from scratch" grep -q "First run: creating state storage" <<< "$out"
 
 # --- A failed read stops setup rather than writing an empty setting ------------------------------
 : > "$secrets"
