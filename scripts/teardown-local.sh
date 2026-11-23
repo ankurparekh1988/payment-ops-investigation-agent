@@ -34,15 +34,37 @@ what="platform and sign-in"
 read -r -p "Remove the '${TF_VAR_environment:-dev}' environment's $what for '$TF_VAR_name_prefix'? Type the name prefix to confirm: " answer
 [[ "$answer" == "$TF_VAR_name_prefix" ]] || { echo "Cancelled."; exit 1; }
 
+fail() { echo "$*" >&2; exit 1; }
+
 # Identity first: its configuration names the web app, which the platform's outputs still describe.
-# Skipped when the platform is already gone, so a rerun after a partial teardown carries on.
-if TF_VAR_web_app_url="$(tf platform output -raw web_app_url 2>/dev/null)"; then
-  TF_VAR_app_identity_principal_id="$(tf platform output -raw app_identity_principal_id)"
-  export TF_VAR_web_app_url TF_VAR_app_identity_principal_id
-  tf identity destroy -auto-approve
-  tf platform destroy -auto-approve
+# Each step reads its state first and skips only a state confirmed empty: one that can't be read
+# stops the teardown with .env unchanged, so a rerun can finish.
+if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
+  identity_state="$(tf identity state list)" ||
+    fail "Couldn't read the sign-in (identity) state, so nothing was removed. Check access and rerun."
+  platform_state="$(tf platform state list)" ||
+    fail "Couldn't read the platform state, so nothing was removed. Check access and rerun."
+  if [[ -z "$identity_state$platform_state" ]]; then
+    echo "The platform and sign-in are already removed."
+  fi
+  if [[ -n "$identity_state" ]]; then
+    TF_VAR_web_app_url="$(tf platform output -raw web_app_url)" &&
+      TF_VAR_app_identity_principal_id="$(tf platform output -raw app_identity_principal_id)" ||
+      fail "The sign-in resources remain, but the platform outputs their configuration needs can't be read."
+    export TF_VAR_web_app_url TF_VAR_app_identity_principal_id
+    tf identity destroy -auto-approve
+  fi
+  if [[ -n "$platform_state" ]]; then
+    tf platform destroy -auto-approve
+  fi
+
+  # Confirmed from the state, not assumed from the commands' exit codes.
+  identity_state="$(tf identity state list)" && platform_state="$(tf platform state list)" ||
+    fail "Couldn't confirm the platform and sign-in were removed. Rerun to check and finish."
+  [[ -z "$identity_state$platform_state" ]] ||
+    fail "Some resources remain after the destroy; rerun to finish: $(echo $identity_state $platform_state)"
 else
-  echo "The platform is already removed."
+  echo "No state storage in .env, so there's no platform or sign-in to remove."
 fi
 
 # These named what was just deleted; setup fills them in again.
@@ -58,24 +80,40 @@ fi
 
 # The bootstrap's state lives in the storage account it manages, which is protected from deletion. So the
 # state is moved to this machine, the storage is left out of Terraform's destroy, and its resource group
-# is deleted afterwards, storage included.
+# is deleted afterwards, storage included. A removal that stopped part-way left that local state behind:
+# it's the newest record, so a rerun carries on from it rather than from Azure's older copy.
+bootstrap_dir="$repo_root/infra/deployments/bootstrap"
 if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
+  owns_state_locally || exit 1
   # Same handling as scripts/terraform.sh: empty values fall back to defaults, and Git Bash leaves ids alone.
   while IFS='=' read -r name _; do
     if [[ -z "${!name}" ]]; then unset "$name"; fi
   done < <(env | grep '^TF_VAR_' || true)
   export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}TF_VAR_"
 
-  bootstrap_dir="$repo_root/infra/deployments/bootstrap"
   cd "$bootstrap_dir"
   trap 'rm -f "$bootstrap_dir/backend_override.tf"' EXIT
-  terraform init -input=false -reconfigure \
-    -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP" \
-    -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT" \
-    -backend-config="container_name=$TF_STATE_CONTAINER" \
-    -backend-config="key=bootstrap.tfstate" >/dev/null
-  printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
-  terraform init -input=false -migrate-state -force-copy >/dev/null
+  if [[ -s terraform.tfstate ]]; then
+    echo "Resuming the bootstrap's removal from the state on this machine."
+    cat > backend_override.tf <<'EOF'
+terraform {
+  backend "local" {}
+}
+EOF
+    terraform init -input=false -reconfigure >/dev/null
+  else
+    terraform init -input=false -reconfigure \
+      -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP" \
+      -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT" \
+      -backend-config="container_name=$TF_STATE_CONTAINER" \
+      -backend-config="key=bootstrap.tfstate" >/dev/null
+    cat > backend_override.tf <<'EOF'
+terraform {
+  backend "local" {}
+}
+EOF
+    terraform init -input=false -migrate-state -force-copy >/dev/null
+  fi
 
   protected=(module.bootstrap.module.state.azurerm_storage_container.this
              module.bootstrap.module.state.azurerm_storage_container.operator
@@ -88,13 +126,19 @@ if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
     fi
   done
   terraform destroy -auto-approve -input=false
-  rm -f terraform.tfstate terraform.tfstate.backup
   cd "$repo_root"
 fi
 
-if [[ "$(az group exists --name "rg-$TF_VAR_name_prefix-bootstrap")" == "true" ]]; then
-  az group delete --name "rg-$TF_VAR_name_prefix-bootstrap" --yes
-fi
+bootstrap_group="rg-$TF_VAR_name_prefix-bootstrap"
+exists="$(az group exists --name "$bootstrap_group")" ||
+  fail "Couldn't check whether $bootstrap_group still exists. .env is unchanged; rerun to finish."
+case "${exists//[[:space:]]/}" in
+  true) az group delete --name "$bootstrap_group" --yes ;;
+  false) ;;
+  *) fail "Unexpected answer checking $bootstrap_group: '$exists'. .env is unchanged; rerun to finish." ;;
+esac
+# Only now is the local copy of the bootstrap's state no longer needed.
+rm -f "$bootstrap_dir/terraform.tfstate" "$bootstrap_dir/terraform.tfstate.backup"
 
 # Nothing they name exists any more; a later setup starts from scratch.
 for name in TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER TF_STATE_OPERATOR_CONTAINER; do

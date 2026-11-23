@@ -148,6 +148,17 @@ fi
 cd "$stack_dir"
 
 if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
+  # A local state file beside remote state means a removal (scripts/teardown-local.sh --all) stopped
+  # part-way. It's the only record of what's left, so nothing runs over it.
+  if [[ -s terraform.tfstate ]]; then
+    echo "Found bootstrap state on this machine ($stack_dir/terraform.tfstate) while .env names state storage" >&2
+    echo "$TF_STATE_STORAGE_ACCOUNT: an earlier 'scripts/teardown-local.sh --all' stopped part-way. Rerun it to finish" >&2
+    echo "the removal. Nothing was changed." >&2
+    exit 1
+  fi
+  if local_mode; then
+    owns_state_locally || exit 1
+  fi
   echo "State storage already exists ($TF_STATE_STORAGE_ACCOUNT); applying against remote state."
   # shellcheck disable=SC2046
   terraform init -input=false -reconfigure $(backend_args)
@@ -156,7 +167,23 @@ if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
   exit 0
 fi
 
-echo "First run: creating state storage with local state."
+if [[ -s terraform.tfstate ]]; then
+  echo "Resuming: bootstrap state from an earlier run is still on this machine; moving it into Azure."
+else
+  # With no state anywhere, an existing bootstrap would be created again: a second state storage
+  # account beside the first, and conflicts on everything else.
+  bootstrap_group="rg-$TF_VAR_name_prefix-bootstrap"
+  if ! exists="$(az group exists --name "$bootstrap_group")"; then
+    echo "Couldn't check whether $bootstrap_group already exists. Nothing was changed." >&2
+    exit 1
+  fi
+  if [[ "${exists//[[:space:]]/}" != "false" ]]; then
+    echo "$bootstrap_group already exists, but .env names no state storage and there's no local state to resume" >&2
+    echo "from. Put that environment's TF_STATE_* values in .env, or choose another TF_VAR_name_prefix. Nothing was changed." >&2
+    exit 1
+  fi
+  echo "First run: creating state storage with local state."
+fi
 cat > backend_override.tf <<'EOF'
 # Temporary, written by scripts/bootstrap.sh for the first run only.
 terraform {
@@ -175,11 +202,6 @@ TF_STATE_STORAGE_ACCOUNT="$(terraform output -raw state_storage_account_name)"
 TF_STATE_CONTAINER="$(terraform output -raw state_container_name)"
 TF_STATE_OPERATOR_CONTAINER="$(terraform output -raw operator_state_container_name)"
 
-set_env_value "$env_file" TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
-set_env_value "$env_file" TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"
-set_env_value "$env_file" TF_STATE_CONTAINER "$TF_STATE_CONTAINER"
-set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$TF_STATE_OPERATOR_CONTAINER"
-
 rm -f backend_override.tf
 echo "Moving bootstrap state into $TF_STATE_STORAGE_ACCOUNT/$TF_STATE_CONTAINER/$state_key."
 
@@ -190,12 +212,18 @@ for attempt in {1..10}; do
     break
   fi
   if (( attempt == 10 )); then
-    echo "State migration failed. Local state is kept in $stack_dir/terraform.tfstate; re-run this script." >&2
+    echo "State migration failed. Local state is kept in $stack_dir/terraform.tfstate; rerun and it resumes from there." >&2
     exit 1
   fi
   echo "Storage access not active yet; retrying in 30 seconds (attempt $attempt of 10)."
   sleep 30
 done
+
+# Recorded only now: from here on, runs use the remote state, so .env mustn't name it before it holds the state.
+set_env_value "$env_file" TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
+set_env_value "$env_file" TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"
+set_env_value "$env_file" TF_STATE_CONTAINER "$TF_STATE_CONTAINER"
+set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$TF_STATE_OPERATOR_CONTAINER"
 
 rm -f terraform.tfstate terraform.tfstate.backup
 echo
