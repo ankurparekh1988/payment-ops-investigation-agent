@@ -18,7 +18,7 @@ scripts/setup-local.sh
 dotnet run --project src/PaymentOps.Web --launch-profile https
 ```
 
-Open `https://localhost:7207` and sign in with your own account, which has the Admin role. Rerunning the script is safe: if a step fails part-way, for example while new permissions take effect, run it again and it carries on.
+Open `https://localhost:7207` and sign in with your own account, which has the Admin role. The app reaches Azure as your `az login` account; the launch profile limits it to the Azure CLI's sign-in, so other signed-in tools such as Visual Studio aren't tried first. Rerunning the script is safe: if a step fails part-way, for example while new permissions take effect, run it again and it carries on.
 
 ## What the script creates
 
