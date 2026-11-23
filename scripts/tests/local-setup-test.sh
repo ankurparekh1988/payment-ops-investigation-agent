@@ -45,6 +45,10 @@ case "$*" in
   "storage account show "*)
     [[ -z "${STUB_FAIL_OWNER:-}" ]] || exit 1
     printf '%s\r\n' "${STUB_OWNER-local}" ;;
+  "storage blob exists "*)
+    [[ -z "${STUB_FAIL_BLOB_EXISTS:-}" ]] || exit 1
+    case "$*" in *platform.tfstate*) blob=platform ;; *identity.tfstate*) blob=identity ;; *) blob=other ;; esac
+    [[ -f "$STUB_STATE/$blob.blob" ]] && printf 'true\r\n' || printf 'false\r\n' ;;
 esac
 EOF
 cat > "$work/bin/terraform" <<'EOF'
@@ -74,9 +78,13 @@ if [[ "$dir" == bootstrap ]]; then
     destroy) [[ -z "${STUB_FAIL_BOOTSTRAP_DESTROY:-}" ]] || exit 1 ;;
   esac
 fi
+# Platform and identity: $dir.blob is the state file in Azure, $dir the resources it lists. A destroy
+# leaves an empty state file behind; a deployment never applied has none. STUB_FAIL_APPLY names one
+# whose apply always fails before creating anything.
 if [[ "$dir" == platform || "$dir" == identity ]]; then
   case "$1" in
-    apply) touch "$STUB_STATE/$dir" ;;
+    apply) [[ "${STUB_FAIL_APPLY:-}" != "$dir" ]] || exit 1
+           touch "$STUB_STATE/$dir" "$STUB_STATE/$dir.blob" ;;
     destroy) [[ "${STUB_DESTROY_LEAVES:-}" == "$dir" ]] || rm -f "$STUB_STATE/$dir" ;;
   esac
 fi
@@ -87,6 +95,8 @@ case "$*" in
       printf '%s\n' module.bootstrap.azurerm_resource_group.bootstrap module.bootstrap.module.state.azurerm_storage_account.this \
         module.bootstrap.module.state.azurerm_storage_container.this module.bootstrap.module.state.azurerm_storage_container.operator \
         module.bootstrap.azurerm_resource_group.workload
+    elif [[ ! -f "$STUB_STATE/$dir.blob" ]]; then
+      echo "No state file was found!" >&2; exit 1
     elif [[ -f "$STUB_STATE/$dir" ]]; then
       echo "module.$dir.azurerm_resource.this"
     fi ;;
@@ -286,6 +296,56 @@ fresh
 STUB_FAIL_GROUP_EXISTS=1 STUB_RUN=1 setup > /dev/null
 check "setup refuses when it can't check for an existing bootstrap" test $? -ne 0
 check "nothing applied when the check fails" bash -c "! grep -q ' apply' '$log'"
+
+# --- Deployments never created are skipped; a state that can't be checked still stops teardown ---
+fresh
+SETUP_RETRY_SECONDS=0 STUB_FAIL_APPLY=platform STUB_RUN=1 setup > /dev/null
+check "setup stops when the platform can't be created" test $? -ne 0
+: > "$log"
+STUB_FAIL_BLOB_EXISTS=1 teardown --all > /dev/null
+check "teardown stops when it can't check for a state file" test $? -ne 0
+check "nothing is destroyed when the check fails" bash -c "! grep -qE ' destroy|^az group delete' '$log'"
+check ".env keeps the state storage when the check fails" env_has TF_STATE_STORAGE_ACCOUNT
+: > "$log"
+teardown --all > /dev/null
+check "--all removes an environment that has only its bootstrap" test $? -eq 0
+check "no platform or sign-in destroy is attempted" bash -c "! grep -qE '^terraform (platform|identity) destroy' '$log'"
+check "the bootstrap is destroyed" grep -q "^terraform bootstrap destroy" "$log"
+check "the bootstrap-only environment's resource group is deleted" bash -c "! grep -qx rg-forktest-bootstrap '$work/groups'"
+
+fresh
+STUB_FAIL_APPLY=identity STUB_RUN=1 setup > /dev/null
+check "setup stops when sign-in can't be created" test $? -ne 0
+: > "$log"
+teardown --all > /dev/null
+check "--all removes a platform that has no sign-in" test $? -eq 0
+check "only the platform is destroyed before the bootstrap" \
+  bash -c "grep -E '^terraform (identity|platform) destroy' '$log' | awk '{print \$2}' | paste -sd' ' | grep -qx platform"
+check "the platform-only environment's resource group is deleted" bash -c "! grep -qx rg-forktest-bootstrap '$work/groups'"
+
+# --- A failed migration followed by --all: the local state is the only record -------------------
+fresh
+STUB_FAIL_MIGRATE=1 STUB_RUN=1 setup > /dev/null
+: > "$log"
+STUB_OWNER="" teardown --all > /dev/null
+check "--all refuses local state whose storage isn't marked local" test $? -ne 0
+check "the local state is kept after that refusal" test -s "$bootstrap_dir/terraform.tfstate"
+check "nothing is deleted after that refusal" bash -c "! grep -qE ' destroy|^az group delete' '$log'"
+: > "$log"
+teardown --all > /dev/null
+check "--all removes a bootstrap whose state never reached Azure" test $? -eq 0
+check "it destroys from the local state" grep -q "^terraform bootstrap destroy .* override=yes" "$log"
+check "the destroy comes before the group delete" \
+  bash -c "grep -E '^terraform bootstrap destroy|^az group delete' '$log' | awk '{print \$2}' | paste -sd' ' | grep -qx 'bootstrap group'"
+check "the resource group is deleted after the local-state destroy" bash -c "! grep -qx rg-forktest-bootstrap '$work/groups'"
+check "the local state is gone once everything is" test ! -e "$bootstrap_dir/terraform.tfstate"
+
+# With no state anywhere, a resource group of the same name isn't this environment's to delete.
+fresh
+echo rg-forktest-bootstrap > "$work/groups"
+teardown --all > /dev/null
+check "--all refuses a bootstrap group no state names" test $? -ne 0
+check "that group is left alone" grep -qx rg-forktest-bootstrap "$work/groups"
 
 # --- jq's Windows line endings are stripped -----------------------------------------------------
 mkdir -p "$work/crlf"

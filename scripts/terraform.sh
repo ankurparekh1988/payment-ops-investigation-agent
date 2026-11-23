@@ -58,14 +58,10 @@ if (( ${#missing[@]} )); then
   exit 1
 fi
 
-# One state file per deployment and environment. Identity state holds demo user passwords and the
-# local sign-in secret, so it lives in a container no pipeline identity can read.
-state_key="$TF_VAR_environment/$deployment.tfstate"
-state_container="$TF_STATE_CONTAINER"
-[[ "$deployment" == "bootstrap" ]] && state_key="bootstrap.tfstate"
-if [[ "$deployment" == "identity" ]]; then
-  state_container="${TF_STATE_OPERATOR_CONTAINER:?Missing TF_STATE_OPERATOR_CONTAINER; rerun scripts/bootstrap.sh to record it.}"
-fi
+# shellcheck source=scripts/lib/state-location.sh
+source "$repo_root/scripts/lib/state-location.sh"
+state_key="$(state_key "$deployment")"
+state_container="$(state_container "$deployment")"
 
 cd "$deployment_dir"
 terraform init -input=false -reconfigure \
