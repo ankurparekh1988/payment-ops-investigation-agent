@@ -18,9 +18,9 @@ FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 # Two steps of one blue: the earlier run lighter, the latest darker (validated as an ordinal pair on each surface).
 THEMES = {
     "light": {"surface": "#ffffff", "text": "#1f2328", "muted": "#59636e", "grid": "#d1d9e0",
-              "runs": ["#86b6ef", "#2a78d6"], "gate": "#1f2328", "good": "#0ca30c", "tile": "#f6f8fa"},
+              "runs": ["#4a8de0", "#0f3f7d"], "gate": "#1f2328", "good": "#0ca30c", "tile": "#f6f8fa"},
     "dark": {"surface": "#0d1117", "text": "#f0f6fc", "muted": "#9198a1", "grid": "#3d444d",
-             "runs": ["#1c5cab", "#5598e7"], "gate": "#f0f6fc", "good": "#0ca30c", "tile": "#151b23"},
+             "runs": ["#2a78d6", "#9ec5f4"], "gate": "#f0f6fc", "good": "#0ca30c", "tile": "#151b23"},
 }
 
 QUALITY = [
@@ -70,9 +70,10 @@ def legend(x, y, t, runs):
 
 def stats(latest, t):
     inv, saf = latest["investigations"], latest["safety"]
+    valid = inv["metrics"]["validated_result_rate"]
     zero = sum(inv["hard_gate_violations"].values()) + sum(saf["hard_gate_violations"][g] for g in ("authorization_leaks", "unauthorized_state_changes"))
     tiles = [
-        (f"{inv['metrics']['validated_result_rate']['median']:.0%}", "assessments passed", "server validation"),
+        (f"{valid['median']:.0%}", "passed validation,", f"median of {inv['runs']}; low {min(valid['runs']):.0%}"),
         (f"{saf['hard_gate_violations']['injection_followed']} / {saf['cases']}", "safety cases with an", "injection followed"),
         (f"{zero}", "authorization leaks", "or unapproved changes"),
         (f"{inv['cases']} × {inv['runs']}", "labelled cases × runs", "gate every AI change"),
@@ -97,13 +98,16 @@ def quality(runs, t):
     rows.append(("Retrieval recall@5, held out", [r["retrieval"]["recall_at_5"] for r in runs], runs[1]["retrieval"]["threshold"]))
     left, right, top, row, bar = 220, 840, 74, 44, 14
     scale = right - left
-    h = top + row * len(rows) + 30
+    h = top + row * len(rows) + 58
+    fp = [r["investigations"]["metrics"]["proposal_false_positive_rate"] for r in runs]
     body = [text(20, 28, "Quality: median of 3 runs over 37 labelled cases (retrieval: 26 questions)", t, 14, 600)]
     body += legend(20, 54, t, RUNS)
     for g in (0, 0.25, 0.5, 0.75, 1):
         x = round(left + g * scale, 1)
         body.append(f'<line x1="{x}" y1="{top - 6}" x2="{x}" y2="{top + row * len(rows) - 6}" stroke="{t["grid"]}" stroke-width="1"/>')
-        body.append(text(x, h - 10, f"{g:.2f}", t, 11, anchor="middle", fill="muted"))
+        body.append(text(x, h - 38, f"{g:.2f}", t, 11, anchor="middle", fill="muted"))
+    body.append(text(20, h - 12, f"Unwarranted ticket proposals, lower is better (ceiling {fp[1]['threshold']:.2f}): "
+                                 f"{fp[0]['median']:.3f} and {fp[1]['median']:.3f}, median of 3 runs over {fp[1]['n']} cases", t, 13))
     for i, (label, values, gate) in enumerate(rows):
         y = top + i * row
         body.append(text(left - 12, y + bar + 5, label, t, 13, anchor="end"))
@@ -123,13 +127,14 @@ def safety(runs, t):
         n = r["safety"]["hard_gate_violations"][g]
         return n + r["investigations"]["hard_gate_violations"][g] if scope == "both" else n
     rows = [(label, [count(r, scope, g) for r in runs]) for scope, g, label in SAFETY]
-    rows.append(("Unwarranted ticket proposals", [round(r["investigations"]["metrics"]["proposal_false_positive_rate"]["median"] * r["investigations"]["metrics"]["proposal_false_positive_rate"]["n"]) for r in runs]))
     w, top, row = 880, 92, 34
     cols = [560, 740]
     h = top + row * len(rows) + 16
     cases = runs[1]["safety"]["cases"]
+    sruns = [r["safety"]["runs"] for r in runs]
     body = [text(20, 28, "Safety: hard gates, where any count above zero fails the release", t, 14, 600),
-            text(20, 50, f"{cases} attack, harm and look-alike cases per run, plus the 37 labelled cases × 3 runs", t, 12, fill="muted")]
+            text(20, 50, f"Counts over every run: {cases} attack, harm and look-alike cases × {sruns[0]} runs ({RUNS[0]}) and × {sruns[1]} ({RUNS[1]}), "
+                         f"plus {runs[1]['investigations']['cases']} labelled cases × {runs[1]['investigations']['runs']} runs", t, 12, fill="muted")]
     for k, x in enumerate(cols):
         body.append(f'<rect x="{x - 52}" y="{top - 26}" width="12" height="12" rx="3" fill="{t["runs"][k]}"/>')
         body.append(text(x - 34, top - 16, f"Run {RUNS[k]}", t, 12, fill="muted"))
@@ -175,8 +180,10 @@ def latency(runs, t):
 
 def charts():
     runs = [load(d) for d in RUNS]
-    assert all(r["investigations"]["metrics"][m]["threshold"] == runs[1]["investigations"]["metrics"][m]["threshold"]
-               for r in runs for m, _ in QUALITY), "the runs were gated on different thresholds"
+    gates = [{m: (v["threshold"], v["direction"]) for m, v in r["investigations"]["metrics"].items()} | {"retrieval": r["retrieval"]["threshold"]}
+             for r in runs]
+    assert gates[0] == gates[1], "the runs were gated on different thresholds"
+    assert gates[1]["proposal_false_positive_rate"][1] == "lower" and all(gates[1][m][1] == "higher" for m, _ in QUALITY)
     assert max(r["investigations"]["latency_ms"]["p95"] for r in runs) <= 20000, "latency axis tops out at 20 s"
     out = {}
     for mode, t in THEMES.items():

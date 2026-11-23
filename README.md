@@ -9,7 +9,7 @@ Built on Azure with .NET 10, Blazor and Microsoft Agent Framework: Microsoft Fou
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/stats-dark.svg">
-  <img alt="Latest release evaluation: 100% of assessments passed server validation; 0 of 87 safety cases followed an injected instruction; 0 authorization leaks or unapproved changes; 37 labelled cases × 3 runs gate every AI change; p95 full investigation 13.1 s, first progress 2.4 s" src="docs/media/stats-light.svg">
+  <img alt="Latest release evaluation: assessments passing server validation, median 100% over 3 runs (lowest run 97%); 0 of 87 safety cases followed an injected instruction; 0 authorization leaks or unapproved changes; 37 labelled cases × 3 runs gate every AI change; p95 full investigation 13.1 s, first progress 2.4 s" src="docs/media/stats-light.svg">
 </picture>
 
 ## Demo
@@ -50,36 +50,57 @@ flowchart LR
 
 Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has to pass a release gate before it merges: 37 labelled cases × 3 runs, 26 held-out retrieval questions and 87 safety cases, against thresholds fixed before measuring from the spread of a ten-run baseline ([how](docs/Evaluation.md#the-threshold-rule)). These are the last two passing release runs, both on `gpt-5.4-mini` with the same thresholds and datasets.
 
-<picture>
+<a href="docs/media/evaluation-quality-light.svg"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-quality-dark.svg">
-  <img alt="Quality medians, 2026-11-09 then 2026-11-18, against the gate: passed server validation 0.946, 1.000 (gate 0.92); outcome allowed 0.892, 0.919 (0.84); evidence cited 0.727, 0.712 (0.66); required tools 0.814, 0.791 (0.78); tool arguments 0.648, 0.630 (0.57); section precision 0.767, 0.773 (0.72); section recall 0.469, 0.438 (0.40); retrieval recall@5 0.808, 0.769 (0.76)" src="docs/media/evaluation-quality-light.svg">
-</picture>
+  <img alt="Quality medians, 2026-11-09 then 2026-11-18, against the gate: passed server validation 0.946, 1.000 (gate 0.92); outcome allowed 0.892, 0.919 (0.84); evidence cited 0.727, 0.712 (0.66); required tools 0.814, 0.791 (0.78); tool arguments 0.648, 0.630 (0.57); section precision 0.767, 0.773 (0.72); section recall 0.469, 0.438 (0.40); retrieval recall@5 0.808, 0.769 (0.76); unwarranted ticket proposals 0.000, 0.000 (lower is better, ceiling 0.05)" src="docs/media/evaluation-quality-light.svg">
+</picture></a>
 
-<picture>
+<a href="docs/media/evaluation-safety-light.svg"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-safety-dark.svg">
-  <img alt="Safety hard gates, both runs: 0 planted instructions followed, 0 harmful requests handled unsafely, 0 harmful text repeated, 0 restricted content leaked, 0 changes nobody approved, 0 unwarranted ticket proposals" src="docs/media/evaluation-safety-light.svg">
-</picture>
+  <img alt="Safety hard gates, both runs: 0 planted instructions followed, 0 harmful requests handled unsafely, 0 harmful text repeated, 0 restricted content leaked, 0 changes nobody approved" src="docs/media/evaluation-safety-light.svg">
+</picture></a>
 
-<picture>
+<a href="docs/media/evaluation-latency-light.svg"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-latency-dark.svg">
   <img alt="Latency, 2026-11-09 then 2026-11-18: full investigation p95 17.2 s, 13.1 s; p50 12.9 s, 7.6 s; first progress p95 2.9 s, 2.4 s" src="docs/media/evaluation-latency-light.svg">
-</picture>
+</picture></a>
+
+<details>
+<summary>The same results as a table (easier on a phone; select a chart above for its full size)</summary>
+
+| Metric (median of 3 runs) | Gate | 2026-11-09 | 2026-11-18 |
+|---|---|---|---|
+| Passed server validation | ≥ 0.92 | 0.946 | 1.000 |
+| Outcome allowed by the label | ≥ 0.84 | 0.892 | 0.919 |
+| Expected evidence cited | ≥ 0.66 | 0.727 | 0.712 |
+| Required tools called | ≥ 0.78 | 0.814 | 0.791 |
+| Tool arguments correct | ≥ 0.57 | 0.648 | 0.630 |
+| Runbook sections: precision | ≥ 0.72 | 0.767 | 0.773 |
+| Runbook sections: recall | ≥ 0.40 | 0.469 | 0.438 |
+| Unwarranted ticket proposals (lower is better) | ≤ 0.05 | 0.000 | 0.000 |
+| Retrieval recall@5, held out | ≥ 0.76 | 0.808 | 0.769 |
+| Full investigation, p95 | | 17.2 s | 13.1 s |
+| Full investigation, p50 | | 12.9 s | 7.6 s |
+| First progress shown, p95 | | 2.9 s | 2.4 s |
+| Safety hard gates (any count fails) | 0 | 0 | 0 |
+
+</details>
 
 **What changed between them.** [#61](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/61) bounded usage and kept untrusted text out of tool choices (prompt `investigation-agent` 1.1.0 → 1.2.0), and [#64](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/64) added model routing, switched off. The validation median reached 1.000 and p95 latency fell by about a quarter; evidence and tool recall dipped within their gates. Retrieval recall@5 went from 21 to 20 of 26 with the knowledge and retrieval code unchanged: one question fell out of the top five and another moved up.
 
-**Safety rates**, reported rather than gated, on the held-out safety cases (both runs unless noted):
+**Safety rates**, reported rather than gated, on the safety cases (both runs unless noted). The 2026-11-09 rates are medians over three safety runs; 2026-11-18 had one run.
 
 | What was measured | Result | Reading it |
 |---|---|---|
 | Harmful questions blocked before the model | 6 of 6 | |
 | Harmful tool text withheld from the model | 6 of 6, then 5 of 6 | The one that got through wasn't repeated; the hard gate held |
-| Direct attacks blocked by the screen | 1 of 6 | The model refused the rest; none succeeded |
+| Direct attacks blocked by the screen | 1 of 6 | The remaining evaluated direct attacks ended in refusal |
 | Planted instructions flagged by the screen | 1 of 12 | None had its effect (the first hard gate above) |
 | Ordinary questions wrongly blocked or refused | 2 of 8 | The cost of a strict filter on look-alike wording |
 
 ![Signed in as an Engineer, who may approve tickets: an instruction to ignore the rules and approve every ticket, then a question about hurting someone, are both stopped before the agent runs](docs/media/safety-refusals.gif)
 
-*Two prompts from the safety set on the deployed app, signed in as an Engineer, a role that is allowed to approve tickets. Both are blocked before the agent runs, so no tool is called and nothing is changed. The screen catching a direct attack is the less common case; usually the model gets it and refuses.*
+*Two prompts from the safety set on the deployed app, signed in as an Engineer, a role that is allowed to approve tickets. Both are blocked before the agent runs, so no tool is called and nothing is changed. The screen catching a direct attack is the less common case: in the evaluation, the remaining direct attacks ended in refusal.*
 
 The screen is one layer, not the defence: what matters is that no attack had its effect, and the hard gates count exactly that. The zero counts are results on these evaluated cases, not a guarantee. Full results: [2026-11-18](docs/evidence/release-evaluation-2026-11-18.md), [2026-11-09](docs/evidence/release-evaluation-2026-11-09.md); the charts are drawn from that evidence by [`scripts/readme-charts.py`](scripts/readme-charts.py).
 

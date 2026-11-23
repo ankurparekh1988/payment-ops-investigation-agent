@@ -2,9 +2,9 @@
 <title>Latency, runs 2026-11-09 and 2026-11-18</title>
 <rect width="880" height="236" rx="8" fill="#ffffff"/>
 <text x="20" y="28" font-size="14" font-weight="600" text-anchor="start" fill="#1f2328">Latency: seconds, lower is better</text>
-<rect x="20" y="44" width="12" height="12" rx="3" fill="#86b6ef"/>
+<rect x="20" y="44" width="12" height="12" rx="3" fill="#4a8de0"/>
 <text x="38" y="54" font-size="12" font-weight="400" text-anchor="start" fill="#59636e">Run 2026-11-09</text>
-<rect x="170" y="44" width="12" height="12" rx="3" fill="#2a78d6"/>
+<rect x="170" y="44" width="12" height="12" rx="3" fill="#0f3f7d"/>
 <text x="188" y="54" font-size="12" font-weight="400" text-anchor="start" fill="#59636e">Run 2026-11-18</text>
 <line x1="220.0" y1="68" x2="220.0" y2="200" stroke="#d1d9e0" stroke-width="1"/>
 <text x="220.0" y="226" font-size="11" font-weight="400" text-anchor="middle" fill="#59636e">0 s</text>
@@ -17,18 +17,18 @@
 <line x1="800.0" y1="68" x2="800.0" y2="200" stroke="#d1d9e0" stroke-width="1"/>
 <text x="800.0" y="226" font-size="11" font-weight="400" text-anchor="middle" fill="#59636e">20 s</text>
 <text x="208" y="93" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Full investigation, p95</text>
-<rect x="220" y="74" width="497.7" height="14" rx="3" fill="#86b6ef"><title>Full investigation, p95, 2026-11-09: 17.2 s</title></rect>
+<rect x="220" y="74" width="497.7" height="14" rx="3" fill="#4a8de0"><title>Full investigation, p95, 2026-11-09: 17.2 s</title></rect>
 <text x="723.7" y="86" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">17.2 s</text>
-<rect x="220" y="90" width="378.7" height="14" rx="3" fill="#2a78d6"><title>Full investigation, p95, 2026-11-18: 13.1 s</title></rect>
+<rect x="220" y="90" width="378.7" height="14" rx="3" fill="#0f3f7d"><title>Full investigation, p95, 2026-11-18: 13.1 s</title></rect>
 <text x="604.7" y="102" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">13.1 s</text>
 <text x="208" y="137" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">Full investigation, p50</text>
-<rect x="220" y="118" width="375.2" height="14" rx="3" fill="#86b6ef"><title>Full investigation, p50, 2026-11-09: 12.9 s</title></rect>
+<rect x="220" y="118" width="375.2" height="14" rx="3" fill="#4a8de0"><title>Full investigation, p50, 2026-11-09: 12.9 s</title></rect>
 <text x="601.2" y="130" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">12.9 s</text>
-<rect x="220" y="134" width="220.7" height="14" rx="3" fill="#2a78d6"><title>Full investigation, p50, 2026-11-18: 7.6 s</title></rect>
+<rect x="220" y="134" width="220.7" height="14" rx="3" fill="#0f3f7d"><title>Full investigation, p50, 2026-11-18: 7.6 s</title></rect>
 <text x="446.7" y="146" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">7.6 s</text>
 <text x="208" y="181" font-size="13" font-weight="400" text-anchor="end" fill="#1f2328">First progress shown, p95</text>
-<rect x="220" y="162" width="84.9" height="14" rx="3" fill="#86b6ef"><title>First progress shown, p95, 2026-11-09: 2.9 s</title></rect>
+<rect x="220" y="162" width="84.9" height="14" rx="3" fill="#4a8de0"><title>First progress shown, p95, 2026-11-09: 2.9 s</title></rect>
 <text x="310.9" y="174" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">2.9 s</text>
-<rect x="220" y="178" width="69.1" height="14" rx="3" fill="#2a78d6"><title>First progress shown, p95, 2026-11-18: 2.4 s</title></rect>
+<rect x="220" y="178" width="69.1" height="14" rx="3" fill="#0f3f7d"><title>First progress shown, p95, 2026-11-18: 2.4 s</title></rect>
 <text x="295.1" y="190" font-size="11" font-weight="400" text-anchor="start" fill="#59636e">2.4 s</text>
 </svg>

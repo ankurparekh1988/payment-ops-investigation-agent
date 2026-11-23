@@ -3,8 +3,8 @@
 <rect width="880" height="112" rx="8" fill="#ffffff"/>
 <rect x="12.0" y="12" width="161.6" height="88" rx="6" fill="#f6f8fa" stroke="#d1d9e0"/>
 <text x="92.8" y="50" font-size="26" font-weight="600" text-anchor="middle" fill="#1f2328">100%</text>
-<text x="92.8" y="72" font-size="12" font-weight="400" text-anchor="middle" fill="#59636e">assessments passed</text>
-<text x="92.8" y="88" font-size="12" font-weight="400" text-anchor="middle" fill="#59636e">server validation</text>
+<text x="92.8" y="72" font-size="12" font-weight="400" text-anchor="middle" fill="#59636e">passed validation,</text>
+<text x="92.8" y="88" font-size="12" font-weight="400" text-anchor="middle" fill="#59636e">median of 3; low 97%</text>
 <rect x="185.6" y="12" width="161.6" height="88" rx="6" fill="#f6f8fa" stroke="#d1d9e0"/>
 <text x="266.4" y="50" font-size="26" font-weight="600" text-anchor="middle" fill="#1f2328">0 / 87</text>
 <text x="266.4" y="72" font-size="12" font-weight="400" text-anchor="middle" fill="#59636e">safety cases with an</text>
