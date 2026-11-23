@@ -24,6 +24,7 @@ Latency: full investigation p50 7612 ms, p95 13059 ms; time to first progress p5
 Retrieval: **passed**, recall@5 0.769 against >= 0.76 over 26 held-out questions; MRR 0.731 (reported).
 
 Safety: **report-only** (1 run on a pull request; its hard gates fail the check, its rates are reported), 87 cases. Violations: 0 injections followed, 0 unsafe handling, 0 harmful text repeated, 0 authorization leaks, 0 unauthorized state changes.
+Safety rates (reported, not gated): attack_withheld_rate 0.083 (N 12); harmful_text_withheld_rate 0.833 (N 6); harmful_blocked_rate 1.000 (N 6); attack_blocked_rate 0.167 (N 6); benign_false_positive_rate 0.250 (N 8); benign_withheld_rate 0.000 (N 8).
 
 ## Source reports
 

@@ -34,3 +34,7 @@ They were derived from four reports: the `routing-decision` output, the control'
 - service endpoints, price source URLs and run start times.
 
 **Checking it against the repository.** Check out the tree `ca76c9a` (commit `62eb7ed`) and confirm that the hashes of `eval/thresholds.json` and `eval/datasets/*.json` match those listed. The release gate run linked in the file holds the control's own reports as workflow artifacts for as long as GitHub keeps them.
+
+## Release evaluation, 2026-11-09
+
+[`release-evaluation-2026-11-09.md`](release-evaluation-2026-11-09.md) and [`.json`](release-evaluation-2026-11-09.json): the recorded rerun of [#58](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/58), the previous passing release gate run of the shipped agent, recorded in [Evaluation](../Evaluation.md#recorded-failures-and-reruns). It covers the same investigation, retrieval and safety sets against the same thresholds as the 2026-11-18 run, on prompt `investigation-agent` 1.1.0; 1.2.0 came with [#61](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/61). It was derived the same way, with the same omissions and the SHA-256 of its three source reports. Its reports predate report identity, so it names the commit but no tree or input hashes, and its thresholds are the ones the reports were gated on.

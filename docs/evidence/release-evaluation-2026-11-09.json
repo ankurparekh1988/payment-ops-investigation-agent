@@ -1,0 +1,195 @@
+{
+  "description": "Sanitized summary of a release gate evaluation. Not a raw report; see README.md.",
+  "evaluated_on": "2026-11-09",
+  "evaluation_run": "https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/runs/42624248665",
+  "commit": "3405303f243be25f04f26531c1c318f73b05b54d",
+  "pull_request_head": "a8c1a8d",
+  "chat": {
+    "model": "gpt-5.4-mini",
+    "version": "2026-03-17"
+  },
+  "prompts": [
+    {
+      "id": "investigation-agent",
+      "version": "1.1.0"
+    },
+    {
+      "id": "harm-screen",
+      "version": "1.0.0"
+    },
+    {
+      "id": "tool-text-harm-screen",
+      "version": "1.0.0"
+    }
+  ],
+  "investigations": {
+    "verdict": "passed",
+    "runs": 3,
+    "cases": 37,
+    "metrics": {
+      "validated_result_rate": {
+        "threshold": 0.92,
+        "direction": "higher",
+        "n": 37,
+        "runs": [
+          0.946,
+          1,
+          0.946
+        ],
+        "median": 0.946
+      },
+      "allowed_outcome_rate": {
+        "threshold": 0.84,
+        "direction": "higher",
+        "n": 37,
+        "runs": [
+          0.892,
+          0.946,
+          0.892
+        ],
+        "median": 0.892
+      },
+      "required_tool_recall": {
+        "threshold": 0.78,
+        "direction": "higher",
+        "n": 86,
+        "runs": [
+          0.814,
+          0.802,
+          0.814
+        ],
+        "median": 0.814
+      },
+      "tool_argument_accuracy": {
+        "threshold": 0.57,
+        "direction": "higher",
+        "n": 54,
+        "runs": [
+          0.685,
+          0.611,
+          0.648
+        ],
+        "median": 0.648
+      },
+      "expected_evidence_coverage": {
+        "threshold": 0.66,
+        "direction": "higher",
+        "n": 66,
+        "runs": [
+          0.758,
+          0.697,
+          0.727
+        ],
+        "median": 0.727
+      },
+      "expected_section_precision": {
+        "threshold": 0.72,
+        "direction": "higher",
+        "n": 31,
+        "runs": [
+          0.767,
+          0.791,
+          0.72
+        ],
+        "median": 0.767
+      },
+      "expected_section_recall": {
+        "threshold": 0.4,
+        "direction": "higher",
+        "n": 32,
+        "runs": [
+          0.406,
+          0.469,
+          0.5
+        ],
+        "median": 0.469
+      },
+      "proposal_false_positive_rate": {
+        "threshold": 0.05,
+        "direction": "lower",
+        "n": 23,
+        "runs": [
+          0,
+          0,
+          0
+        ],
+        "median": 0
+      }
+    },
+    "reported": {
+      "proposal_recall": {
+        "n": 14,
+        "median": 0.571
+      }
+    },
+    "hard_gate_violations": {
+      "authorization_leaks": 0,
+      "unauthorized_state_changes": 0
+    },
+    "latency_ms": {
+      "p50": 12939,
+      "p95": 17163
+    },
+    "time_to_first_progress_ms": {
+      "p50": 2131,
+      "p95": 2927
+    }
+  },
+  "retrieval": {
+    "verdict": "passed",
+    "threshold": 0.76,
+    "recall_at_5": 0.808,
+    "n": 26,
+    "mrr": 0.731
+  },
+  "safety": {
+    "verdict": "report-only",
+    "runs": 3,
+    "cases": 87,
+    "hard_gate_violations": {
+      "injection_followed": 0,
+      "unsafe_handling": 0,
+      "harmful_text_repeated": 0,
+      "authorization_leaks": 0,
+      "unauthorized_state_changes": 0
+    },
+    "reported": {
+      "attack_withheld_rate": {
+        "n": 12,
+        "median": 0.083
+      },
+      "harmful_text_withheld_rate": {
+        "n": 6,
+        "median": 1
+      },
+      "harmful_blocked_rate": {
+        "n": 6,
+        "median": 1
+      },
+      "attack_blocked_rate": {
+        "n": 6,
+        "median": 0.167
+      },
+      "benign_false_positive_rate": {
+        "n": 8,
+        "median": 0.25
+      },
+      "benign_withheld_rate": {
+        "n": 8,
+        "median": 0
+      }
+    }
+  },
+  "source_reports": {
+    "investigations": "sha256:354e16eeedb5d97ba189a76533369bdddb41a4409e0c7ecefd498ceebfe256a7",
+    "retrieval": "sha256:6577fae66f0c76aa15915bc665f7e1b8673179ae2e2e039db6b8b3c5455b126c",
+    "safety": "sha256:9d22f4702f111f13e5d82c56918a8da089c145d63241b2ff39316c79dba64652"
+  },
+  "omitted": [
+    "absolute cost values and prices (USD)",
+    "per-case transcripts, tool arguments and retrieved sections",
+    "service endpoints",
+    "price source URLs",
+    "run start times"
+  ]
+}
