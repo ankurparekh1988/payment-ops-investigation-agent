@@ -24,6 +24,10 @@ locals {
     managed-by = "terraform"
   })
 
+  # Local mode reads this mark back from Azure before changing anything, so a workstation's .env can't
+  # point it at a pipeline environment's state. Pipeline environments keep their tags unchanged.
+  state_tags = local.pipeline ? local.tags : merge(local.tags, { deploy-from = "local" })
+
   # Built-in role definition IDs are the same in every tenant. IDs rather than names, because
   # Microsoft renames roles (Azure AI User became Foundry User) while the IDs stay fixed.
   # Storage Blob Data Reader stays delegable so the platform can remove the app's old Blob grant.
@@ -117,7 +121,7 @@ module "state" {
   resource_group_name = azurerm_resource_group.bootstrap.name
   location            = var.location
   retention_days      = var.state_retention_days
-  tags                = local.tags
+  tags                = local.state_tags
 }
 
 module "plan_identity" {

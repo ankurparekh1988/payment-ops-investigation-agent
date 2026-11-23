@@ -40,6 +40,11 @@ run "without_repository" {
     condition     = output.deploy_identity_client_id == null && output.federated_subjects == null
     error_message = "Identity outputs are null without a repository."
   }
+
+  assert {
+    condition     = local.state_tags["deploy-from"] == "local"
+    error_message = "The state storage is marked deploy-from=local, which local mode checks before changing anything."
+  }
 }
 
 run "partial_repository" {

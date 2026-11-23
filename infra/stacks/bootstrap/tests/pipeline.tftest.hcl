@@ -38,4 +38,9 @@ run "with_repository" {
     condition     = length(azurerm_role_assignment.operator_search) == 0
     error_message = "The pipeline publishes the knowledge, so the operator gets no Search write roles."
   }
+
+  assert {
+    condition     = !contains(keys(local.state_tags), "deploy-from") && jsonencode(local.state_tags) == jsonencode(local.tags)
+    error_message = "A pipeline environment's state storage keeps its existing tags, with no deploy-from mark."
+  }
 }
