@@ -159,7 +159,7 @@ dotnet build PaymentOps.slnx
 dotnet test PaymentOps.slnx
 ```
 
-The app itself runs against Azure: Entra ID for sign-in, Foundry for the model, AI Search for the knowledge and Content Safety for screening. Without them, pages return 503 or investigations report that a service isn't responding. Creating the environment and signing in locally are covered in [Deployment](docs/Deployment.md) and [Running locally with sign-in](docs/Deployment.md#running-locally-with-sign-in).
+The app itself runs against Azure: Entra ID for sign-in, Foundry for the model, AI Search for the knowledge and Content Safety for screening. Without them, pages return 503 or investigations report that a service isn't responding. [SETUP.md](SETUP.md) creates all of it in your own subscription with one script and runs the app on localhost; [Deployment](docs/Deployment.md) covers the pipeline-deployed environment.
 
 ## Documentation
 

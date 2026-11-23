@@ -26,6 +26,8 @@ The bootstrap can't run through the pipeline, because it creates what the pipeli
 
 ## Prerequisites
 
+This page covers an environment deployed by the GitHub pipeline. To run the app against your own subscription from your machine, without GitHub, follow [SETUP.md](../SETUP.md) instead.
+
 - An Azure subscription where you're **Owner** (needed for the bootstrap only)
 - Rights to create applications, groups and users in Entra ID, such as Application Administrator plus User Administrator (needed for identity only)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in with `az login`
@@ -133,7 +135,7 @@ scripts/terraform.sh identity output -json demo_user_sign_ins
 
 ### Running locally with sign-in
 
-A laptop has no managed identity, so local sign-in uses a client secret instead. Setting `TF_VAR_local_app_urls` and rerunning `scripts/identity.sh` registers the local address and creates a secret that expires after `TF_VAR_local_secret_lifetime_days` (30 by default). Rerunning the script after that replaces it, and clearing the variable removes it. Keep it in user-secrets, outside the repository. Without these settings, pages return 503:
+A laptop has no managed identity, so local sign-in uses a client secret instead. For an environment created with `scripts/setup-local.sh`, the script does all of this. Setting `TF_VAR_local_app_urls` and rerunning `scripts/identity.sh` registers the local address and creates a secret that expires after `TF_VAR_local_secret_lifetime_days` (30 by default). Rerunning the script after that replaces it, and clearing the variable removes it. Keep it in user-secrets, outside the repository. Without these settings, pages return 503:
 
 ```bash
 dotnet user-secrets --project src/PaymentOps.Web set AzureAd:TenantId <tenant-id>
