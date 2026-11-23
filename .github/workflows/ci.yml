@@ -86,6 +86,10 @@ jobs:
           terraform -chdir=infra/stacks/bootstrap init -backend=false -input=false -lockfile=readonly
           terraform -chdir=infra/stacks/bootstrap test
 
+      # Which Terraform commands may change an environment, from the pipeline and from a workstation.
+      - name: Test the deployment guard
+        run: bash scripts/tests/deploy-guard-test.sh
+
       - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}

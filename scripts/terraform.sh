@@ -24,20 +24,6 @@ if [[ ! -d "$deployment_dir" ]]; then
   exit 2
 fi
 
-# Only the deployment pipeline changes environments. Workstations can plan and inspect. The exceptions
-# need rights no pipeline should hold: the bootstrap creates the pipeline's own identities and state
-# (Owner), and identity creates Entra app registrations, groups and users (directory rights).
-human_run_deployments=(bootstrap identity)
-changes_environment=false
-case "$1" in
-  apply | destroy | import | taint | untaint | force-unlock) changes_environment=true ;;
-  state) [[ "${2:-}" =~ ^(rm|mv|push|replace-provider)$ ]] && changes_environment=true ;;
-esac
-if [[ "$changes_environment" == "true" && " ${human_run_deployments[*]} " != *" $deployment "* && "${GITHUB_ACTIONS:-}" != "true" ]]; then
-  echo "'terraform $*' for '$deployment' runs only in the deployment pipeline. Use 'plan' locally." >&2
-  exit 1
-fi
-
 # .env fills in configuration; anything already set in the environment (such as CI variables) wins.
 if [[ -f "$env_file" ]]; then
   preset_env="$(export -p | grep -v '^declare -[a-z]*r')"
@@ -56,6 +42,12 @@ done < <(env | grep '^TF_VAR_' || true)
 # Git Bash on Windows rewrites values starting with "/" into Windows paths for native programs, which
 # would turn resource IDs such as /subscriptions/... into C:/Program Files/Git/subscriptions/....
 export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}TF_VAR_"
+
+# Only the deployment pipeline changes environments, unless this one is deployed from a workstation.
+# Checked after .env is read, because that's where local mode is set.
+# shellcheck source=scripts/lib/deploy-guard.sh
+source "$repo_root/scripts/lib/deploy-guard.sh"
+may_change_environment "$deployment" "$@" || exit 1
 
 missing=()
 for name in ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_environment TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER; do

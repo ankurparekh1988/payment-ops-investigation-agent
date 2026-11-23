@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-time setup: creates Terraform state storage, the workload resource group and the GitHub
-# pipeline identities. The first run starts with local state, then moves it into the storage
-# account it has just created. Later runs use that remote state directly.
+# pipeline identities (none in local mode: see scripts/lib/deploy-guard.sh). The first run starts
+# with local state, then moves it into the storage account it has just created. Later runs use
+# that remote state directly.
 #
 # Usage: scripts/bootstrap.sh          (reads configuration from .env in the repository root)
 set -euo pipefail
@@ -30,9 +31,19 @@ done < <(env | grep '^TF_VAR_' || true)
 # would turn resource IDs such as /subscriptions/... into C:/Program Files/Git/subscriptions/....
 export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}TF_VAR_"
 
+# shellcheck source=scripts/lib/deploy-guard.sh
+source "$repo_root/scripts/lib/deploy-guard.sh"
+required=(ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_location TF_VAR_name_prefix TF_VAR_environment)
+apply_args=()
+if local_mode; then
+  # Deployed from this workstation: no pipeline to trust, and no approval prompt.
+  apply_args=(-auto-approve)
+else
+  required+=(TF_VAR_github_repository TF_VAR_github_owner_id TF_VAR_github_repository_id)
+fi
+
 missing=()
-for name in ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_location TF_VAR_name_prefix TF_VAR_environment \
-            TF_VAR_github_repository TF_VAR_github_owner_id TF_VAR_github_repository_id; do
+for name in "${required[@]}"; do
   [[ -n "${!name:-}" ]] || missing+=("$name")
 done
 if (( ${#missing[@]} )); then
@@ -90,7 +101,9 @@ check_oidc_subject() {
   echo "OIDC subject prefix matches the repository: $expected_prefix"
 }
 
-if ! command -v gh >/dev/null 2>&1; then
+if local_mode; then
+  : # No GitHub repository to check.
+elif ! command -v gh >/dev/null 2>&1; then
   echo "GitHub CLI not found; skipping the OIDC subject check. Expected prefix: $expected_prefix"
 else
   check_oidc_subject && status=0 || status=$?
@@ -120,13 +133,24 @@ if [[ -z "${TF_VAR_bootstrap_operator_object_id:-}" ]]; then
   echo "Recorded the bootstrap operator in .env."
 fi
 
+# In local mode the operator also runs the app, so they get the developer roles.
+if local_mode && [[ "${TF_VAR_developer_object_ids:-}" != *"$TF_VAR_bootstrap_operator_object_id"* ]]; then
+  ids="${TF_VAR_developer_object_ids:-[]}"
+  ids="${ids%]}"
+  [[ "$ids" == *\" ]] && ids="$ids,"
+  TF_VAR_developer_object_ids="$ids\"$TF_VAR_bootstrap_operator_object_id\"]"
+  export TF_VAR_developer_object_ids
+  set_env_value "$env_file" TF_VAR_developer_object_ids "'$TF_VAR_developer_object_ids'"
+  echo "Recorded you as a developer of this environment in .env."
+fi
+
 cd "$stack_dir"
 
 if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
   echo "State storage already exists ($TF_STATE_STORAGE_ACCOUNT); applying against remote state."
   # shellcheck disable=SC2046
   terraform init -input=false -reconfigure $(backend_args)
-  terraform apply
+  terraform apply ${apply_args[@]+"${apply_args[@]}"}
   set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$(terraform output -raw operator_state_container_name)"
   exit 0
 fi
@@ -141,7 +165,7 @@ EOF
 trap 'rm -f "$stack_dir/backend_override.tf"' EXIT
 
 terraform init -input=false
-terraform apply
+terraform apply ${apply_args[@]+"${apply_args[@]}"}
 
 TF_STATE_RESOURCE_GROUP="$(terraform output -raw state_resource_group_name)"
 TF_STATE_STORAGE_ACCOUNT="$(terraform output -raw state_storage_account_name)"
