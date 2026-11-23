@@ -62,7 +62,8 @@ fi
 
 # A federated credential with the wrong subject is created without error and only fails when a
 # workflow tries to sign in, so compare against the subject format GitHub actually issues.
-expected_prefix="repo:${TF_VAR_github_repository%%/*}@${TF_VAR_github_owner_id}/${TF_VAR_github_repository#*/}@${TF_VAR_github_repository_id}"
+expected_prefix=""
+local_mode || expected_prefix="repo:${TF_VAR_github_repository%%/*}@${TF_VAR_github_owner_id}/${TF_VAR_github_repository#*/}@${TF_VAR_github_repository_id}"
 check_oidc_subject() {
   local repo="$TF_VAR_github_repository" actual_prefix settings use_default use_immutable reported_prefix
 

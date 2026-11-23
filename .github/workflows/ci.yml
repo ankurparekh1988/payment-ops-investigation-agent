@@ -90,6 +90,10 @@ jobs:
       - name: Test the deployment guard
         run: bash scripts/tests/deploy-guard-test.sh
 
+      # setup-local.sh and teardown-local.sh end to end, with az, terraform, dotnet and jq stubbed.
+      - name: Test the local setup scripts
+        run: bash scripts/tests/local-setup-test.sh
+
       - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}

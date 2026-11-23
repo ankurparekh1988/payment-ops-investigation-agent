@@ -30,5 +30,12 @@ export TF_VAR_web_app_url TF_VAR_app_identity_principal_id
 tf identity destroy -auto-approve
 tf platform destroy -auto-approve
 
+# These named what was just deleted; setup fills them in again.
+# shellcheck source=scripts/lib/env-file.sh
+source "$repo_root/scripts/lib/env-file.sh"
+for name in TF_VAR_eval_foundry_account_id TF_VAR_entra_client_id TF_VAR_restricted_group_id; do
+  set_env_value "$env_file" "$name" ""
+done
+
 echo
 echo "Removed. The bootstrap remains so you can run scripts/setup-local.sh again; see SETUP.md to remove it too."

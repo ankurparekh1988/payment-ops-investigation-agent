@@ -14,6 +14,8 @@ set -euo pipefail
 deployment="$1"
 plan_file="$2"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/jq.sh
+source "$repo_root/scripts/lib/jq.sh"
 api="https://management.azure.com/subscriptions/${ARM_SUBSCRIPTION_ID:?}/providers/Microsoft.CognitiveServices/locations/${TF_VAR_location:?}"
 api_version="2024-10-01"
 

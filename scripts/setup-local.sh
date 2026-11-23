@@ -50,12 +50,11 @@ for name in TF_VAR_location TF_VAR_name_prefix TF_VAR_alert_email; do
   [[ -n "${!name:-}" ]] || missing+=("$name")
 done
 (( ${#missing[@]} == 0 )) || fail "Fill in ${missing[*]} in .env."
-account="$(az account show --query '{subscription:id, tenant:tenantId}' -o json 2>/dev/null)" ||
-  fail "The Azure CLI isn't signed in. Run: az login"
+subscription="$(az account show --query id -o tsv 2>/dev/null)" || fail "The Azure CLI isn't signed in. Run: az login"
 
 # Low-cost defaults; change any of them in .env before running.
-default ARM_SUBSCRIPTION_ID "$(jq -r .subscription <<< "$account")"
-default ARM_TENANT_ID "$(jq -r .tenant <<< "$account")"
+default ARM_SUBSCRIPTION_ID "$subscription"
+default ARM_TENANT_ID "$(az account show --query tenantId -o tsv)"
 default TF_VAR_environment dev
 default TF_VAR_app_service_sku F1
 default TF_VAR_dotnet_version 10.0
@@ -78,7 +77,8 @@ if [[ "$TF_VAR_search_sku" == "free" && -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]] &&
    tf platform output -raw search_service_id >/dev/null 2>&1; then
   : # This environment's own free service.
 elif [[ "$TF_VAR_search_sku" == "free" ]]; then
-  free="$(az search service list --query "[?sku.name=='free'].name" -o tsv 2>/dev/null || true)"
+  free="$(az rest --method get --query "value[?sku.name=='free'].name" -o tsv     --url "https://management.azure.com/subscriptions/$ARM_SUBSCRIPTION_ID/providers/Microsoft.Search/searchServices?api-version=2023-11-01")" ||
+    fail "Couldn't list this subscription's Search services to check for a free one. Check your access and rerun."
   [[ -z "$free" ]] || fail "This subscription already has a free Search service ($free), and only one is allowed. \
 Set TF_VAR_search_sku=basic in .env (billed hourly), or remove that service."
 fi
@@ -105,7 +105,9 @@ step "2/7 Platform: Foundry with its models, AI Search, storage, monitoring and 
 apply_platform
 
 step "3/7 Bootstrap again: screening rights on the new Foundry account"
-set_env_value "$env_file" TF_VAR_eval_foundry_account_id "$(tf platform output -raw foundry_account_id)"
+TF_VAR_eval_foundry_account_id="$(tf platform output -raw foundry_account_id)"
+export TF_VAR_eval_foundry_account_id
+set_env_value "$env_file" TF_VAR_eval_foundry_account_id "$TF_VAR_eval_foundry_account_id"
 "$repo_root/scripts/bootstrap.sh"
 load_env
 
@@ -134,18 +136,23 @@ step "6/7 Platform again: the web app's sign-in settings"
 apply_platform
 
 step "7/7 App settings: writing user-secrets for src/PaymentOps.Web"
+# Read first, so a failed read stops the script instead of writing an empty setting.
+client_id="$(tf identity output -raw client_id)"
+restricted_group_id="$(tf identity output -raw restricted_group_id)"
+foundry_endpoint="$(tf platform output -raw foundry_endpoint)"
+content_safety_endpoint="$(tf platform output -raw content_safety_endpoint)"
 secrets() { dotnet user-secrets --project "$web_project" "$@" >/dev/null; }
 secrets set AzureAd:TenantId "$ARM_TENANT_ID"
-secrets set AzureAd:ClientId "$(tf identity output -raw client_id)"
+secrets set AzureAd:ClientId "$client_id"
 secrets set AzureAd:ClientCredentials:0:SourceType ClientSecret
 # The secret goes from Terraform's output straight into user-secrets: never an argument, variable or log line.
 tf identity output -json local_client_secret |
   jq '{"AzureAd:ClientCredentials:0:ClientSecret": .}' |
   dotnet user-secrets --project "$web_project" set >/dev/null
-secrets set PaymentOps:Foundry:Endpoint "$(tf platform output -raw foundry_endpoint)"
-secrets set PaymentOps:ContentSafety:Endpoint "$(tf platform output -raw content_safety_endpoint)"
+secrets set PaymentOps:Foundry:Endpoint "$foundry_endpoint"
+secrets set PaymentOps:ContentSafety:Endpoint "$content_safety_endpoint"
 secrets set PaymentOps:Search:Endpoint "$search_endpoint"
-secrets set PaymentOps:Authorization:RestrictedGroupId "$(tf identity output -raw restricted_group_id)"
+secrets set PaymentOps:Authorization:RestrictedGroupId "$restricted_group_id"
 
 cat <<EOF
 
