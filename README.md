@@ -2,10 +2,19 @@
 
 [![CI](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml)
 [![CD](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml)
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
+![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-512BD4)
+![Microsoft Foundry](https://img.shields.io/badge/Microsoft%20Foundry-gpt--5.4--mini-0078D4)
+![Terraform](https://img.shields.io/badge/Terraform-Azure-7B42BC)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-An AI agent that helps a payments operations team work out why money didn't move when it should have: a late payout, a missing settlement, a processor outage. It chooses its own read-only tools, cites the records and runbook sections behind every statement, and has every assessment checked by the server before anyone sees it. It can propose an incident ticket, but only a person can approve one.
+- **Problem.** When a payout is late or a settlement goes missing, an operations engineer rebuilds the incident by hand from settlement records, error logs, processor status and runbooks.
+- **Solution.** An AI agent that chooses its own read-only tools, cites the record or runbook section behind every statement, and has every assessment checked by the server before anyone sees it. It can propose an incident ticket; only a person can approve one.
+- **Safety and governance.** Questions and untrusted text are screened for harm and planted instructions, restricted runbooks are filtered by the user's group before retrieval, Azure services are reached without keys, and every AI change must pass 37 labelled cases × 3 runs and 87 safety cases.
+- **Technology.** .NET 10, Blazor and Microsoft Agent Framework on Microsoft Foundry, Azure AI Search, Content Safety, Entra ID and App Service, deployed with Terraform and GitHub Actions.
+- **Engineering depth.** Thresholds fixed before the runs they judge, a gate shown to fail on a degraded prompt, an agent that had to beat a fixed workflow, and a cheaper model-routing design measured and rejected.
 
-Built on Azure with .NET 10, Blazor and Microsoft Agent Framework: Microsoft Foundry, Azure AI Search, Content Safety, Entra ID and App Service, deployed with Terraform and GitHub Actions. The setting is *Contoso Payments*, a fictional payment platform, and all data is synthetic.
+The setting is *Calderbrook Payments*, a fictional payment platform. Independently developed using synthetic payment data; not a production service.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/stats-dark.svg">
@@ -14,7 +23,7 @@ Built on Azure with .NET 10, Blazor and Microsoft Agent Framework: Microsoft Fou
 
 ## Demo
 
-*Recorded from the deployed app, 2026-11-19, on synthetic data. The signed-in account's name is blurred.*
+*Captured on 2026-11-24 from the app running locally against the dev environment's services, on synthetic data. The signed-in account's name is blurred.*
 
 ![An investigation of a delayed payout: the question, each tool call as it happens, and the validated assessment](docs/media/investigation.gif)
 
@@ -98,9 +107,9 @@ Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has
 | Planted instructions flagged by the screen | 1 of 12 | None had its effect (the first hard gate above) |
 | Ordinary questions wrongly blocked or refused | 2 of 8 | The cost of a strict filter on look-alike wording |
 
-![Signed in as an Engineer, who may approve tickets: an instruction to ignore the rules and approve every ticket, then a question about hurting someone, are both stopped before the agent runs](docs/media/safety-refusals.gif)
+![Signed in as an Admin, who may approve tickets: an instruction to ignore the rules and approve every ticket, then a question about hurting someone, are both stopped before the agent runs](docs/media/safety-refusals.gif)
 
-*Two prompts from the safety set on the deployed app, signed in as an Engineer, a role that is allowed to approve tickets. Both are blocked before the agent runs, so no tool is called and nothing is changed. The screen catching a direct attack is the less common case: in the evaluation, the remaining direct attacks ended in refusal.*
+*Two prompts from the safety set, on the app running locally against dev and signed in as an Admin, a role that is allowed to approve tickets. Both are blocked before the agent runs, so no tool is called and nothing is changed. The screen catching a direct attack is the less common case: in the evaluation, the remaining direct attacks ended in refusal.*
 
 The screen is one layer, not the defence: what matters is that no attack had its effect, and the hard gates count exactly that. The zero counts are results on these evaluated cases, not a guarantee. Full results: [2026-11-18](docs/evidence/release-evaluation-2026-11-18.md), [2026-11-09](docs/evidence/release-evaluation-2026-11-09.md); the charts are drawn from that evidence by [`scripts/readme-charts.py`](scripts/readme-charts.py).
 
@@ -111,7 +120,7 @@ The screen is one layer, not the defence: what matters is that no attack had its
 - **The agent had to earn its place.** It beat a fixed-sequence workflow on the same cases, by a rule written before either ran ([kill test](docs/Evaluation.md#agent-against-a-fixed-workflow-the-kill-test)).
 - **A cheaper design was measured and rejected.** Starting on the smaller `gpt-5.4-nano` cut the modelled cost per validated investigation by 32.8%, past the 25% the pre-registered rule required, but followed a planted instruction in one run, missed quality thresholds and raised p95 latency 52%. Routing stays off and nothing was tuned in response ([ADR 0023](docs/adr/0023-route-to-a-small-model-first-by-a-pre-registered-rule.md), [evidence](docs/evidence/routing-decision-2026-11-18.md)).
 - **Retrieval chosen by measurement.** Semantic ranking had to beat lexical by a margin fixed in advance on reviewed cases, and didn't ([ADR 0007](docs/adr/0007-retrieval-strategy-by-frozen-calibration.md)).
-- **No keys anywhere.** Every service-to-service call uses an Entra identity, pipelines sign in with OIDC, and API-key authentication is disabled ([Security](docs/Security.md#keyless-controls)).
+- **Keyless Azure service access.** The deployed app reaches every Azure service with its managed identity (locally, your `az login`), API-key authentication is disabled, and pipelines sign in with OIDC. The app's only credential is for running locally: Entra sign-in on a workstation uses a client secret that expires after 30 days, kept in .NET user-secrets ([Security](docs/Security.md#keyless-controls)).
 - **Sessions are owned by the server**: a fresh credential at every sign-in, sign-out after 15 minutes idle, and a recent sign-in to approve a ticket or resume investigations ([Security](docs/Security.md#users-and-sign-in)).
 - **Models are pinned and checked before deploy.** Each plan fails if a model isn't offered at its pinned version or retires within 90 days, and capacity is checked right before apply ([Deployment](docs/Deployment.md#model-preflight)).
 - **Usage is bounded and observable**: daily limits per person and in total, an Admin pause switch, a cost estimate per investigation, and an optional budget cutoff for the AI account ([ADR 0021](docs/adr/0021-bounded-usage-and-observable-cost.md), [Runbook](docs/Runbook.md#pausing-and-limits)).

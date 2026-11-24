@@ -3,10 +3,10 @@ using MudBlazor;
 namespace PaymentOps.Web.Theme;
 
 /// <summary>
-/// The Contoso Payments theme for both modes. Status colours are dark enough to be read as text, not only as fills,
+/// The Calderbrook Payments theme for both modes. Status colours are dark enough to be read as text, not only as fills,
 /// and every text colour is listed in <see cref="TextPairs"/> with the background it's used on, so contrast is tested.
 /// </summary>
-public static class ContosoTheme
+public static class CalderbrookTheme
 {
     public const string FontStack = "Inter, \"Segoe UI\", system-ui, -apple-system, sans-serif";
 

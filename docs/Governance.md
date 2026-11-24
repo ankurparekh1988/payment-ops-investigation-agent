@@ -6,7 +6,7 @@ What the agent is for, what it isn't, and how each Responsible AI principle is m
 
 **What it does.** An operations person asks why a merchant's money didn't move. The agent reads merchant, settlement, processor and error data and the operations knowledge through read-only tools, and returns an assessment: an outcome, a summary, claims, a root cause labelled *Assessment* or *Hypothesis*, a confidence, gaps and next steps. Every statement lists the records, computed facts and knowledge sections behind it, checked by the server against what this investigation's tools returned. When a runbook says to raise an incident, it can propose a ticket for an Operations Engineer to approve.
 
-**Who it's for.** Contoso's internal operations, engineering, admin and risk teams. Merchants never use it.
+**Who it's for.** Calderbrook's internal operations, engineering, admin and risk teams. Merchants never use it.
 
 **What it isn't for.** Deciding anything about a merchant, such as holds, limits, fees or offboarding; it has no tool that changes anything, and only a person can create a ticket. It isn't a source of record: the systems it reads are. It doesn't answer questions outside payments operations; it refuses them.
 

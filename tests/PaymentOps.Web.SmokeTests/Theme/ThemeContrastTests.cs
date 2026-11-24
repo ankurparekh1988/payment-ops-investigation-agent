@@ -10,7 +10,7 @@ public sealed class ThemeContrastTests
     public static TheoryData<string, string, string> Pairs()
     {
         var data = new TheoryData<string, string, string>();
-        foreach (var (name, foreground, background) in ContosoTheme.TextPairs)
+        foreach (var (name, foreground, background) in CalderbrookTheme.TextPairs)
         {
             data.Add(name, foreground, background);
         }
@@ -30,8 +30,8 @@ public sealed class ThemeContrastTests
     [Fact]
     public void Both_modes_define_their_pairs()
     {
-        Assert.Contains(ContosoTheme.TextPairs, pair => pair.Name.StartsWith("light ", StringComparison.Ordinal));
-        Assert.Contains(ContosoTheme.TextPairs, pair => pair.Name.StartsWith("dark ", StringComparison.Ordinal));
+        Assert.Contains(CalderbrookTheme.TextPairs, pair => pair.Name.StartsWith("light ", StringComparison.Ordinal));
+        Assert.Contains(CalderbrookTheme.TextPairs, pair => pair.Name.StartsWith("dark ", StringComparison.Ordinal));
     }
 
     private static double ContrastRatio(string first, string second)

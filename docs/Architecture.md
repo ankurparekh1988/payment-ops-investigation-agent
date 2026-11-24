@@ -8,7 +8,7 @@
 |---|---|
 | Solution structure | ✅ Projects and allowed dependency directions in place |
 | Architecture tests | ✅ Dependency rules enforced in `PaymentOps.ArchitectureTests` |
-| Web host | ✅ Blazor host with the Contoso Payments shell, a role-based home page, the Investigate page, source pages and health endpoints ([below](#ui-shell)) |
+| Web host | ✅ Blazor host with the Calderbrook Payments shell, a role-based home page, the Investigate page, source pages and health endpoints ([below](#ui-shell)) |
 | Infrastructure | ✅ Terraform bootstrap: state storage and keyless GitHub pipeline identities ([Deployment](Deployment.md)) |
 | Azure platform | ✅ Defined in Terraform, with a model preflight. Deployed only by the deployment pipeline, after approval |
 | Health endpoints | ✅ `/health` (liveness) and `/health/ready` (the app reaches Foundry and queries the knowledge index with its managed identity) |
@@ -268,7 +268,7 @@ Everything goes to Application Insights through the app's managed identity; the 
 
 ## UI shell
 
-The UI is Blazor with MudBlazor, under a custom Contoso Payments theme ([ADR 0022](adr/0022-enterprise-ui-on-mudblazor.md)).
+The UI is Blazor with MudBlazor, under a custom Calderbrook Payments theme ([ADR 0022](adr/0022-enterprise-ui-on-mudblazor.md)).
 
 - **One circuit across pages.** Every page is interactive on the server except Source, Signed out, No access, Not found and Error, which stay static to set a status code or post a plain form.
 - **The shell.** The app bar shows the company and module, Home and Investigate (for someone with a role), an environment badge when one is configured, the theme toggle, the person's name, their highest role and Risk and Compliance membership, and Sign out. On a phone it wraps so nothing is hidden.
