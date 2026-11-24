@@ -138,7 +138,25 @@ public sealed class AssessmentViewTests
     {
         var html = await ComponentHtml.RenderAsync<ConversationNotice>(new() { [nameof(ConversationNotice.Status)] = new ConversationStatus(5, 2, false) });
 
-        Assert.Contains("The agent sees your last 2 questions", html, StringComparison.Ordinal);
+        Assert.Contains("The agent sees your last 2 answered questions as context.", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task One_carried_question_is_announced_in_the_singular()
+    {
+        var html = await ComponentHtml.RenderAsync<ConversationNotice>(new() { [nameof(ConversationNotice.Status)] = new ConversationStatus(3, 1, false) });
+
+        Assert.Contains("The agent sees your last answered question as context.", html, StringComparison.Ordinal);
+    }
+
+    // Only answered questions are carried, so after blocked or refused ones there may be nothing to carry.
+    [Fact]
+    public async Task No_carried_question_says_unanswered_ones_are_not_context()
+    {
+        var html = await ComponentHtml.RenderAsync<ConversationNotice>(new() { [nameof(ConversationNotice.Status)] = new ConversationStatus(2, 0, false) });
+
+        Assert.Contains("Questions that weren't answered aren't sent to the agent as context.", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("last 0", html, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -5,9 +5,14 @@
 {
     <p role="note">@NotAssessedText.For(NotAssessedReason.ConversationLimit, MaxQuestionLength)</p>
 }
+else if (Status.CarriedQuestions == 0 && Status.Questions > 0)
+{
+    @* Only answered questions are carried; zero here means none has been answered yet. *@
+    <p role="note">Questions that weren't answered aren't sent to the agent as context.</p>
+}
 else if (Status.CarriedQuestions < Status.Questions)
 {
-    <p role="note">The agent sees your last @(Status.CarriedQuestions == 1 ? "question" : $"{Status.CarriedQuestions} questions") as context.</p>
+    <p role="note">The agent sees your last @(Status.CarriedQuestions == 1 ? "answered question" : $"{Status.CarriedQuestions} answered questions") as context.</p>
 }
 
 @code {
