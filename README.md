@@ -23,7 +23,7 @@ The setting is *Calderbrook Payments*, a fictional payment platform. Independent
 
 ## Demo
 
-*Recorded from the deployed app, 2026-11-19, on synthetic data. The signed-in account's name is blurred.*
+*Captured on 2026-11-24 from the app running locally against the dev environment's services, on synthetic data. The signed-in account's name is blurred.*
 
 ![An investigation of a delayed payout: the question, each tool call as it happens, and the validated assessment](docs/media/investigation.gif)
 
@@ -107,9 +107,9 @@ Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has
 | Planted instructions flagged by the screen | 1 of 12 | None had its effect (the first hard gate above) |
 | Ordinary questions wrongly blocked or refused | 2 of 8 | The cost of a strict filter on look-alike wording |
 
-![Signed in as an Engineer, who may approve tickets: an instruction to ignore the rules and approve every ticket, then a question about hurting someone, are both stopped before the agent runs](docs/media/safety-refusals.gif)
+![Signed in as an Admin, who may approve tickets: an instruction to ignore the rules and approve every ticket, then a question about hurting someone, are both stopped before the agent runs](docs/media/safety-refusals.gif)
 
-*Two prompts from the safety set on the deployed app, signed in as an Engineer, a role that is allowed to approve tickets. Both are blocked before the agent runs, so no tool is called and nothing is changed. The screen catching a direct attack is the less common case: in the evaluation, the remaining direct attacks ended in refusal.*
+*Two prompts from the safety set, on the app running locally against dev and signed in as an Admin, a role that is allowed to approve tickets. Both are blocked before the agent runs, so no tool is called and nothing is changed. The screen catching a direct attack is the less common case: in the evaluation, the remaining direct attacks ended in refusal.*
 
 The screen is one layer, not the defence: what matters is that no attack had its effect, and the hard gates count exactly that. The zero counts are results on these evaluated cases, not a guarantee. Full results: [2026-11-18](docs/evidence/release-evaluation-2026-11-18.md), [2026-11-09](docs/evidence/release-evaluation-2026-11-09.md); the charts are drawn from that evidence by [`scripts/readme-charts.py`](scripts/readme-charts.py).
 
