@@ -8,24 +8,24 @@
 ![Terraform](https://img.shields.io/badge/Terraform-Azure-7B42BC)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-- **Problem.** Late payouts and missing settlements are investigated by hand across settlement records, error logs, processor status and runbooks.
-- **Solution.** An AI agent picks its own read-only tools, cites the evidence for every statement, and has each assessment checked by the server. It can propose an incident ticket; only a person can approve it.
-- **Safety and governance.** Questions and untrusted text are screened for harm and planted instructions, restricted runbooks are filtered by the user's group, and every AI change must pass quality and safety gates.
-- **Technology.** .NET 10, Blazor, Microsoft Agent Framework, Microsoft Foundry, Azure AI Search, Entra ID, Terraform and GitHub Actions.
-- **Engineering depth.** Thresholds fixed before measuring, an agent that had to beat a fixed workflow, and a cheaper model-routing design measured and rejected.
+Ask why a merchant's payout was late, and the agent checks the payment platform's records and runbooks itself, then answers with the evidence behind every statement. The setting is *Calderbrook Payments*, a fictional payment platform. Independently developed using synthetic payment data; not a production service.
 
-The setting is *Calderbrook Payments*, a fictional payment platform. Independently developed using synthetic payment data; not a production service.
+![An investigation of a delayed payout: the question, each tool call as it happens, and the validated assessment](docs/media/investigation.gif)
+
+*Captured on 2026-11-24 from the app running locally against the dev environment's services, on synthetic data. The signed-in account's name is blurred.*
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/stats-dark.svg">
   <img alt="Latest release evaluation: assessments passing server validation, median 100% over 3 runs (lowest run 97%); 0 of 87 safety cases followed an injected instruction; 0 authorization leaks or unapproved changes; 37 labelled cases × 3 runs gate every AI change; p95 full investigation 13.1 s, first progress 2.4 s" src="docs/media/stats-light.svg">
 </picture>
 
+- **Problem.** Late payouts and missing settlements are investigated by hand across settlement records, error logs, processor status and runbooks.
+- **Solution.** The agent picks its own read-only tools, and the server checks every citation before an assessment is shown. It can propose an incident ticket; only a person can approve it.
+- **Safety and governance.** Questions and untrusted text are screened for harm and planted instructions, restricted runbooks are filtered by the user's group, and every AI change must pass quality and safety gates.
+- **Technology.** .NET 10, Blazor, Microsoft Agent Framework, Microsoft Foundry, Azure AI Search, Entra ID, Terraform and GitHub Actions.
+- **Engineering depth.** Thresholds fixed before measuring, an agent that had to beat a fixed workflow, and a cheaper model-routing design measured and rejected.
+
 ## Demo
-
-*Captured on 2026-11-24 from the app running locally against the dev environment's services, on synthetic data. The signed-in account's name is blurred.*
-
-![An investigation of a delayed payout: the question, each tool call as it happens, and the validated assessment](docs/media/investigation.gif)
 
 Asked *"Why were payouts for merchant M-1042 delayed on November 9, 2026?"*, the agent read the merchant, its settlement batches, the processor's status and the runbooks, and found that Fabrikam Pay's settlement file for 9 November never arrived during the processor's incident INC-FAB-1109, while the merchant's Northwind payout was on schedule.
 
@@ -58,6 +58,8 @@ flowchart LR
 ## The last two release evaluations
 
 Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has to pass a release gate before it merges: 37 labelled cases × 3 runs, 26 held-out retrieval questions and 87 safety cases, against thresholds fixed before measuring from the spread of a ten-run baseline ([how](docs/Evaluation.md#the-threshold-rule)). These are the last two passing release runs, both on `gpt-5.4-mini` with the same thresholds and datasets.
+
+**Reading the gates.** Evaluation thresholds are regression-detection floors calibrated against measured run-to-run variation, not target quality scores. They help detect meaningful deterioration while reducing failures caused by normal model variability; a small drop can still pass. Passing them isn't the same as being good: assessments cite fewer than half of the runbook sections the labels require (section recall 0.438), and in over a third of the tool uses the labels constrain, no call had every argument right (tool arguments 0.630). Both are real limitations, not noise.
 
 <a href="docs/media/evaluation-quality-light.svg"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-quality-dark.svg">
@@ -97,6 +99,8 @@ Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has
 
 **What changed between them.** [#61](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/61) bounded usage and kept untrusted text out of tool choices (prompt `investigation-agent` 1.1.0 → 1.2.0), and [#64](https://github.com/ankurparekh1988/payment-ops-investigation-agent/pull/64) added model routing, switched off. The validation median reached 1.000 and p95 latency fell by about a quarter; evidence and tool recall dipped within their gates. Retrieval recall@5 went from 21 to 20 of 26 with the knowledge and retrieval code unchanged: one question fell out of the top five and another moved up.
 
+**Safety outcome.** Both recorded release evaluations had zero end-to-end hard-gate violations on the 87 safety cases: no planted instruction followed, no harmful request handled unsafely, no harmful text repeated, no restricted content leaked and no change made without approval. The detection rates below describe individual screening layers, not the complete system's protection.
+
 **Safety rates**, reported rather than gated, on the safety cases (both runs unless noted). The 2026-11-09 rates are medians over three safety runs; 2026-11-18 had one run.
 
 | What was measured | Result | Reading it |
@@ -111,7 +115,7 @@ Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has
 
 *Two prompts from the safety set, on the app running locally against dev and signed in as an Admin, a role that is allowed to approve tickets. Both are blocked before the agent runs, so no tool is called and nothing is changed. The screen catching a direct attack is the less common case: in the evaluation, the remaining direct attacks ended in refusal.*
 
-The screen is one layer, not the defence: what matters is that no attack had its effect, and the hard gates count exactly that. The zero counts are results on these evaluated cases, not a guarantee. Full results: [2026-11-18](docs/evidence/release-evaluation-2026-11-18.md), [2026-11-09](docs/evidence/release-evaluation-2026-11-09.md); the charts are drawn from that evidence by [`scripts/readme-charts.py`](scripts/readme-charts.py).
+The zero counts are results on these evaluated cases, not a guarantee of future safety. Full results: [2026-11-18](docs/evidence/release-evaluation-2026-11-18.md), [2026-11-09](docs/evidence/release-evaluation-2026-11-09.md); the charts are drawn from that evidence by [`scripts/readme-charts.py`](scripts/readme-charts.py).
 
 ## Engineering that's easy to miss
 
