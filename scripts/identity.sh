@@ -3,7 +3,8 @@
 # roles, the Risk and Compliance group and, optionally, demo users. Needs directory rights no
 # pipeline holds, so it's run by a person. Records the values the platform needs in .env.
 #
-# Usage: scripts/identity.sh   (run after the platform is deployed; then scripts/configure-github.sh)
+# Usage: scripts/identity.sh [terraform apply options]   (after the platform is deployed; then
+#        scripts/configure-github.sh, or nothing when scripts/setup-local.sh runs it)
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,12 +17,13 @@ TF_VAR_web_app_url="$("$repo_root/scripts/terraform.sh" platform output -raw web
 TF_VAR_app_identity_principal_id="$("$repo_root/scripts/terraform.sh" platform output -raw app_identity_principal_id)"
 export TF_VAR_web_app_url TF_VAR_app_identity_principal_id
 
-"$repo_root/scripts/terraform.sh" identity apply
+"$repo_root/scripts/terraform.sh" identity apply "$@"
 
 set_env_value "$env_file" TF_VAR_entra_client_id "$("$repo_root/scripts/terraform.sh" identity output -raw client_id)"
 set_env_value "$env_file" TF_VAR_restricted_group_id "$("$repo_root/scripts/terraform.sh" identity output -raw restricted_group_id)"
 
 echo
-echo "Recorded the client ID and Restricted group in .env. Next: scripts/configure-github.sh"
+echo "Recorded the client ID and Restricted group in .env."
+[[ "${PAYMENTOPS_DEPLOY_FROM:-}" == "local" ]] || echo "Next: scripts/configure-github.sh"
 echo "Demo user sign-ins: scripts/terraform.sh identity output -json demo_user_sign_ins"
 echo "Local sign-in: see 'Running locally with sign-in' in docs/Deployment.md"

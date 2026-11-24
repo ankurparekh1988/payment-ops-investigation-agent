@@ -24,18 +24,26 @@ variable "environment" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository (owner/name) whose workflows may sign in as the pipeline identities."
+  description = "GitHub repository (owner/name) whose workflows may sign in as the pipeline identities. Null deploys from a workstation instead, with no pipeline identities."
   type        = string
+  default     = null
+
+  validation {
+    condition     = (var.github_repository == null) == (var.github_owner_id == null) && (var.github_repository == null) == (var.github_repository_id == null)
+    error_message = "Set github_repository, github_owner_id and github_repository_id together, or none of them for a workstation-only environment."
+  }
 }
 
 variable "github_owner_id" {
   description = "Numeric ID of the repository owner, part of the immutable OIDC subject."
   type        = number
+  default     = null
 }
 
 variable "github_repository_id" {
   description = "Numeric ID of the repository, part of the immutable OIDC subject."
   type        = number
+  default     = null
 }
 
 variable "alert_email" {

@@ -16,10 +16,17 @@ terraform {
 data "azurerm_client_config" "current" {}
 
 locals {
+  # Without a repository the environment is deployed from a workstation: no pipeline identities exist.
+  pipeline = var.github_repository != null
+
   tags = merge(var.tags, {
     project    = var.name_prefix
     managed-by = "terraform"
   })
+
+  # Local mode reads this mark back from Azure before changing anything, so a workstation's .env can't
+  # point it at a pipeline environment's state. Pipeline environments keep their tags unchanged.
+  state_tags = local.pipeline ? local.tags : merge(local.tags, { deploy-from = "local" })
 
   # Built-in role definition IDs are the same in every tenant. IDs rather than names, because
   # Microsoft renames roles (Azure AI User became Foundry User) while the IDs stay fixed.
@@ -46,31 +53,31 @@ locals {
   }
 
   # The publisher's writer role is on the evaluation index only: every gate run proves the live index refuses it.
-  eval_grants = {
+  eval_grants = !local.pipeline ? {} : {
     openai-user = {
       scope        = var.eval_foundry_account_id
       role         = "Cognitive Services OpenAI User"
-      principal_id = module.eval_identity.principal_id
+      principal_id = module.eval_identity[0].principal_id
     }
     search-reader = {
       scope        = var.eval_search_service_id
       role         = "Search Index Data Reader"
-      principal_id = module.eval_identity.principal_id
+      principal_id = module.eval_identity[0].principal_id
     }
     publish-index-writer = {
       scope        = var.eval_search_service_id == null ? null : "${var.eval_search_service_id}/indexes/${var.eval_search_index_name}"
       role         = "Search Index Data Contributor"
-      principal_id = module.eval_publish_identity.principal_id
+      principal_id = module.eval_publish_identity[0].principal_id
     }
     prompt-shields = {
       scope        = var.eval_foundry_account_id
       role         = "Prompt Shields User"
-      principal_id = module.eval_identity.principal_id
+      principal_id = module.eval_identity[0].principal_id
     }
     publish-metrics-publisher = {
       scope        = var.eval_dcr_id
       role         = "Monitoring Metrics Publisher"
-      principal_id = module.eval_publish_identity.principal_id
+      principal_id = module.eval_publish_identity[0].principal_id
     }
   }
 
@@ -114,11 +121,12 @@ module "state" {
   resource_group_name = azurerm_resource_group.bootstrap.name
   location            = var.location
   retention_days      = var.state_retention_days
-  tags                = local.tags
+  tags                = local.state_tags
 }
 
 module "plan_identity" {
   source = "../../modules/github-oidc-identity"
+  count  = local.pipeline ? 1 : 0
 
   name                 = "id-${var.name_prefix}-gh-plan"
   resource_group_name  = azurerm_resource_group.bootstrap.name
@@ -137,6 +145,7 @@ module "plan_identity" {
 
 module "deploy_identity" {
   source = "../../modules/github-oidc-identity"
+  count  = local.pipeline ? 1 : 0
 
   name                 = "id-${var.name_prefix}-gh-deploy"
   resource_group_name  = azurerm_resource_group.bootstrap.name
@@ -159,6 +168,7 @@ module "deploy_identity" {
 # job that runs PR code with model access can't mint the token that writes.
 module "eval_identity" {
   source = "../../modules/github-oidc-identity"
+  count  = local.pipeline ? 1 : 0
 
   name                 = "id-${var.name_prefix}-gh-eval"
   resource_group_name  = azurerm_resource_group.bootstrap.name
@@ -176,6 +186,7 @@ module "eval_identity" {
 
 module "eval_publish_identity" {
   source = "../../modules/github-oidc-identity"
+  count  = local.pipeline ? 1 : 0
 
   name                 = "id-${var.name_prefix}-gh-eval-publish"
   resource_group_name  = azurerm_resource_group.bootstrap.name
@@ -196,44 +207,52 @@ module "eval_publish_identity" {
 # Subscription-wide read, so plans can also detect drift in the bootstrap itself (subscription role
 # assignments, the custom role, provider registration). Reader can't list keys or read secrets.
 resource "azurerm_role_assignment" "plan_subscription_reader" {
+  count = local.pipeline ? 1 : 0
+
   scope                = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
   role_definition_name = "Reader"
-  principal_id         = module.plan_identity.principal_id
+  principal_id         = module.plan_identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
 
 # Plans run with -lock=false, so reading state is enough.
 resource "azurerm_role_assignment" "plan_state_reader" {
+  count = local.pipeline ? 1 : 0
+
   scope                = module.state.container_id
   role_definition_name = "Storage Blob Data Reader"
-  principal_id         = module.plan_identity.principal_id
+  principal_id         = module.plan_identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
 
 # --- Deploy identity: changes the workload resource group only ----------------------------------
 
 resource "azurerm_role_assignment" "deploy_workload_contributor" {
+  count = local.pipeline ? 1 : 0
+
   scope                = azurerm_resource_group.workload.id
   role_definition_name = "Contributor"
-  principal_id         = module.deploy_identity.principal_id
+  principal_id         = module.deploy_identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
 
 resource "azurerm_role_assignment" "deploy_state_contributor" {
+  count = local.pipeline ? 1 : 0
+
   scope                = module.state.container_id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = module.deploy_identity.principal_id
+  principal_id         = module.deploy_identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
 
 # Index management and section upload for the knowledge publisher. Scoped to the resource group
 # because the search service doesn't exist yet when the bootstrap runs, and it holds only this workload.
 resource "azurerm_role_assignment" "deploy_search" {
-  for_each = toset(["Search Service Contributor", "Search Index Data Contributor"])
+  for_each = local.pipeline ? toset(["Search Service Contributor", "Search Index Data Contributor"]) : toset([])
 
   scope              = azurerm_resource_group.workload.id
   role_definition_id = local.delegable_role_definition_ids[each.value]
-  principal_id       = module.deploy_identity.principal_id
+  principal_id       = module.deploy_identity[0].principal_id
   principal_type     = "ServicePrincipal"
 }
 
@@ -241,9 +260,11 @@ resource "azurerm_role_assignment" "deploy_search" {
 # assign roles, but only the allow-listed roles above and only to service principals such as
 # managed identities. It cannot grant Owner or Contributor, or assign anything to users or groups.
 resource "azurerm_role_assignment" "deploy_constrained_rbac_admin" {
+  count = local.pipeline ? 1 : 0
+
   scope                = azurerm_resource_group.workload.id
   role_definition_name = "Role Based Access Control Administrator"
-  principal_id         = module.deploy_identity.principal_id
+  principal_id         = module.deploy_identity[0].principal_id
   principal_type       = "ServicePrincipal"
   description          = "May assign only allow-listed platform roles, and only to service principals."
 
@@ -297,9 +318,9 @@ resource "azurerm_role_definition" "model_availability_reader" {
 
 resource "azurerm_role_assignment" "model_availability_reader" {
   # The plan identity already has these reads through subscription Reader.
-  for_each = {
-    deploy = module.deploy_identity.principal_id
-  }
+  for_each = local.pipeline ? {
+    deploy = module.deploy_identity[0].principal_id
+  } : {}
 
   scope              = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
   role_definition_id = azurerm_role_definition.model_availability_reader.role_definition_resource_id
@@ -324,9 +345,11 @@ resource "azurerm_role_definition" "web_app_config_reader" {
 }
 
 resource "azurerm_role_assignment" "plan_web_app_config_reader" {
+  count = local.pipeline ? 1 : 0
+
   scope              = azurerm_resource_group.workload.id
   role_definition_id = azurerm_role_definition.web_app_config_reader.role_definition_resource_id
-  principal_id       = module.plan_identity.principal_id
+  principal_id       = module.plan_identity[0].principal_id
   principal_type     = "ServicePrincipal"
 }
 
@@ -424,6 +447,17 @@ resource "azurerm_role_assignment" "operator_only_state_contributor" {
   principal_id         = var.operator_object_id
 }
 
+# Without a pipeline the operator publishes the knowledge from their workstation, with the roles the
+# deploy identity would have used. Scoped to the resource group, as the search service doesn't exist yet.
+resource "azurerm_role_assignment" "operator_search" {
+  for_each = local.pipeline ? toset([]) : toset(["Search Service Contributor", "Search Index Data Contributor"])
+
+  scope                = azurerm_resource_group.workload.id
+  role_definition_name = each.value
+  principal_id         = var.operator_object_id
+  principal_type       = "User"
+}
+
 # --- Evaluation identities: exact-resource roles ----------------------------------------------
 
 # Set from platform outputs after the platform exists; re-run after a rebuild, because exact-resource
@@ -435,4 +469,55 @@ resource "azurerm_role_assignment" "eval" {
   role_definition_id = local.delegable_role_definition_ids[each.value.role]
   principal_id       = each.value.principal_id
   principal_type     = "ServicePrincipal"
+}
+
+# Existing pipeline environments keep their identities and grants at the indexed addresses.
+moved {
+  from = module.plan_identity
+  to   = module.plan_identity[0]
+}
+
+moved {
+  from = module.deploy_identity
+  to   = module.deploy_identity[0]
+}
+
+moved {
+  from = module.eval_identity
+  to   = module.eval_identity[0]
+}
+
+moved {
+  from = module.eval_publish_identity
+  to   = module.eval_publish_identity[0]
+}
+
+moved {
+  from = azurerm_role_assignment.plan_subscription_reader
+  to   = azurerm_role_assignment.plan_subscription_reader[0]
+}
+
+moved {
+  from = azurerm_role_assignment.plan_state_reader
+  to   = azurerm_role_assignment.plan_state_reader[0]
+}
+
+moved {
+  from = azurerm_role_assignment.deploy_workload_contributor
+  to   = azurerm_role_assignment.deploy_workload_contributor[0]
+}
+
+moved {
+  from = azurerm_role_assignment.deploy_state_contributor
+  to   = azurerm_role_assignment.deploy_state_contributor[0]
+}
+
+moved {
+  from = azurerm_role_assignment.deploy_constrained_rbac_admin
+  to   = azurerm_role_assignment.deploy_constrained_rbac_admin[0]
+}
+
+moved {
+  from = azurerm_role_assignment.plan_web_app_config_reader
+  to   = azurerm_role_assignment.plan_web_app_config_reader[0]
 }

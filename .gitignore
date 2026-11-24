@@ -8,6 +8,8 @@
 
 # Terraform: working directories, state and plans never leave the workstation or CI runner.
 # Provider lock files (.terraform.lock.hcl) are committed.
+# Except the bootstrap stack's, copied from its deployment when its tests run.
+infra/stacks/bootstrap/.terraform.lock.hcl
 **/.terraform/*
 *.tfstate
 *.tfstate.*

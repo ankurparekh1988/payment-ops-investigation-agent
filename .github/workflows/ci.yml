@@ -78,6 +78,22 @@ jobs:
             echo "::endgroup::"
           done
 
+      # Offline, with mock providers: the bootstrap with and without a GitHub repository. Uses the
+      # deployment's lock file, so the tests run the provider versions that are deployed.
+      - name: Test the bootstrap stack
+        run: |
+          cp infra/deployments/bootstrap/.terraform.lock.hcl infra/stacks/bootstrap/
+          terraform -chdir=infra/stacks/bootstrap init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/stacks/bootstrap test
+
+      # Which Terraform commands may change an environment, from the pipeline and from a workstation.
+      - name: Test the deployment guard
+        run: bash scripts/tests/deploy-guard-test.sh
+
+      # setup-local.sh and teardown-local.sh end to end, with az, terraform, dotnet and jq stubbed.
+      - name: Test the local setup scripts
+        run: bash scripts/tests/local-setup-test.sh
+
       - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-time setup: creates Terraform state storage, the workload resource group and the GitHub
-# pipeline identities. The first run starts with local state, then moves it into the storage
-# account it has just created. Later runs use that remote state directly.
+# pipeline identities (none in local mode: see scripts/lib/deploy-guard.sh). The first run starts
+# with local state, then moves it into the storage account it has just created. Later runs use
+# that remote state directly.
 #
 # Usage: scripts/bootstrap.sh          (reads configuration from .env in the repository root)
 set -euo pipefail
@@ -30,9 +31,19 @@ done < <(env | grep '^TF_VAR_' || true)
 # would turn resource IDs such as /subscriptions/... into C:/Program Files/Git/subscriptions/....
 export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}TF_VAR_"
 
+# shellcheck source=scripts/lib/deploy-guard.sh
+source "$repo_root/scripts/lib/deploy-guard.sh"
+required=(ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_location TF_VAR_name_prefix TF_VAR_environment)
+apply_args=()
+if local_mode; then
+  # Deployed from this workstation: no pipeline to trust, and no approval prompt.
+  apply_args=(-auto-approve)
+else
+  required+=(TF_VAR_github_repository TF_VAR_github_owner_id TF_VAR_github_repository_id)
+fi
+
 missing=()
-for name in ARM_SUBSCRIPTION_ID ARM_TENANT_ID TF_VAR_location TF_VAR_name_prefix TF_VAR_environment \
-            TF_VAR_github_repository TF_VAR_github_owner_id TF_VAR_github_repository_id; do
+for name in "${required[@]}"; do
   [[ -n "${!name:-}" ]] || missing+=("$name")
 done
 if (( ${#missing[@]} )); then
@@ -51,7 +62,8 @@ fi
 
 # A federated credential with the wrong subject is created without error and only fails when a
 # workflow tries to sign in, so compare against the subject format GitHub actually issues.
-expected_prefix="repo:${TF_VAR_github_repository%%/*}@${TF_VAR_github_owner_id}/${TF_VAR_github_repository#*/}@${TF_VAR_github_repository_id}"
+expected_prefix=""
+local_mode || expected_prefix="repo:${TF_VAR_github_repository%%/*}@${TF_VAR_github_owner_id}/${TF_VAR_github_repository#*/}@${TF_VAR_github_repository_id}"
 check_oidc_subject() {
   local repo="$TF_VAR_github_repository" actual_prefix settings use_default use_immutable reported_prefix
 
@@ -90,7 +102,9 @@ check_oidc_subject() {
   echo "OIDC subject prefix matches the repository: $expected_prefix"
 }
 
-if ! command -v gh >/dev/null 2>&1; then
+if local_mode; then
+  : # No GitHub repository to check.
+elif ! command -v gh >/dev/null 2>&1; then
   echo "GitHub CLI not found; skipping the OIDC subject check. Expected prefix: $expected_prefix"
 else
   check_oidc_subject && status=0 || status=$?
@@ -120,18 +134,56 @@ if [[ -z "${TF_VAR_bootstrap_operator_object_id:-}" ]]; then
   echo "Recorded the bootstrap operator in .env."
 fi
 
+# In local mode the operator also runs the app, so they get the developer roles.
+if local_mode && [[ "${TF_VAR_developer_object_ids:-}" != *"$TF_VAR_bootstrap_operator_object_id"* ]]; then
+  ids="${TF_VAR_developer_object_ids:-[]}"
+  ids="${ids%]}"
+  [[ "$ids" == *\" ]] && ids="$ids,"
+  TF_VAR_developer_object_ids="$ids\"$TF_VAR_bootstrap_operator_object_id\"]"
+  export TF_VAR_developer_object_ids
+  set_env_value "$env_file" TF_VAR_developer_object_ids "'$TF_VAR_developer_object_ids'"
+  echo "Recorded you as a developer of this environment in .env."
+fi
+
 cd "$stack_dir"
 
 if [[ -n "${TF_STATE_STORAGE_ACCOUNT:-}" ]]; then
+  # A local state file beside remote state means a removal (scripts/teardown-local.sh --all) stopped
+  # part-way. It's the only record of what's left, so nothing runs over it.
+  if [[ -s terraform.tfstate ]]; then
+    echo "Found bootstrap state on this machine ($stack_dir/terraform.tfstate) while .env names state storage" >&2
+    echo "$TF_STATE_STORAGE_ACCOUNT: an earlier 'scripts/teardown-local.sh --all' stopped part-way. Rerun it to finish" >&2
+    echo "the removal. Nothing was changed." >&2
+    exit 1
+  fi
+  if local_mode; then
+    owns_state_locally || exit 1
+  fi
   echo "State storage already exists ($TF_STATE_STORAGE_ACCOUNT); applying against remote state."
   # shellcheck disable=SC2046
   terraform init -input=false -reconfigure $(backend_args)
-  terraform apply
+  terraform apply ${apply_args[@]+"${apply_args[@]}"}
   set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$(terraform output -raw operator_state_container_name)"
   exit 0
 fi
 
-echo "First run: creating state storage with local state."
+if [[ -s terraform.tfstate ]]; then
+  echo "Resuming: bootstrap state from an earlier run is still on this machine; moving it into Azure."
+else
+  # With no state anywhere, an existing bootstrap would be created again: a second state storage
+  # account beside the first, and conflicts on everything else.
+  bootstrap_group="rg-$TF_VAR_name_prefix-bootstrap"
+  if ! exists="$(az group exists --name "$bootstrap_group")"; then
+    echo "Couldn't check whether $bootstrap_group already exists. Nothing was changed." >&2
+    exit 1
+  fi
+  if [[ "${exists//[[:space:]]/}" != "false" ]]; then
+    echo "$bootstrap_group already exists, but .env names no state storage and there's no local state to resume" >&2
+    echo "from. Put that environment's TF_STATE_* values in .env, or choose another TF_VAR_name_prefix. Nothing was changed." >&2
+    exit 1
+  fi
+  echo "First run: creating state storage with local state."
+fi
 cat > backend_override.tf <<'EOF'
 # Temporary, written by scripts/bootstrap.sh for the first run only.
 terraform {
@@ -140,18 +192,15 @@ terraform {
 EOF
 trap 'rm -f "$stack_dir/backend_override.tf"' EXIT
 
-terraform init -input=false
-terraform apply
+# -reconfigure: a working directory initialised earlier against a remote backend (say, by a plan) would
+# otherwise ask to migrate that state here.
+terraform init -input=false -reconfigure
+terraform apply ${apply_args[@]+"${apply_args[@]}"}
 
 TF_STATE_RESOURCE_GROUP="$(terraform output -raw state_resource_group_name)"
 TF_STATE_STORAGE_ACCOUNT="$(terraform output -raw state_storage_account_name)"
 TF_STATE_CONTAINER="$(terraform output -raw state_container_name)"
 TF_STATE_OPERATOR_CONTAINER="$(terraform output -raw operator_state_container_name)"
-
-set_env_value "$env_file" TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
-set_env_value "$env_file" TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"
-set_env_value "$env_file" TF_STATE_CONTAINER "$TF_STATE_CONTAINER"
-set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$TF_STATE_OPERATOR_CONTAINER"
 
 rm -f backend_override.tf
 echo "Moving bootstrap state into $TF_STATE_STORAGE_ACCOUNT/$TF_STATE_CONTAINER/$state_key."
@@ -163,12 +212,18 @@ for attempt in {1..10}; do
     break
   fi
   if (( attempt == 10 )); then
-    echo "State migration failed. Local state is kept in $stack_dir/terraform.tfstate; re-run this script." >&2
+    echo "State migration failed. Local state is kept in $stack_dir/terraform.tfstate; rerun and it resumes from there." >&2
     exit 1
   fi
   echo "Storage access not active yet; retrying in 30 seconds (attempt $attempt of 10)."
   sleep 30
 done
+
+# Recorded only now: from here on, runs use the remote state, so .env mustn't name it before it holds the state.
+set_env_value "$env_file" TF_STATE_RESOURCE_GROUP "$TF_STATE_RESOURCE_GROUP"
+set_env_value "$env_file" TF_STATE_STORAGE_ACCOUNT "$TF_STATE_STORAGE_ACCOUNT"
+set_env_value "$env_file" TF_STATE_CONTAINER "$TF_STATE_CONTAINER"
+set_env_value "$env_file" TF_STATE_OPERATOR_CONTAINER "$TF_STATE_OPERATOR_CONTAINER"
 
 rm -f terraform.tfstate terraform.tfstate.backup
 echo
