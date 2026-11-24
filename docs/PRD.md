@@ -1,16 +1,16 @@
 # Product notes
 
-*Contoso Payments is a fictional company. All data in this repository is synthetic.*
+*Calderbrook Payments is a fictional company. All data in this repository is synthetic.*
 
 ## Setting
 
-Contoso Payments is a payment orchestration platform: it routes merchants' payments to downstream processors and acquirers and pays merchants out from their settlement files.
+Calderbrook Payments is a payment orchestration platform: it routes merchants' payments to downstream processors and acquirers and pays merchants out from their settlement files.
 
-The agent is an internal tool for Contoso's operations, engineering, admin and risk teams, and merchants never use it. That's why it may see routing, processor responses and internal risk state.
+The agent is an internal tool for Calderbrook's operations, engineering, admin and risk teams, and merchants never use it. That's why it may see routing, processor responses and internal risk state.
 
 ## Problem
 
-Contoso Payments' operations team investigates payout delays, settlement failures and processor issues. Today an engineer reconstructs each incident by hand: querying settlement records, scanning error logs, checking processor status pages and finding the right runbook. This is slow, depends on individual knowledge, and leaves no consistent record of how a conclusion was reached.
+Calderbrook Payments' operations team investigates payout delays, settlement failures and processor issues. Today an engineer reconstructs each incident by hand: querying settlement records, scanning error logs, checking processor status pages and finding the right runbook. This is slow, depends on individual knowledge, and leaves no consistent record of how a conclusion was reached.
 
 The agent performs the cross-referencing, cites every piece of evidence, states its confidence, and proposes next actions. People keep the decisions.
 

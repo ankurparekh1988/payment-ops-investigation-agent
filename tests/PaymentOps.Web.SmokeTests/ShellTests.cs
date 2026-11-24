@@ -15,7 +15,7 @@ public sealed class ShellTests(PaymentOpsWebApplicationFactory factory) : IClass
 
         var html = await client.GetStringAsync(new Uri("/", UriKind.Relative));
 
-        Assert.Contains("Contoso Payments", html, StringComparison.Ordinal);
+        Assert.Contains("Calderbrook Payments", html, StringComparison.Ordinal);
         Assert.Contains("Payment Operations", html, StringComparison.Ordinal);
         Assert.Contains("Ada Admin", html, StringComparison.Ordinal);
         Assert.Contains("<span class=\"user-role\">Admin</span>", html, StringComparison.Ordinal);

@@ -17,7 +17,7 @@ public sealed class StatusPagesTests(PaymentOpsWebApplicationFactory factory) : 
 
         var html = await client.GetStringAsync(new Uri("/signed-out", UriKind.Relative));
 
-        Assert.Contains("Contoso Payments", html, StringComparison.Ordinal);
+        Assert.Contains("Calderbrook Payments", html, StringComparison.Ordinal);
         Assert.Contains("You&#x27;re signed out</h1>", html, StringComparison.Ordinal);
         Assert.Matches("<a[^>]*href=\"/\"[^>]*>Sign in</a>", html);
         Assert.DoesNotContain("href=\"investigate\"", html, StringComparison.Ordinal);
@@ -48,7 +48,7 @@ public sealed class StatusPagesTests(PaymentOpsWebApplicationFactory factory) : 
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Contains("Page not found</h1>", html, StringComparison.Ordinal);
-        Assert.Contains("Contoso Payments", html, StringComparison.Ordinal);
+        Assert.Contains("Calderbrook Payments", html, StringComparison.Ordinal);
         Assert.Matches("<a[^>]*href=\"/\"[^>]*>Go to Home</a>", html);
     }
 

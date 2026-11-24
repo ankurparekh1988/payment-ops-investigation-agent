@@ -3,7 +3,7 @@
 @inject IOptions<UiOptions> Ui
 @inject IJSRuntime JS
 
-<MudThemeProvider @ref="_themeProvider" Theme="ContosoTheme.Theme" IsDarkMode="_dark" />
+<MudThemeProvider @ref="_themeProvider" Theme="CalderbrookTheme.Theme" IsDarkMode="_dark" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -15,14 +15,14 @@
 <MudLayout>
     @* Not fixed, so on a phone the bar can wrap to a second row instead of hiding Sign out. *@
     <MudAppBar Elevation="0" Fixed="false" Class="app-bar">
-        <a href="" class="brand" aria-label="Contoso Payments, Payment Operations home">
+        <a href="" class="brand" aria-label="Calderbrook Payments, Payment Operations home">
             <svg width="28" height="28" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
                 <rect width="36" height="36" rx="9" fill="#1D4ED8"></rect>
                 <path d="M24 12.5a8 8 0 1 0 0 11" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"></path>
                 <circle cx="25" cy="18" r="2.2" fill="#7DD3FC"></circle>
             </svg>
-            <span class="brand-name">Contoso Payments</span>
-            <span class="brand-module" style="color:@ContosoTheme.AppBarMutedText">Payment Operations</span>
+            <span class="brand-name">Calderbrook Payments</span>
+            <span class="brand-module" style="color:@CalderbrookTheme.AppBarMutedText">Payment Operations</span>
         </a>
         @* Only someone with a role has anywhere to go; the No access page offers sign-out instead. *@
         @if (CurrentUser.IsInRole(OpsRoles.Reader))

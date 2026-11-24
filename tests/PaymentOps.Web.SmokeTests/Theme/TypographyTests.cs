@@ -35,7 +35,7 @@ public sealed partial class TypographyTests(PaymentOpsWebApplicationFactory fact
 
         var stray = HexColour().Matches(css)
             .Select(match => match.Value.ToUpperInvariant())
-            .Where(colour => !ContosoTheme.Colours.Contains(colour))
+            .Where(colour => !CalderbrookTheme.Colours.Contains(colour))
             .Distinct()
             .ToList();
         Assert.Empty(stray);
@@ -51,7 +51,7 @@ public sealed partial class TypographyTests(PaymentOpsWebApplicationFactory fact
         var start = css.IndexOf("html[data-theme=\"dark\"] {", StringComparison.Ordinal);
         var block = css[start..css.IndexOf('}', start)];
         var set = DarkVariable().Matches(block).ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value, StringComparer.Ordinal);
-        var dark = ContosoTheme.Theme.PaletteDark;
+        var dark = CalderbrookTheme.Theme.PaletteDark;
         var expected = new Dictionary<string, MudColor>(StringComparer.Ordinal)
         {
             ["background"] = dark.Background,
@@ -76,8 +76,8 @@ public sealed partial class TypographyTests(PaymentOpsWebApplicationFactory fact
     [Fact]
     public void The_theme_sets_inter_and_sentence_case_buttons()
     {
-        Assert.Equal("Inter", ContosoTheme.Theme.Typography.Default.FontFamily![0]);
-        Assert.Equal("none", ContosoTheme.Theme.Typography.Button.TextTransform);
+        Assert.Equal("Inter", CalderbrookTheme.Theme.Typography.Default.FontFamily![0]);
+        Assert.Equal("none", CalderbrookTheme.Theme.Typography.Button.TextTransform);
     }
 
     [GeneratedRegex("#[0-9A-Fa-f]{6}\\b")]

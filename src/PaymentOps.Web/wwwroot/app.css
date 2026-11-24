@@ -3,7 +3,7 @@ html[data-theme="light"], html[data-theme="light"] body { background: #F3F5F8; c
 html[data-theme="dark"], html[data-theme="dark"] body { background: #0B1220; color: #E2E8F0; }
 
 /* The dark palette for pages MudBlazor never starts on (the static pages), and for the first paint of the others:
-   the page's mode attribute always matches the mode the app renders. Values are ContosoTheme's dark palette. */
+   the page's mode attribute always matches the mode the app renders. Values are CalderbrookTheme's dark palette. */
 html[data-theme="dark"] {
     --mud-palette-background: #0B1220;
     --mud-palette-surface: #111A2E;
