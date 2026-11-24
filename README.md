@@ -2,9 +2,11 @@
 
 [![CI](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml)
 [![CD](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml)
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
+![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-512BD4)
+![Microsoft Foundry](https://img.shields.io/badge/Microsoft%20Foundry-gpt--5.4--mini-0078D4)
+![Terraform](https://img.shields.io/badge/Terraform-Azure-7B42BC)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-
-▶ [3-minute walkthrough](VIDEO_URL)
 
 Ask why a merchant's payout was late, and the agent checks the payment platform's records and runbooks itself, then answers with the evidence behind every statement. The setting is *Calderbrook Payments*, a fictional payment platform. Independently developed using synthetic payment data; not a production service.
 
@@ -57,7 +59,7 @@ flowchart LR
 
 Every change to AI behaviour (prompts, models, tools, knowledge, agent code) has to pass a release gate before it merges: 37 labelled cases × 3 runs, 26 held-out retrieval questions and 87 safety cases, against thresholds fixed before measuring from the spread of a ten-run baseline ([how](docs/Evaluation.md#the-threshold-rule)). These are the last two passing release runs, both on `gpt-5.4-mini` with the same thresholds and datasets.
 
-**Reading the gates.** Evaluation thresholds are regression-detection floors calibrated against measured run-to-run variation, not target quality scores. They help detect meaningful deterioration while reducing failures caused by normal model variability; a small drop can still pass. Passing them isn't the same as being good: assessments cite fewer than half of the runbook sections the labels require (section recall 0.438), and in over a third of the tool uses the labels constrain, no call had every argument right (tool arguments 0.630). Both are real limitations, not noise. Next: [plan for section recall] and [plan for tool arguments], each measured through the same gate.
+**Reading the gates.** Evaluation thresholds are regression-detection floors calibrated against measured run-to-run variation, not target quality scores. They help detect meaningful deterioration while reducing failures caused by normal model variability; a small drop can still pass. Passing them isn't the same as being good: assessments cite fewer than half of the runbook sections the labels require (section recall 0.438), and in over a third of the tool uses the labels constrain, no call had every argument right (tool arguments 0.630). Both are real limitations, not noise.
 
 <a href="docs/media/evaluation-quality-light.svg"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/evaluation-quality-dark.svg">
@@ -132,10 +134,10 @@ All decisions: [docs/adr](docs/adr/README.md).
 
 ## How this was built
 
-Built by me over seven weeks of evenings (5 Oct – 24 Nov 2026, about [N] hours), with AI coding agents doing most of the implementation.
+Built by me over seven weeks of evenings (5 Oct – 24 Nov 2026), with AI coding agents doing most of the implementation.
 
 - **My part:** the product notes, the architecture, all 23 decision records, the evaluation design and thresholds, the safety model, and the acceptance criteria for every change, which I reviewed and merged.
-- **The agents' part:** implementing each change on its own branch against those criteria[, with an automated review of every pull request before mine].
+- **The agents' part:** implementing each change on its own branch against those criteria.
 - **Same rules for everyone:** agent-written code passes the same CI, AI evaluation gate and safety gate as anything else; nothing merges without them.
 
 ## Architecture
