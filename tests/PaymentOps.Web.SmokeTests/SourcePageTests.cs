@@ -37,7 +37,7 @@ public sealed class SourcePageTests(PaymentOpsWebApplicationFactory factory) : I
 
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("<base href=\"/\"", html, StringComparison.Ordinal);
-        Assert.Contains("<title>Doc A · Contoso Payments</title>", html, StringComparison.Ordinal);
+        Assert.Contains("<title>Doc A · Calderbrook Payments</title>", html, StringComparison.Ordinal);
     }
 
     [Fact]

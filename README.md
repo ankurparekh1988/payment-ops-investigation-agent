@@ -2,10 +2,19 @@
 
 [![CI](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/ci.yml)
 [![CD](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml/badge.svg)](https://github.com/ankurparekh1988/payment-ops-investigation-agent/actions/workflows/cd.yml)
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
+![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-512BD4)
+![Microsoft Foundry](https://img.shields.io/badge/Microsoft%20Foundry-gpt--5.4--mini-0078D4)
+![Terraform](https://img.shields.io/badge/Terraform-Azure-7B42BC)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-An AI agent that helps a payments operations team work out why money didn't move when it should have: a late payout, a missing settlement, a processor outage. It chooses its own read-only tools, cites the records and runbook sections behind every statement, and has every assessment checked by the server before anyone sees it. It can propose an incident ticket, but only a person can approve one.
+- **Problem.** When a payout is late or a settlement goes missing, an operations engineer rebuilds the incident by hand from settlement records, error logs, processor status and runbooks.
+- **Solution.** An AI agent that chooses its own read-only tools, cites the record or runbook section behind every statement, and has every assessment checked by the server before anyone sees it. It can propose an incident ticket; only a person can approve one.
+- **Safety and governance.** Questions and untrusted text are screened for harm and planted instructions, restricted runbooks are filtered by the user's group before retrieval, nothing uses keys, and every AI change must pass 37 labelled cases × 3 runs and 87 safety cases.
+- **Technology.** .NET 10, Blazor and Microsoft Agent Framework on Microsoft Foundry, Azure AI Search, Content Safety, Entra ID and App Service, deployed with Terraform and GitHub Actions.
+- **Engineering depth.** Thresholds fixed before the runs they judge, a gate shown to fail on a degraded prompt, an agent that had to beat a fixed workflow, and a cheaper model-routing design measured and rejected.
 
-Built on Azure with .NET 10, Blazor and Microsoft Agent Framework: Microsoft Foundry, Azure AI Search, Content Safety, Entra ID and App Service, deployed with Terraform and GitHub Actions. The setting is *Contoso Payments*, a fictional payment platform, and all data is synthetic.
+The setting is *Calderbrook Payments*, a fictional payment platform. Independently developed using synthetic payment data; not a production service.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/stats-dark.svg">
