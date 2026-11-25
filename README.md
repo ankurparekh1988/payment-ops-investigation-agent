@@ -134,11 +134,11 @@ All decisions: [docs/adr](docs/adr/README.md).
 
 ## How this was built
 
-Built by me over seven weeks of evenings (5 Oct – 24 Nov 2026), with AI coding agents doing most of the implementation.
+AI coding agents implemented most changes under my direction and review.
 
-- **My part:** the product notes, the architecture, all 23 decision records, the evaluation design and thresholds, the safety model, and the acceptance criteria for every change, which I reviewed and merged.
-- **The agents' part:** implementing each change on its own branch against those criteria.
-- **Same rules for everyone:** agent-written code passes the same CI, AI evaluation gate and safety gate as anything else; nothing merges without them.
+- **My part:** Product scope and notes, architecture, all 23 decision records, evaluation design and thresholds, security decisions, and acceptance criteria. I reviewed and merged every change.
+- **The agents' part:** Implementing changes on separate branches against those criteria.
+- **Quality gates:** Every change must pass its applicable CI checks. Changes to AI behaviour or evaluation-gate policy must additionally pass the AI evaluation gate, including its safety hard gates.
 
 ## Architecture
 
