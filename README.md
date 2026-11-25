@@ -132,6 +132,14 @@ The zero counts are results on these evaluated cases, not a guarantee of future 
 
 All decisions: [docs/adr](docs/adr/README.md).
 
+## How this was built
+
+AI coding agents implemented most changes under my direction and review.
+
+- **My part:** Product scope and notes, architecture, all 23 decision records, evaluation design and thresholds, security decisions, and acceptance criteria. I reviewed and merged every change.
+- **The agents' part:** Implementing changes on separate branches against those criteria.
+- **Quality gates:** Every change must pass its applicable CI checks. Changes to AI behaviour or evaluation-gate policy must additionally pass the AI evaluation gate, including its safety hard gates.
+
 ## Architecture
 
 ```mermaid
